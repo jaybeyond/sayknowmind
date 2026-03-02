@@ -1,0 +1,113 @@
+services:
+  # EdgeQuake API Server
+  # Multi-platform: supports linux/amd64 (Intel/AMD), linux/arm64 (Apple Silicon, ARM servers)
+  # macOS:   docker compose up  (Docker Desktop auto-selects arm64 on M-series, amd64 on Intel)
+  # Linux:   docker compose up  (uses native architecture)
+  # Windows: docker compose up  (uses linux/amd64 via WSL2)
+  # Override: DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose up
+  # Multi-arch build: docker buildx build --platform linux/amd64,linux/arm64 -t edgequake .
+  edgequake:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: edgequake
+    restart: unless-stopped
+    ports:
+      - "${EDGEQUAKE_PORT:-8080}:8080"
+    environment:
+      - EDGEQUAKE_HOST=0.0.0.0
+      - EDGEQUAKE_PORT=8080
+      - DATABASE_URL=postgres://edgequake:${POSTGRES_PASSWORD:-edgequake_secret}@postgres:5432/edgequake
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # FIX-DOCKER-OLLAMA: Use host.docker.internal to reach Ollama on the host
+      # machine. Without this, the container tries localhost:11434 which points
+      # to the container itself, causing "connection refused" and vision extraction
+      # timeouts that leave documents stuck in "processing" forever.
+      # On macOS/Windows Docker Desktop, host.docker.internal resolves to the host.
+      # On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` below.
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      - EDGEQUAKE_LLM_PROVIDER=${EDGEQUAKE_LLM_PROVIDER:-ollama}
+      - EDGEQUAKE_EMBEDDING_PROVIDER=${EDGEQUAKE_EMBEDDING_PROVIDER:-}
+      # Vision extraction timeout (seconds). Default 600s (10 min).
+      - EDGEQUAKE_VISION_TIMEOUT_SECS=${EDGEQUAKE_VISION_TIMEOUT_SECS:-600}
+      - RUST_LOG=info,edgequake=debug
+    # Linux only: enable host.docker.internal resolution
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - edgequake-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # EdgeQuake Frontend (Next.js)
+  frontend:
+    build:
+      context: ../../
+      dockerfile: edgequake_webui/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    container_name: edgequake-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - NODE_ENV=production
+    depends_on:
+      - edgequake
+    networks:
+      - edgequake-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # PostgreSQL with pgvector and Apache AGE extensions
+  postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    container_name: edgequake-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=edgequake
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-edgequake_secret}
+      - POSTGRES_DB=edgequake
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-extensions.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - edgequake-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edgequake -d edgequake"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  edgequake-network:
+    driver: bridge

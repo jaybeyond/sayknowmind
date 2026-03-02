@@ -1,0 +1,75 @@
+[package]
+name = "edgequake-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "REST API server for EdgeQuake"
+
+[features]
+default = []
+postgres = ["edgequake-storage/postgres", "edgequake-core/postgres", "dep:sqlx"]
+# Vision mode for PDF extraction using edgequake-pdf2md (bundled pdfium, no system deps)
+vision = []
+
+[dependencies]
+edgequake-core = { path = "../edgequake-core" }
+edgequake-storage = { path = "../edgequake-storage" }
+edgequake-llm = { workspace = true }
+edgequake-pipeline = { path = "../edgequake-pipeline" }
+edgequake-query = { path = "../edgequake-query" }
+edgequake-tasks = { path = "../edgequake-tasks", features = ["postgres"] }
+edgequake-auth = { path = "../edgequake-auth" }
+edgequake-rate-limiter = { path = "../edgequake-rate-limiter" }
+edgequake-audit = { path = "../edgequake-audit" }
+# PDF vision extraction via VLM — bundled pdfium, multi-provider, 10-rule post-processing
+# WHY: edgequake-pdf2md provides higher quality vision extraction than internal implementation
+# v0.4.6: latest stable release with improvements
+edgequake-pdf2md = "=0.4.6"
+
+axum.workspace = true
+axum-extra = { version = "0.10", features = ["multipart"] }
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = "0.1"
+futures-util = "0.3"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tower = { version = "0.5", features = ["timeout", "limit"] }
+tower-http = { version = "0.6", features = [
+    "cors",
+    "trace",
+    "compression-gzip",
+] }
+utoipa.workspace = true
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
+uuid.workspace = true
+futures.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+async-trait.workspace = true
+sqlx = { workspace = true, optional = true }
+url = "2.5"
+lazy_static = "1.5"
+
+# File handling
+sha2 = "0.10"
+hex = "0.4"
+rand = "0.9"
+bytes = "1.9"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
+tower = { version = "0.5", features = ["util"] }
+sqlx = { workspace = true, features = [
+    "runtime-tokio",
+    "postgres",
+    "uuid",
+    "chrono",
+] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+serial_test = "3.2"
+tempfile = "3"
+urlencoding = "2.1"

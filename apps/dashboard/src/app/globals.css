@@ -1,0 +1,1332 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./design-tokens.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Smooth theme transition - prevents flash on theme change */
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Disable all transitions during theme switch to prevent flickering */
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition-duration: 0s !important;
+}
+
+/* Custom animations for delightful micro-interactions */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s infinite;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* ============================================
+ * ILLUSTRATION ANIMATIONS
+ * ============================================ */
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes dash {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -12;
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-dash {
+  animation: dash 2s linear infinite;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+/* ============================================
+ * REDUCED MOTION SUPPORT (WCAG 2.1)
+ * ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  /* Keep essential transforms but remove animations */
+  .animate-float,
+  .animate-dash,
+  .animate-pulse-subtle,
+  .animate-shimmer,
+  .animate-pulse-soft,
+  .animate-gradient-shift,
+  .animate-spin,
+  .animate-ping,
+  .animate-pulse,
+  .animate-bounce {
+    animation: none !important;
+  }
+  
+  /* Disable transitions on panels and modals */
+  [data-state="open"],
+  [data-state="closed"] {
+    transition: none !important;
+  }
+}
+
+/* Class-based reduced motion override */
+.motion-reduce,
+.motion-reduce *,
+.motion-reduce *::before,
+.motion-reduce *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* ============================================
+ * SCROLL AREA ENHANCEMENTS
+ * ============================================ */
+
+/* Smooth scrolling with proper overflow */
+.scroll-smooth {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: var(--muted-foreground);
+  border-radius: 3px;
+  opacity: 0.5;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  opacity: 0.8;
+}
+
+/* Panel scroll area */
+.panel-scroll-area {
+  max-height: var(--scroll-area-max-height, 280px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+/* Prevent body scroll when modal open */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* ============================================
+ * MICRO-INTERACTIONS & TRANSITIONS
+ * ============================================ */
+
+/* Smooth hover transitions for interactive elements */
+.hover-lift {
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Subtle scale on hover */
+.hover-scale {
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
+
+.hover-scale:hover {
+  transform: scale(1.02);
+}
+
+/* Focus ring with animation */
+.focus-ring-animated {
+  transition: box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.focus-ring-animated:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+/* Expandable content animation */
+@keyframes expand-down {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+    transform: translateY(0);
+  }
+}
+
+.animate-expand-down {
+  animation: expand-down var(--duration-normal) var(--ease-out);
+}
+
+/* Fade in up animation */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up var(--duration-normal) var(--ease-out);
+}
+
+/* Stagger animation for lists */
+.stagger-children > * {
+  animation: fade-in-up var(--duration-normal) var(--ease-out) backwards;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+
+/* ============================================
+ * STREAMING TEXT ANIMATIONS
+ * ============================================ */
+
+/* Cursor blink animation for streaming */
+@keyframes cursor-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+.animate-cursor-blink {
+  animation: cursor-blink 0.8s step-end infinite;
+}
+
+/* Token fade-in animation for streaming text */
+@keyframes token-fade-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.animate-token-fade {
+  animation: token-fade-in 0.15s ease-out forwards;
+}
+
+/* Streaming content indicator removed - was causing black blinking horizontal line */
+.streaming-content {
+  position: relative;
+}
+
+/* Enhanced shimmer for table loading */
+@keyframes table-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-table-shimmer {
+  animation: table-shimmer 1.2s ease-in-out infinite;
+}
+
+/* Thinking section pulse */
+@keyframes thinking-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+.animate-thinking-pulse {
+  animation: thinking-pulse 2s ease-in-out infinite;
+}
+
+/* Slide in from right for user messages */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+/* Slide in from left for AI messages */
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.3s ease-out forwards;
+}
+
+/* ============================================
+ * SLICK UI UTILITIES
+ * ============================================ */
+
+/* Glass morphism effect */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, var(--primary) 0%, oklch(0.65 0.2 290) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Property value truncation with expand */
+.property-value-truncate {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.property-value-expanded {
+  max-width: none;
+  white-space: normal;
+  word-break: break-all;
+}
+
+/* Badge enhanced styling */
+.badge-enhanced {
+  padding: var(--badge-padding-y) var(--badge-padding-x);
+  border-radius: var(--badge-border-radius);
+  font-weight: var(--font-medium);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+/* Empty state styling */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+}
+
+.empty-state-icon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--space-4);
+  opacity: 0.5;
+}
+
+/* ============================================
+ * ADDITIONAL ANIMATIONS
+ * ============================================ */
+
+/* Smooth entrance animations */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right var(--duration-normal) var(--ease-out);
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left var(--duration-normal) var(--ease-out);
+}
+
+.animate-scale-in {
+  animation: scale-in var(--duration-normal) var(--ease-spring);
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Dialog/Modal entrance */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-dialog-in {
+  animation: dialog-in var(--duration-normal) var(--ease-spring);
+}
+
+/* Card hover interactions */
+.card-interactive {
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.card-interactive:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Button press effect */
+.btn-press {
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* Skeleton loading */
+@keyframes skeleton-pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.skeleton {
+  animation: skeleton-pulse 2s var(--ease-in-out) infinite;
+  background: linear-gradient(
+    90deg,
+    var(--muted) 25%,
+    oklch(0.5 0 0 / 0.1) 50%,
+    var(--muted) 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* Tooltip arrow smooth */
+.tooltip-content {
+  animation: scale-in var(--duration-fast) var(--ease-spring);
+}
+
+/* Ripple effect */
+@keyframes ripple {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  transform: scale(0);
+  animation: ripple 0.6s linear;
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Progress bar animation */
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.progress-indeterminate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: progress-indeterminate 1.5s infinite;
+}
+
+/* ============================================
+ * SCROLLBAR CUSTOMIZATION
+ * ============================================ */
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 4px;
+  opacity: 0.3;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  opacity: 0.5;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+
+/* ============================================
+ * FOCUS STATES
+ * ============================================ */
+
+/* Better focus rings */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+/* Input focus */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+/* ============================================
+ * ENHANCED FORM INPUTS
+ * ============================================ */
+
+/* Consistent input borders */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select,
+[role="combobox"] {
+  border: 1px solid var(--input);
+  background-color: var(--background);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Enhanced focus state with brand color */
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus,
+[role="combobox"]:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.15);
+}
+
+/* Query input enhanced focus */
+.query-input:focus {
+  border-color: oklch(0.65 0.2 290);
+  box-shadow: 0 0 0 3px oklch(0.65 0.2 290 / 0.15);
+}
+
+/* ============================================
+ * SYNTAX HIGHLIGHTING - highlight.js integration
+ * Beautiful code block syntax colors
+ * ============================================ */
+
+/* Base code styling */
+code[class*="language-"],
+pre[class*="language-"],
+.hljs {
+  color: oklch(0.88 0.02 265);
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, 'Courier New', monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  text-shadow: none;
+  direction: ltr;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  tab-size: 2;
+  hyphens: none;
+}
+
+/* Light mode syntax colors */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-title.class_,
+.hljs-type {
+  color: oklch(0.55 0.2 280);
+  font-weight: 500;
+}
+
+.hljs-built_in,
+.hljs-builtin-name {
+  color: oklch(0.55 0.18 195);
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+  color: oklch(0.52 0.15 145);
+}
+
+.hljs-number,
+.hljs-literal {
+  color: oklch(0.6 0.18 45);
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion,
+.hljs-meta {
+  color: oklch(0.5 0 0);
+  font-style: italic;
+}
+
+.hljs-function,
+.hljs-title.function_,
+.hljs-section {
+  color: oklch(0.52 0.18 250);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-name {
+  color: oklch(0.55 0.16 15);
+}
+
+.hljs-attribute,
+.hljs-attr-name,
+.hljs-tag {
+  color: oklch(0.55 0.16 195);
+}
+
+.hljs-operator,
+.hljs-punctuation {
+  color: oklch(0.55 0.12 320);
+}
+
+.hljs-regexp,
+.hljs-link {
+  color: oklch(0.55 0.15 35);
+}
+
+.hljs-params {
+  color: oklch(0.6 0.1 265);
+}
+
+.hljs-property {
+  color: oklch(0.52 0.14 210);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+/* Dark mode syntax colors - enhanced for readability */
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-title.class_,
+.dark .hljs-type {
+  color: oklch(0.75 0.18 280);
+  font-weight: 500;
+}
+
+.dark .hljs-built_in,
+.dark .hljs-builtin-name {
+  color: oklch(0.75 0.15 195);
+}
+
+.dark .hljs-string,
+.dark .hljs-attr,
+.dark .hljs-symbol,
+.dark .hljs-bullet,
+.dark .hljs-addition {
+  color: oklch(0.75 0.14 145);
+}
+
+.dark .hljs-number,
+.dark .hljs-literal {
+  color: oklch(0.8 0.16 45);
+}
+
+.dark .hljs-comment,
+.dark .hljs-quote,
+.dark .hljs-deletion,
+.dark .hljs-meta {
+  color: oklch(0.55 0 0);
+  font-style: italic;
+}
+
+.dark .hljs-function,
+.dark .hljs-title.function_,
+.dark .hljs-section {
+  color: oklch(0.78 0.15 210);
+}
+
+.dark .hljs-variable,
+.dark .hljs-template-variable,
+.dark .hljs-name {
+  color: oklch(0.78 0.14 15);
+}
+
+.dark .hljs-attribute,
+.dark .hljs-attr-name,
+.dark .hljs-tag {
+  color: oklch(0.75 0.14 195);
+}
+
+.dark .hljs-operator,
+.dark .hljs-punctuation {
+  color: oklch(0.75 0.1 320);
+}
+
+.dark .hljs-regexp,
+.dark .hljs-link {
+  color: oklch(0.75 0.14 35);
+}
+
+.dark .hljs-params {
+  color: oklch(0.7 0.08 265);
+}
+
+.dark .hljs-property {
+  color: oklch(0.75 0.12 210);
+}
+
+/* ============================================
+ * MARKDOWN PROSE STYLING
+ * Beautiful typography for markdown content
+ * ============================================ */
+
+.markdown-content {
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--foreground);
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Headings hierarchy */
+.markdown-content h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.3;
+}
+
+.markdown-content h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.35;
+}
+
+.markdown-content h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.markdown-content h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.45;
+}
+
+.markdown-content h5,
+.markdown-content h6 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.markdown-content h6 {
+  color: var(--muted-foreground);
+}
+
+/* Paragraphs */
+.markdown-content p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  line-height: 1.75;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* Lists with nice markers */
+.markdown-content ul,
+.markdown-content ol {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.markdown-content ul {
+  list-style-type: disc;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+}
+
+.markdown-content li {
+  margin-bottom: 0.375rem;
+  line-height: 1.65;
+  padding-left: 0.25rem;
+}
+
+.markdown-content li::marker {
+  color: var(--muted-foreground);
+}
+
+.markdown-content li > p {
+  margin-bottom: 0.5rem;
+}
+
+/* Nested lists */
+.markdown-content ul ul,
+.markdown-content ol ol,
+.markdown-content ul ol,
+.markdown-content ol ul {
+  margin: 0.5rem 0;
+}
+
+/* Task lists (GFM) */
+.markdown-content input[type="checkbox"] {
+  margin-right: 0.5rem;
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--primary);
+  border-radius: 0.25rem;
+}
+
+/* Blockquotes with accent */
+.markdown-content blockquote {
+  margin: 1.25rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--primary);
+  background: oklch(from var(--primary) l c h / 0.05);
+  border-radius: 0 0.5rem 0.5rem 0;
+  color: var(--foreground);
+  font-style: normal;
+}
+
+.markdown-content blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content blockquote blockquote {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+}
+
+/* Links */
+.markdown-content a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.markdown-content a:hover {
+  color: oklch(from var(--primary) calc(l - 0.1) c h);
+}
+
+/* Strong and emphasis */
+.markdown-content strong {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.markdown-content em {
+  font-style: italic;
+}
+
+.markdown-content del {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+
+/* Inline code */
+.markdown-content code:not(pre code) {
+  padding: 0.125rem 0.375rem;
+  background: oklch(0.94 0.01 265);
+  border: 1px solid oklch(0.9 0.01 265);
+  border-radius: 0.375rem;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+  font-size: 0.875em;
+  color: oklch(0.45 0.1 280);
+  white-space: nowrap;
+}
+
+.dark .markdown-content code:not(pre code) {
+  background: oklch(0.22 0.01 265);
+  border-color: oklch(0.3 0.01 265);
+  color: oklch(0.8 0.08 280);
+}
+
+/* Horizontal rule */
+.markdown-content hr {
+  margin: 2rem 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* Images */
+.markdown-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.1);
+}
+
+/* Tables */
+.markdown-content table {
+  width: 100%;
+  margin: 1rem 0;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.markdown-content thead {
+  background: var(--muted);
+}
+
+.markdown-content th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-content td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-content tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-content tbody tr:hover {
+  background: var(--muted);
+}
+
+/* First child margin fix */
+.markdown-content > *:first-child {
+  margin-top: 0;
+}
+
+/* ============================================
+ * KATEX MATH STYLING
+ * ============================================ */
+
+.katex {
+  font-size: 1.1em !important;
+}
+
+.katex-display {
+  margin: 1.25rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5rem 0;
+}
+
+.katex-display > .katex {
+  white-space: nowrap;
+}
+
+/* Improve math equation display */
+.markdown-content .math-display {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--muted);
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
+
+.dark .katex {
+  color: oklch(0.9 0.02 265);
+}
+/* ============================================
+ * HIGHLIGHTER PEN (STABILO) STYLE
+ * For source citation line highlighting
+ * ============================================ */
+
+/* Highlighter pen style for source citations */
+mark.highlight-citation {
+  background: linear-gradient(104deg, 
+    rgba(255, 237, 74, 0.3) 0.9%, 
+    rgba(255, 237, 74, 0.7) 2.4%, 
+    rgba(255, 237, 74, 0.5) 5.8%, 
+    rgba(255, 237, 74, 0.4) 93%, 
+    rgba(255, 237, 74, 0.7) 96%, 
+    transparent 98%
+  );
+  background-size: 100% 0.7em;
+  background-repeat: no-repeat;
+  background-position: 0 88%;
+  color: inherit;
+  padding: 0.125rem 0;
+  border-radius: 0.25rem;
+  animation: highlight-fade-in 0.8s ease-out;
+  line-height: 1.6;
+  display: inline;
+}
+
+@keyframes highlight-fade-in {
+  from {
+    background-size: 0% 0.7em;
+    opacity: 0.6;
+  }
+  to {
+    background-size: 100% 0.7em;
+    opacity: 1;
+  }
+}
+
+/* Dark mode version - slightly brighter yellow */
+.dark mark.highlight-citation {
+  background: linear-gradient(104deg, 
+    rgba(253, 224, 71, 0.4) 0.9%, 
+    rgba(253, 224, 71, 0.8) 2.4%, 
+    rgba(253, 224, 71, 0.6) 5.8%, 
+    rgba(253, 224, 71, 0.5) 93%, 
+    rgba(253, 224, 71, 0.8) 96%, 
+    transparent 98%
+  );
+}
+
+/* Indeterminate loading bar animation for graph loading overlay */
+@keyframes loading-bar {
+  0% {
+    width: 0%;
+    margin-left: 0%;
+  }
+  50% {
+    width: 60%;
+    margin-left: 20%;
+  }
+  100% {
+    width: 0%;
+    margin-left: 100%;
+  }
+}
+.animate-loading-bar {
+  animation: loading-bar 1.8s ease-in-out infinite;
+}
+
+/* Ensure proper stacking for line numbers */
+[data-line-number] {
+  position: relative;
+  display: block;
+}

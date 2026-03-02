@@ -1,0 +1,172 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/edgequake-api",
+    "crates/edgequake-audit",
+    "crates/edgequake-auth",
+    "crates/edgequake-core",
+    "crates/edgequake-pipeline",
+    "crates/edgequake-query",
+    "crates/edgequake-rate-limiter",
+    "crates/edgequake-storage",
+    "crates/edgequake-tasks",
+]
+
+[package]
+name = "edgequake"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "EdgeQuake RAG server with knowledge graph capabilities"
+
+[[bin]]
+name = "edgequake"
+path = "src/main.rs"
+
+[[example]]
+name = "basic_rag"
+path = "examples/basic_rag.rs"
+
+[[example]]
+name = "streaming_query"
+path = "examples/streaming_query.rs"
+
+[[example]]
+name = "graph_exploration"
+path = "examples/graph_exploration.rs"
+
+[[example]]
+name = "multi_tenant"
+path = "examples/multi_tenant.rs"
+
+[features]
+default = ["postgres", "vision"]
+postgres = ["edgequake-api/postgres", "edgequake-storage/postgres"]
+vision = ["edgequake-api/vision"]
+
+[dependencies]
+edgequake-core = { workspace = true, features = ["pipeline"] }
+edgequake-storage = { workspace = true }
+edgequake-llm = { workspace = true }
+edgequake-pipeline = { workspace = true }
+edgequake-query = { workspace = true }
+edgequake-api = { workspace = true }
+edgequake-tasks = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+futures = { workspace = true }
+num_cpus = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tokio-test = { workspace = true }
+
+[workspace.package]
+version = "0.5.4"
+edition = "2021"
+rust-version = "1.78"
+license = "MIT OR Apache-2.0"
+authors = ["EdgeQuake Team"]
+repository = "https://github.com/edgequake/edgequake"
+description = "High-performance RAG system with knowledge graph capabilities"
+keywords = ["rag", "knowledge-graph", "llm", "embeddings", "search"]
+categories = ["science", "database", "web-programming"]
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.48", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Time and dates
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Hashing
+md5 = "0.7"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Web framework
+axum = { version = "0.8", features = ["ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = [
+    "cors",
+    "trace",
+    "compression-gzip",
+] }
+
+# OpenAPI
+utoipa = { version = "5.4", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
+
+# Database
+sqlx = { version = "0.8", features = [
+    "runtime-tokio",
+    "tls-rustls-ring-webpki",
+    "postgres",
+    "chrono",
+    "json",
+    "uuid",
+] }
+
+# LLM
+async-openai = { version = "0.32", features = ["chat-completion", "embedding"] }
+
+# Text processing
+tiktoken-rs = "0.6"
+
+# Utilities
+uuid = { version = "1.11", features = ["v4", "serde"] }
+dotenvy = "0.15"
+config = "0.14"
+
+# Testing
+tokio-test = "0.4"
+criterion = { version = "0.5", features = ["async_tokio"] }
+
+# Workspace crates
+edgequake-api = { path = "crates/edgequake-api" }
+edgequake-auth = { path = "crates/edgequake-auth" }
+edgequake-core = { path = "crates/edgequake-core" }
+edgequake-llm = "0.2.7"
+edgequake-pipeline = { path = "crates/edgequake-pipeline" }
+edgequake-query = { path = "crates/edgequake-query" }
+edgequake-storage = { path = "crates/edgequake-storage" }
+edgequake-tasks = { path = "crates/edgequake-tasks" }
+
+# CPU utilities
+num_cpus = "1.16"
+
+# Authentication
+argon2 = "0.5"
+password-hash = "0.5"
+jsonwebtoken = "9.3"
+rand = "0.9"
+
+[profile.release]
+lto = "thin"
+opt-level = 3
+codegen-units = 1
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.dev.package.sqlx-macros]
+opt-level = 3

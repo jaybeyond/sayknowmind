@@ -1,0 +1,28 @@
+# Node.js/TypeScript project
+node_modules/
+dist/
+build/
+coverage/
+*.log
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+# OS files
+.DS_Store
+Thumbs.db
+# IDE files
+.vscode/
+.idea/
+# Test outputs
+*.out
+*.pid
+# Misc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# Ignore compiled Python cache if present
+__pycache__/
+# Ignore lock files
+package-lock.json
+pnpm-lock.yaml
