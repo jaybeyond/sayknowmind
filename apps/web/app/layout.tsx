@@ -1,21 +1,22 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Space_Grotesk } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
-const geistSans = Geist({
+const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-heading",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Bookmarks - Square UI",
-  description: "A beautiful bookmark manager template by Square UI",
+  title: "SayknowMind - Agentic Second Brain",
+  description:
+    "Everything you say, we know, and mind forever. Personal knowledge management with GraphRAG.",
 };
 
 export default function RootLayout({
@@ -25,12 +26,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link
+          href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans`}
+        className={`${inter.variable} ${spaceGrotesk.variable} antialiased font-sans`}
+        style={{ fontFamily: "var(--font-sans), Satoshi, sans-serif" }}
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >
@@ -40,4 +48,3 @@ export default function RootLayout({
     </html>
   );
 }
-
