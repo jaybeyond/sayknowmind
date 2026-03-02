@@ -1,0 +1,180 @@
+version: "3.8"
+
+services:
+  # === DATABASE ===
+  postgres:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.postgres
+    container_name: sayknowmind-postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: sayknowmind
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init/01-edgequake-init.sql:/docker-entrypoint-initdb.d/01-edgequake.sql
+      - ./db/init/03-init-extensions.sql:/docker-entrypoint-initdb.d/02-extensions.sql
+      - ./db/init/02-init-age-db.sh:/docker-entrypoint-initdb.d/03-age-db.sh
+      - ./db/init/04-sayknowmind-init.sql:/docker-entrypoint-initdb.d/04-sayknowmind.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - sayknowmind
+
+  # === BACKEND ENGINES ===
+  edgequake:
+    build:
+      context: ./packages/edgequake
+      dockerfile: docker/Dockerfile
+    container_name: sayknowmind-edgequake
+    ports:
+      - "${EDGEQUAKE_PORT:-8080}:8080"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/sayknowmind
+      RUST_LOG: ${RUST_LOG:-info}
+      EDGEQUAKE_DEFAULT_LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      EDGEQUAKE_DEFAULT_LLM_MODEL: ${LLM_MODEL:-qwen2.5:0.5b}
+      OLLAMA_HOST: http://ollama:11434
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sayknowmind
+
+  ai-server:
+    build:
+      context: ./apps/ai-server
+      dockerfile: Dockerfile
+    container_name: sayknowmind-ai-server
+    ports:
+      - "${AI_SERVER_PORT:-4000}:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      OLLAMA_URL: http://ollama:11434
+      OCR_ENDPOINT: http://ocr-server:8000
+      SEARXNG_URL: http://searxng:8888
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      RATE_LIMIT_TTL: 60
+      RATE_LIMIT_MAX: 100
+    volumes:
+      - model_cache:/app/models
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+    networks:
+      - sayknowmind
+
+  # === FRONTEND APPS ===
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: sayknowmind-web
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_EDGEQUAKE_URL: http://localhost:${EDGEQUAKE_PORT:-8080}
+      NEXT_PUBLIC_AI_SERVER_URL: http://localhost:${AI_SERVER_PORT:-4000}
+    depends_on:
+      - edgequake
+      - ai-server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sayknowmind
+
+  dashboard:
+    build:
+      context: ./apps/dashboard
+      dockerfile: Dockerfile
+    container_name: sayknowmind-dashboard
+    ports:
+      - "${DASHBOARD_PORT:-3001}:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:${EDGEQUAKE_PORT:-8080}
+    depends_on:
+      - edgequake
+    restart: unless-stopped
+    networks:
+      - sayknowmind
+
+  # === AI INFRASTRUCTURE ===
+  ollama:
+    image: ollama/ollama:latest
+    container_name: sayknowmind-ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+    restart: unless-stopped
+    networks:
+      - sayknowmind
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: sayknowmind-searxng
+    ports:
+      - "${SEARXNG_PORT:-8888}:8080"
+    environment:
+      SEARXNG_BASE_URL: http://localhost:${SEARXNG_PORT:-8888}/
+    restart: unless-stopped
+    networks:
+      - sayknowmind
+
+  # === MCP SERVER ===
+  mcp-server:
+    build:
+      context: ./packages/mcp-server
+      dockerfile: Dockerfile
+    container_name: sayknowmind-mcp
+    ports:
+      - "${MCP_PORT:-8082}:8082"
+    environment:
+      EDGEQUAKE_URL: http://edgequake:8080
+      AUTH_SECRET: ${AUTH_SECRET:-changeme}
+    depends_on:
+      - edgequake
+    restart: unless-stopped
+    networks:
+      - sayknowmind
+
+volumes:
+  db_data:
+    driver: local
+  model_cache:
+    driver: local
+  ollama_data:
+    driver: local
+
+networks:
+  sayknowmind:
+    driver: bridge
