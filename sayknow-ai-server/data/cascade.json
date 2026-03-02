@@ -1,0 +1,38 @@
+{
+  "pro": [
+    {
+      "type": "openrouter",
+      "model": "x-ai/grok-4.1-fast",
+      "name": "Grok 4.1 Fast (OR)"
+    },
+    {
+      "type": "openrouter",
+      "model": "meta-llama/llama-3.3-70b-instruct:free",
+      "name": "Llama 3.3 70B"
+    },
+    {
+      "type": "openrouter",
+      "model": "google/gemma-3-27b-it:free",
+      "name": "Gemma 3 27B"
+    },
+    {
+      "type": "grok",
+      "model": "grok-4-1-fast-reasoning",
+      "name": "Grok (xAI direct)"
+    }
+  ],
+  "flash": [
+    {
+      "type": "openrouter",
+      "model": "stepfun/step-3.5-flash:free",
+      "name": "Step 3.5 Flash"
+    }
+  ],
+  "thinking": [
+    {
+      "type": "openrouter",
+      "model": "qwen/qwen3-235b-a22b:free",
+      "name": "Qwen3 235B"
+    }
+  ]
+}

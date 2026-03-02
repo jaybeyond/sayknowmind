@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+ocr-server/__pycache__/
+ocr-server/*.pyc
+
+# Build
+dist/
+build/
+
+# Keys (NEVER commit!)
+keys/
+*.pem
+*.pub
+
+# Environment
+.env
+.env.local
+.env.production
+!.env.example
+!.env.*.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Cache
+.cache/
+.npm/
+
+# Docker volumes
+ollama-data/
+ocr-cache/
+
+# SearXNG submodule (has its own .git, too large)
+searxng/
+
+# Python virtual environments
+ocr-server/venv/
+venv/
+.venv/
+__pycache__/
+*.py[cod]

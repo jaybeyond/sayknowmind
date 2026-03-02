@@ -1,0 +1,24 @@
+[
+  {
+    "name": "Dolphin3.0-Qwen2.5-1.5B",
+    "provider": "WebGPU",
+    "hfId": "Jay0628/Dolphin3.0-Qwen2.5-1.5B-MLC-q4f16_1",
+    "size": "~900MB",
+    "role": "flash",
+    "roleLabel": "Flash",
+    "wasmLib": "Qwen2-1.5B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm",
+    "contextWindow": 4096,
+    "prefillChunkSize": 1024
+  },
+  {
+    "name": "Dolphin3.0-Qwen2.5-0.5B",
+    "provider": "WebGPU",
+    "hfId": "Jay0628/Dolphin3.0-Qwen2.5-0.5B-MLC-q4f16_1",
+    "size": "~280MB",
+    "role": "lite",
+    "roleLabel": "Lite",
+    "wasmLib": "Qwen2-0.5B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm",
+    "contextWindow": 4096,
+    "prefillChunkSize": 1024
+  }
+]

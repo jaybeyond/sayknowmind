@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # SayKnowAI AI Server
+  ai-server:
+    build: .
+    container_name: sayknowai-ai-server
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - OLLAMA_URL=http://ollama:11434
+      - OCR_ENDPOINT=http://ocr-server:8000
+      - SEARXNG_URL=http://searxng:8080
+      - RATE_LIMIT_TTL=60
+      - RATE_LIMIT_MAX=100
+    volumes:
+      - ./keys:/app/keys:ro
+    depends_on:
+      - ollama
+      - searxng
+    networks:
+      - ai-network
+    restart: unless-stopped
+
+  # Ollama - Qwen3-8B
+  ollama:
+    image: ollama/ollama:latest
+    container_name: sayknowai-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - ai-network
+    restart: unless-stopped
+    # Pull Qwen3 model on startup
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        /bin/ollama serve &
+        sleep 5
+        /bin/ollama pull qwen3:8b
+        wait
+
+  # SearXNG - Web Search
+  searxng:
+    image: searxng/searxng:latest
+    container_name: sayknowai-searxng
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+    networks:
+      - ai-network
+    restart: unless-stopped
+
+  # LightOnOCR Server (Python FastAPI)
+  ocr-server:
+    build:
+      context: ./ocr-server
+      dockerfile: Dockerfile
+    container_name: sayknowai-ocr
+    ports:
+      - "8000:8000"
+    environment:
+      - OCR_MODEL=lightonai/LightOnOCR-2-1B
+      - DEVICE=cpu
+    volumes:
+      - ocr-cache:/root/.cache/huggingface
+    networks:
+      - ai-network
+    restart: unless-stopped
+
+networks:
+  ai-network:
+    driver: bridge
+
+volumes:
+  ollama-data:
+  ocr-cache:

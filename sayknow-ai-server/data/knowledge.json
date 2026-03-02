@@ -1,0 +1,10 @@
+{
+  "bases": [],
+  "globalSettings": {
+    "embeddingModel": "simclusters_v2",
+    "hybridAlpha": 0.7,
+    "rankingModel": "heavy_ranker",
+    "minScore": 0.3,
+    "lookbackWindow": "30d"
+  }
+}
