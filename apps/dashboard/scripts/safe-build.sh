@@ -73,8 +73,8 @@ run_typecheck() {
     log "Running TypeScript type check..."
     cd "$PROJECT_DIR"
     
-    # Run tsc with timeout
-    if timeout 60 npx tsc --noEmit; then
+    # Run tsc (timeout is optional, not available on macOS by default)
+    if npx tsc --noEmit; then
         success "TypeScript check passed"
         return 0
     else
@@ -91,7 +91,7 @@ run_build() {
     export NODE_OPTIONS="--max-old-space-size=4096"
     
     # Run with nice (low priority) and timeout
-    if nice -n 10 timeout $MAX_BUILD_TIME npx next build 2>&1 | tee "$LOG_FILE"; then
+    if nice -n 10 npx next build 2>&1 | tee "$LOG_FILE"; then
         success "Build completed successfully!"
         return 0
     else
