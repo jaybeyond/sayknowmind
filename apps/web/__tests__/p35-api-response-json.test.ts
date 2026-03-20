@@ -87,7 +87,7 @@ const mcpResponseArb = fc.record({
 const loginResponseArb = fc.record({
   userId: fc.uuid(),
   token: fc.stringMatching(/^[a-f0-9]{64}$/),
-  expiresAt: fc.date().map((d) => d.toISOString()),
+  expiresAt: fc.date({ min: new Date("2000-01-01"), max: new Date("2100-12-31") }).filter((d) => !isNaN(d.getTime())).map((d) => d.toISOString()),
 }) as fc.Arbitrary<LoginResponse>;
 
 describe("Property 35: API response JSON format", () => {
