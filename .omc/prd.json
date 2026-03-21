@@ -1,0 +1,133 @@
+{
+  "title": "SayKnowMind — Mock-to-Real Replacement & Completion",
+  "version": "1.0.0",
+  "created": "2026-03-21",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Document codebase with AGENTS.md",
+      "description": "Create AGENTS.md at project root documenting architecture, real vs mock status, API map, and agent guidelines.",
+      "acceptanceCriteria": [
+        "AGENTS.md exists at project root",
+        "AGENTS.md lists all real implementations with file paths",
+        "AGENTS.md lists all mock/stub items and their replacement status",
+        "AGENTS.md documents API routes with method, path, auth requirement",
+        "AGENTS.md documents tech stack and service ports"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-002",
+      "title": "Bookmarks store: stop initializing with mock data",
+      "description": "store/bookmarks-store.ts initializes bookmarks with mockBookmarks (16 hardcoded items). On empty DB, show empty state — not fake bookmarks.",
+      "acceptanceCriteria": [
+        "bookmarks-store.ts initializes bookmarks as [] (empty array), not mockBookmarks",
+        "fetchBookmarks() sets bookmarks from API when user is authenticated",
+        "When API returns empty array and user IS authenticated, bookmarks remain []",
+        "isLoading starts as true on first render, false after fetchBookmarks completes",
+        "Mock data is not imported for initialization"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-003",
+      "title": "Sidebar: replace mock collections with real categories from API",
+      "description": "sidebar.tsx imports `collections` from mock-data. Collections section should show real user categories from /api/categories.",
+      "acceptanceCriteria": [
+        "sidebar.tsx no longer imports `collections` from mock-data/bookmarks",
+        "Sidebar fetches categories from /api/categories on mount",
+        "Each category renders with its name and document count",
+        "Clicking a category filters the bookmarks by that category",
+        "Empty state shows 'No categories yet' when API returns empty",
+        "Loading state shown while categories are being fetched"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-004",
+      "title": "Sidebar: replace mock tags with real tags from documents",
+      "description": "sidebar.tsx imports `tags` from mock-data. Tags should be derived from actual document metadata in the DB.",
+      "acceptanceCriteria": [
+        "sidebar.tsx no longer imports `tags` from mock-data/bookmarks",
+        "Tags are fetched from /api/documents endpoint and derived from document metadata",
+        "Tag counts reflect real document counts",
+        "Tag filtering still works — clicking tag filters bookmarks",
+        "Empty tags section hidden or shows empty state when no tags exist"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-005",
+      "title": "StatsCards: use real counts from DB instead of mock array lengths",
+      "description": "stats-cards.tsx uses mock collections.length and tags.length for Collections and Tags Used stats.",
+      "acceptanceCriteria": [
+        "stats-cards.tsx no longer imports from mock-data/bookmarks",
+        "Collections count comes from real categories fetched from API",
+        "Tags Used count comes from real tags in bookmarks store",
+        "Total Bookmarks and Favorites counts remain correct (from bookmarks store)"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-006",
+      "title": "Content component: remove mock-data imports",
+      "description": "content.tsx imports `collections` and `tags` from mock-data for display. Should use real data.",
+      "acceptanceCriteria": [
+        "content.tsx no longer imports from mock-data/bookmarks",
+        "currentCollection name displayed comes from real categories or store state",
+        "activeTagsData comes from real tags in bookmarks store",
+        "Filter chips still work correctly"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-007",
+      "title": "Sidebar: connect user avatar to real auth session",
+      "description": "Sidebar shows hardcoded /ln.png avatar and LN initials. Should use real logged-in user info from better-auth.",
+      "acceptanceCriteria": [
+        "Sidebar uses useSession() from auth-client to get current user",
+        "Avatar fallback shows real user initials (first 2 chars of name/email)",
+        "Hardcoded /ln.png and LN are replaced with dynamic values",
+        "Works correctly when session is loading or user is null"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-008",
+      "title": "Sidebar: remove hardcoded workspace entries",
+      "description": "Workspace dropdown has hardcoded 'Personal' and 'Work' entries that are not real workspaces.",
+      "acceptanceCriteria": [
+        "Hardcoded 'Personal' and 'Work' workspace items removed",
+        "Workspace dropdown shows only the current user's workspace (app name)",
+        "Create Workspace item remains as future placeholder",
+        "Account Settings and Workspace Settings items remain"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-009",
+      "title": "Add Bookmark button: wire to URL/text ingest endpoint",
+      "description": "Header has an 'Add Bookmark' button with no functionality. Should open a modal to ingest a URL.",
+      "acceptanceCriteria": [
+        "Clicking Add Bookmark opens a modal/dialog",
+        "Modal has a URL input field",
+        "Submitting calls POST /api/ingest/url with the provided URL",
+        "Shows loading state during ingest",
+        "On success: closes modal, refreshes bookmarks list",
+        "On error: shows error message in modal"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-010",
+      "title": "Build passes without TypeScript errors",
+      "description": "After all changes, the Next.js build (or tsc --noEmit) must pass without errors.",
+      "acceptanceCriteria": [
+        "cd apps/web && npx tsc --noEmit exits with code 0",
+        "No import errors from removed mock-data usage",
+        "All new components have correct TypeScript types"
+      ],
+      "passes": false
+    }
+  ]
+}

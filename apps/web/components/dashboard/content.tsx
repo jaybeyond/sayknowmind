@@ -1,7 +1,7 @@
 "use client";
 
 import { useBookmarksStore } from "@/store/bookmarks-store";
-import { collections, tags } from "@/mock-data/bookmarks";
+import { useCategoriesStore } from "@/store/categories-store";
 import { BookmarkCard } from "./bookmark-card";
 import { StatsCards } from "./stats-cards";
 import { Button } from "@/components/ui/button";
@@ -17,14 +17,19 @@ export function BookmarksContent() {
     filterType,
     setFilterType,
     sortBy,
+    getDerivedTags,
   } = useBookmarksStore();
+  const { categories } = useCategoriesStore();
+
   const filteredBookmarks = getFilteredBookmarks();
+  const derivedTags = getDerivedTags();
 
-  const currentCollection = collections.find(
-    (c) => c.id === selectedCollection
-  );
+  const currentCollection =
+    selectedCollection === "all"
+      ? { name: "All Bookmarks" }
+      : categories.find((c) => c.id === selectedCollection);
 
-  const activeTagsData = tags.filter((t) => selectedTags.includes(t.id));
+  const activeTagsData = derivedTags.filter((t) => selectedTags.includes(t.id));
   const hasActiveFilters =
     selectedTags.length > 0 || filterType !== "all" || sortBy !== "date-newest";
 

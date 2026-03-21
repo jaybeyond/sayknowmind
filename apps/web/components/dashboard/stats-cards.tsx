@@ -2,7 +2,7 @@
 
 import { Bookmark, Star, Tag, FolderOpen } from "lucide-react";
 import { useBookmarksStore } from "@/store/bookmarks-store";
-import { collections, tags } from "@/mock-data/bookmarks";
+import { useCategoriesStore } from "@/store/categories-store";
 
 const stats = [
   {
@@ -28,13 +28,15 @@ const stats = [
 ];
 
 export function StatsCards() {
-  const { bookmarks } = useBookmarksStore();
+  const { bookmarks, getDerivedTags } = useBookmarksStore();
+  const { categories } = useCategoriesStore();
 
+  const derivedTags = getDerivedTags();
   const values = [
     bookmarks.length,
     bookmarks.filter((b) => b.isFavorite).length,
-    collections.length - 1,
-    tags.length,
+    categories.length,
+    derivedTags.length,
   ];
 
   return (

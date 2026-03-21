@@ -39,31 +39,19 @@ import {
   LogOut,
   Folder,
   Star,
-  Code,
-  Palette,
-  Wrench,
-  BookOpen,
-  Sparkles,
   Tag,
   Archive,
   Trash2,
 } from "lucide-react";
 import { useBookmarksStore } from "@/store/bookmarks-store";
-import { collections, tags } from "@/mock-data/bookmarks";
+import { useCategoriesStore } from "@/store/categories-store";
+import { useSession } from "@/lib/auth-client";
+import { useTranslation } from "@/lib/i18n";
 
-const collectionIcons: Record<string, React.ElementType> = {
-  bookmark: Bookmark,
-  palette: Palette,
-  code: Code,
-  wrench: Wrench,
-  "book-open": BookOpen,
-  sparkles: Sparkles,
-};
-
-const navItems = [
-  { icon: Star, label: "Favorites", href: "/favorites" },
-  { icon: Archive, label: "Archive", href: "/archive" },
-  { icon: Trash2, label: "Trash", href: "/trash" },
+const navItemKeys = [
+  { icon: Star, key: "sidebar.favorites", href: "/favorites" },
+  { icon: Archive, key: "sidebar.archive", href: "/archive" },
+  { icon: Trash2, key: "sidebar.trash", href: "/trash" },
 ];
 
 export function BookmarksSidebar({
@@ -78,7 +66,29 @@ export function BookmarksSidebar({
     selectedTags,
     toggleTag,
     clearTags,
+    getDerivedTags,
+    fetchBookmarks,
   } = useBookmarksStore();
+  const { categories, fetchCategories } = useCategoriesStore();
+  const { data: session } = useSession();
+  const { t } = useTranslation();
+
+  React.useEffect(() => {
+    fetchBookmarks();
+    fetchCategories();
+  }, [fetchBookmarks, fetchCategories]);
+
+  const derivedTags = getDerivedTags();
+
+  // Build collection list: "All" virtual entry + real categories
+  const collectionList = React.useMemo(() => [
+    { id: "all", name: t("sidebar.allBookmarks") || "All Bookmarks", count: null },
+    ...categories.map((c) => ({ id: c.id, name: c.name, count: null })),
+  ], [categories, t]);
+
+  // User display info from session
+  const userName = session?.user?.name ?? session?.user?.email ?? "";
+  const userInitials = userName.slice(0, 2).toUpperCase() || "??";
 
   const isHomePage = pathname === "/";
 
@@ -90,57 +100,48 @@ export function BookmarksSidebar({
             <DropdownMenuTrigger className="flex items-center gap-2 outline-none">
               <div className="size-7 rounded-full overflow-hidden bg-linear-to-br from-blue-400 via-indigo-500 to-violet-500 flex items-center justify-center ring-1 ring-white/40 shadow-lg" />
               <span className="font-medium text-muted-foreground">
-                Square UI
+                {t("app.title")}
               </span>
               <ChevronDown className="size-3 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
               <DropdownMenuLabel className="text-muted-foreground text-xs font-medium">
-                Workspaces
+                {t("sidebar.workspaces")}
               </DropdownMenuLabel>
               <DropdownMenuItem>
                 <div className="size-5 rounded-full bg-linear-to-br from-blue-400 via-indigo-500 to-violet-500 mr-2" />
-                Square UI
+                {userName || t("app.title")}
                 <Check className="size-4 ml-auto" />
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <div className="size-5 rounded-full bg-linear-to-br from-emerald-400 to-cyan-500 mr-2" />
-                Personal
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <div className="size-5 rounded-full bg-linear-to-br from-orange-400 to-rose-500 mr-2" />
-                Work
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
               <DropdownMenuItem>
                 <Plus className="size-4 mr-2" />
-                Create Workspace
+                {t("sidebar.createWorkspace")}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
               <DropdownMenuItem>
                 <User className="size-4 mr-2" />
-                Account Settings
+                {t("sidebar.accountSettings")}
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Settings className="size-4 mr-2" />
-                Workspace Settings
+                {t("sidebar.workspaceSettings")}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
               <DropdownMenuItem className="text-destructive">
                 <LogOut className="size-4 mr-2" />
-                Log out
+                {t("sidebar.logOut")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <Avatar className="size-6.5">
-            <AvatarImage src="/ln.png" />
-            <AvatarFallback>LN</AvatarFallback>
+            <AvatarFallback>{userInitials}</AvatarFallback>
           </Avatar>
         </div>
       </SidebarHeader>
@@ -149,7 +150,7 @@ export function BookmarksSidebar({
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
-            placeholder="Search Bookmarks..."
+            placeholder={t("sidebar.searchPlaceholder")}
             className="pl-9 pr-10 h-9 bg-background"
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 bg-muted px-1.5 py-0.5 rounded text-[11px] text-muted-foreground font-medium">
@@ -169,17 +170,16 @@ export function BookmarksSidebar({
                   !collectionsOpen && "-rotate-90"
                 )}
               />
-              COLLECTIONS
+              {t("sidebar.collections")}
             </button>
           </SidebarGroupLabel>
           {collectionsOpen && (
             <SidebarGroupContent>
               <SidebarMenu className="mt-2">
-                {collections.map((collection) => {
-                  const IconComponent =
-                    collectionIcons[collection.icon] || Folder;
+                {collectionList.map((collection) => {
                   const isActive =
                     isHomePage && selectedCollection === collection.id;
+                  const IconComponent = collection.id === "all" ? Bookmark : Folder;
                   return (
                     <SidebarMenuItem key={collection.id}>
                       <SidebarMenuButton
@@ -196,9 +196,6 @@ export function BookmarksSidebar({
                         >
                           <IconComponent className="size-5" />
                           <span className="flex-1">{collection.name}</span>
-                          <span className="text-muted-foreground text-xs">
-                            {collection.count}
-                          </span>
                           {isActive && (
                             <ChevronRight className="size-4 text-muted-foreground opacity-60" />
                           )}
@@ -224,7 +221,7 @@ export function BookmarksSidebar({
                   !tagsOpen && "-rotate-90"
                 )}
               />
-              TAGS
+              {t("sidebar.tags")}
             </button>
             {selectedTags.length > 0 && (
               <button
@@ -234,28 +231,32 @@ export function BookmarksSidebar({
                 }}
                 className="ml-auto text-[10px] text-muted-foreground hover:text-foreground"
               >
-                Clear
+                {t("sidebar.clearTags")}
               </button>
             )}
           </SidebarGroupLabel>
           {tagsOpen && (
             <SidebarGroupContent>
               <div className="flex flex-wrap gap-1.5 mt-2">
-                {tags.map((tag) => (
-                  <button
-                    key={tag.id}
-                    onClick={() => toggleTag(tag.id)}
-                    className={cn(
-                      "inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors",
-                      selectedTags.includes(tag.id)
-                        ? "bg-primary text-primary-foreground"
-                        : tag.color
-                    )}
-                  >
-                    <Tag className="size-3" />
-                    {tag.name}
-                  </button>
-                ))}
+                {derivedTags.length === 0 ? (
+                  <p className="text-xs text-muted-foreground px-1">No tags yet</p>
+                ) : (
+                  derivedTags.map((tag) => (
+                    <button
+                      key={tag.id}
+                      onClick={() => toggleTag(tag.id)}
+                      className={cn(
+                        "inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors",
+                        selectedTags.includes(tag.id)
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted/60 text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      <Tag className="size-3" />
+                      {tag.name}
+                    </button>
+                  ))
+                )}
               </div>
             </SidebarGroupContent>
           )}
@@ -264,8 +265,8 @@ export function BookmarksSidebar({
         <SidebarGroup className="p-0">
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.label}>
+              {navItemKeys.map((item) => (
+                <SidebarMenuItem key={item.key}>
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.href}
@@ -273,7 +274,7 @@ export function BookmarksSidebar({
                   >
                     <Link href={item.href}>
                       <item.icon className="size-5" />
-                      <span>{item.label}</span>
+                      <span>{t(item.key)}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -284,15 +285,10 @@ export function BookmarksSidebar({
       </SidebarContent>
 
       <SidebarFooter className="px-5 pb-5">
-        <Link
-          href="https://github.com/ln-dev7/square-ui"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md border border-border bg-background hover:bg-muted shadow-xs text-sm font-medium w-full"
-        >
+        <div className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md border border-border bg-background shadow-xs text-sm font-medium w-full text-muted-foreground">
           <Globe className="size-4" />
-          square.lndev.me
-        </Link>
+          {t("app.title")} v0.1.0
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

@@ -1,8 +1,10 @@
 "use client";
 
+import * as React from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import { AddBookmarkDialog } from "@/components/dashboard/add-bookmark-dialog";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -20,32 +22,19 @@ import {
   Plus,
   SlidersHorizontal,
   ArrowUpDown,
-  Github,
   Check,
 } from "lucide-react";
 import { useBookmarksStore } from "@/store/bookmarks-store";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
+import { useTranslation } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 interface BookmarksHeaderProps {
   title?: string;
 }
 
-const sortOptions = [
-  { value: "date-newest", label: "Date Added (Newest)" },
-  { value: "date-oldest", label: "Date Added (Oldest)" },
-  { value: "alpha-az", label: "Alphabetical (A-Z)" },
-  { value: "alpha-za", label: "Alphabetical (Z-A)" },
-] as const;
-
-const filterOptions = [
-  { value: "all", label: "All Bookmarks" },
-  { value: "favorites", label: "Favorites Only" },
-  { value: "with-tags", label: "With Tags" },
-  { value: "without-tags", label: "Without Tags" },
-] as const;
-
-export function BookmarksHeader({ title = "Bookmarks" }: BookmarksHeaderProps) {
+export function BookmarksHeader({ title }: BookmarksHeaderProps) {
+  const [addOpen, setAddOpen] = React.useState(false);
   const {
     viewMode,
     setViewMode,
@@ -56,24 +45,41 @@ export function BookmarksHeader({ title = "Bookmarks" }: BookmarksHeaderProps) {
     filterType,
     setFilterType,
   } = useBookmarksStore();
+  const { t } = useTranslation();
+
+  const sortOptions = [
+    { value: "date-newest", label: t("sort.dateNewest") },
+    { value: "date-oldest", label: t("sort.dateOldest") },
+    { value: "alpha-az", label: t("sort.alphaAZ") },
+    { value: "alpha-za", label: t("sort.alphaZA") },
+  ] as const;
+
+  const filterOptions = [
+    { value: "all", label: t("filter.all") },
+    { value: "favorites", label: t("filter.favorites") },
+    { value: "with-tags", label: t("filter.withTags") },
+    { value: "without-tags", label: t("filter.withoutTags") },
+  ] as const;
 
   const currentSort = sortOptions.find((opt) => opt.value === sortBy);
   const currentFilter = filterOptions.find((opt) => opt.value === filterType);
 
   return (
+    <>
+    <AddBookmarkDialog open={addOpen} onOpenChange={setAddOpen} />
     <header className="w-full border-b">
       <div className="flex items-center justify-between h-14 px-4">
         <div className="flex items-center gap-3">
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-5" />
-          <h1 className="text-base font-semibold hidden sm:block">{title}</h1>
+          <h1 className="text-base font-semibold hidden sm:block">{title ?? t("header.bookmarks")}</h1>
         </div>
 
         <div className="flex items-center gap-2">
           <div className="relative hidden md:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search..."
+              placeholder={t("header.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 w-64 h-9"
@@ -108,7 +114,7 @@ export function BookmarksHeader({ title = "Bookmarks" }: BookmarksHeaderProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel className="text-xs text-muted-foreground">
-                Sort by
+                {t("header.sortBy")}
               </DropdownMenuLabel>
               {sortOptions.map((option) => (
                 <DropdownMenuItem
@@ -135,13 +141,13 @@ export function BookmarksHeader({ title = "Bookmarks" }: BookmarksHeaderProps) {
               >
                 <SlidersHorizontal className="size-4" />
                 <span className="hidden lg:inline">
-                  {filterType !== "all" ? currentFilter?.label : "Filter"}
+                  {filterType !== "all" ? currentFilter?.label : t("header.filterBy")}
                 </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel className="text-xs text-muted-foreground">
-                Filter by
+                {t("header.filterBy")}
               </DropdownMenuLabel>
               {filterOptions.map((option) => (
                 <DropdownMenuItem
@@ -160,33 +166,25 @@ export function BookmarksHeader({ title = "Bookmarks" }: BookmarksHeaderProps) {
                     onClick={() => setFilterType("all")}
                     className="text-muted-foreground"
                   >
-                    Clear filter
+                    {t("header.clearFilter")}
                   </DropdownMenuItem>
                 </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button size="sm" className="hidden sm:flex">
+          <Button size="sm" className="hidden sm:flex" onClick={() => setAddOpen(true)}>
             <Plus className="size-4" />
-            Add Bookmark
+            {t("header.addBookmark")}
           </Button>
 
           <Separator orientation="vertical" className="h-5 hidden sm:block" />
 
+          <LanguageSwitcher />
           <ThemeToggle />
-
-          <Button variant="ghost" size="icon" asChild>
-            <Link
-              href="https://github.com/ln-dev7/square-ui"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Github className="size-5" />
-            </Link>
-          </Button>
         </div>
       </div>
     </header>
+    </>
   );
 }
