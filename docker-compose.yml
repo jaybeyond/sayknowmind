@@ -19,12 +19,27 @@ services:
       - ./db/init/03-init-extensions.sql:/docker-entrypoint-initdb.d/02-extensions.sql
       - ./db/init/02-init-age-db.sh:/docker-entrypoint-initdb.d/03-age-db.sh
       - ./db/init/04-sayknowmind-init.sql:/docker-entrypoint-initdb.d/04-sayknowmind.sql
+      - ./db/init/05-ingestion-jobs.sql:/docker-entrypoint-initdb.d/05-ingestion-jobs.sql
+      - ./db/init/06-privacy-levels.sql:/docker-entrypoint-initdb.d/06-privacy-levels.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - sayknowmind
+
+  # === CACHE ===
+  redis:
+    image: redis:7-alpine
+    container_name: sayknowmind-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     networks:
       - sayknowmind
 
@@ -40,7 +55,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/sayknowmind
       RUST_LOG: ${RUST_LOG:-info}
       EDGEQUAKE_DEFAULT_LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      EDGEQUAKE_DEFAULT_LLM_MODEL: ${LLM_MODEL:-qwen2.5:0.5b}
+      EDGEQUAKE_DEFAULT_LLM_MODEL: ${LLM_MODEL:-Qwen/Qwen3.5-0.8B}
       OLLAMA_HOST: http://ollama:11434
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
@@ -55,6 +70,15 @@ services:
     networks:
       - sayknowmind
 
+  ocr-server:
+    build:
+      context: ./apps/ai-server/ocr-server
+      dockerfile: Dockerfile.ocr
+    container_name: sayknowmind-ocr
+    restart: unless-stopped
+    networks:
+      - sayknowmind
+
   ai-server:
     build:
       context: ./apps/ai-server
@@ -65,6 +89,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
+      REDIS_URL: redis://redis:6379
       OLLAMA_URL: http://ollama:11434
       OCR_ENDPOINT: http://ocr-server:8000
       SEARXNG_URL: http://searxng:8888
@@ -75,6 +100,8 @@ services:
       - model_cache:/app/models
     depends_on:
       - ollama
+      - redis
+      - ocr-server
     restart: unless-stopped
     deploy:
       resources:
@@ -95,13 +122,24 @@ services:
       - "${WEB_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_EDGEQUAKE_URL: http://localhost:${EDGEQUAKE_PORT:-8080}
-      NEXT_PUBLIC_AI_SERVER_URL: http://localhost:${AI_SERVER_PORT:-4000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/sayknowmind
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      EDGEQUAKE_URL: http://edgequake:8080
+      EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}
+      AI_SERVER_URL: http://ai-server:4000
+      AI_API_KEY: ${AI_API_KEY:-}
     depends_on:
-      - edgequake
-      - ai-server
+      postgres:
+        condition: service_healthy
+      edgequake:
+        condition: service_healthy
+      ai-server:
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -144,6 +182,8 @@ services:
     container_name: sayknowmind-searxng
     ports:
       - "${SEARXNG_PORT:-8888}:8080"
+    volumes:
+      - ./docker/searxng/settings.yml:/etc/searxng/settings.yml:ro
     environment:
       SEARXNG_BASE_URL: http://localhost:${SEARXNG_PORT:-8888}/
     restart: unless-stopped
@@ -160,9 +200,34 @@ services:
       - "${MCP_PORT:-8082}:8082"
     environment:
       EDGEQUAKE_URL: http://edgequake:8080
-      AUTH_SECRET: ${AUTH_SECRET:-changeme}
+      AUTH_SECRET: ${BETTER_AUTH_SECRET}
     depends_on:
       - edgequake
+    restart: unless-stopped
+    networks:
+      - sayknowmind
+
+  # === ZEROCLAW (Web Scraper / Crawler) ===
+  zeroclaw:
+    build:
+      context: ./packages/zeroclaw
+      dockerfile: Dockerfile
+    container_name: sayknowmind-zeroclaw
+    ports:
+      - "${ZEROCLAW_PORT:-8081}:8081"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/sayknowmind
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - user_data:/data/crawl_cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
     networks:
       - sayknowmind
@@ -173,6 +238,8 @@ volumes:
   model_cache:
     driver: local
   ollama_data:
+    driver: local
+  user_data:
     driver: local
 
 networks:

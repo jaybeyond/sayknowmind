@@ -1,0 +1,63 @@
+# SearXNG settings for SayKnowMind
+# https://docs.searxng.org/admin/settings/settings.html
+
+use_default_settings: true
+
+server:
+  # IMPORTANT: Replace with a strong random secret in production
+  # Generate with: openssl rand -hex 32
+  secret_key: "changeme-replace-with-openssl-rand-hex-32"
+  limiter: false
+  image_proxy: false
+
+ui:
+  static_use_hash: true
+  default_locale: ""
+  query_in_title: false
+  infinite_scroll: false
+  center_alignment: false
+  default_theme: simple
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "auto"
+  ban_time_on_fail: 5
+  max_ban_time_on_fail: 120
+  formats:
+    - html
+    - json
+
+engines:
+  - name: bing
+    engine: bing
+    shortcut: b
+    disabled: false
+
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: d
+    disabled: false
+
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: false
+
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false
+
+categories_as_tabs:
+  general:
+    - general
+  web:
+    - general
+
+outgoing:
+  request_timeout: 3.0
+  max_request_timeout: 15.0
+  useragent_suffix: ""
+  pool_connections: 100
+  pool_maxsize: 20

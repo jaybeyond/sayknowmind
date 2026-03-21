@@ -1,133 +1,99 @@
 {
-  "title": "SayKnowMind — Mock-to-Real Replacement & Completion",
-  "version": "1.0.0",
+  "title": "SayKnowMind — Production Readiness",
+  "version": "2.0.0",
   "created": "2026-03-21",
   "stories": [
     {
       "id": "US-001",
-      "title": "Document codebase with AGENTS.md",
-      "description": "Create AGENTS.md at project root documenting architecture, real vs mock status, API map, and agent guidelines.",
+      "title": "docker-compose: mount missing DB init scripts 05 and 06",
       "acceptanceCriteria": [
-        "AGENTS.md exists at project root",
-        "AGENTS.md lists all real implementations with file paths",
-        "AGENTS.md lists all mock/stub items and their replacement status",
-        "AGENTS.md documents API routes with method, path, auth requirement",
-        "AGENTS.md documents tech stack and service ports"
+        "postgres volumes section includes 05-ingestion-jobs.sql mounted as /docker-entrypoint-initdb.d/05-ingestion-jobs.sql",
+        "postgres volumes section includes 06-privacy-levels.sql mounted as /docker-entrypoint-initdb.d/06-privacy-levels.sql"
       ],
-      "passes": false
+      "passes": true,
+      "completedAt": "2026-03-21",
+      "evidence": "docker-compose.yml lines 22-23 confirmed"
     },
     {
       "id": "US-002",
-      "title": "Bookmarks store: stop initializing with mock data",
-      "description": "store/bookmarks-store.ts initializes bookmarks with mockBookmarks (16 hardcoded items). On empty DB, show empty state — not fake bookmarks.",
+      "title": "docker-compose: add required env vars to web service",
       "acceptanceCriteria": [
-        "bookmarks-store.ts initializes bookmarks as [] (empty array), not mockBookmarks",
-        "fetchBookmarks() sets bookmarks from API when user is authenticated",
-        "When API returns empty array and user IS authenticated, bookmarks remain []",
-        "isLoading starts as true on first render, false after fetchBookmarks completes",
-        "Mock data is not imported for initialization"
+        "web service environment has DATABASE_URL using postgres:5432 (not localhost)",
+        "web service environment has BETTER_AUTH_SECRET, BETTER_AUTH_URL, ENCRYPTION_KEY",
+        "web service environment has EDGEQUAKE_URL=http://edgequake:8080",
+        "web service environment has AI_SERVER_URL=http://ai-server:4000",
+        "web service does NOT have mismatched NEXT_PUBLIC_EDGEQUAKE_URL"
       ],
-      "passes": false
+      "passes": true,
+      "completedAt": "2026-03-21",
+      "evidence": "docker-compose.yml lines 120-135 confirmed"
     },
     {
       "id": "US-003",
-      "title": "Sidebar: replace mock collections with real categories from API",
-      "description": "sidebar.tsx imports `collections` from mock-data. Collections section should show real user categories from /api/categories.",
+      "title": "docker-compose: add ocr-server service",
       "acceptanceCriteria": [
-        "sidebar.tsx no longer imports `collections` from mock-data/bookmarks",
-        "Sidebar fetches categories from /api/categories on mount",
-        "Each category renders with its name and document count",
-        "Clicking a category filters the bookmarks by that category",
-        "Empty state shows 'No categories yet' when API returns empty",
-        "Loading state shown while categories are being fetched"
+        "docker-compose has an ocr-server service built from apps/ai-server/ocr-server using Dockerfile.ocr",
+        "ocr-server exposes port 8000 internally and is on sayknowmind network",
+        "ai-server depends_on includes ocr-server"
       ],
-      "passes": false
+      "passes": true,
+      "completedAt": "2026-03-21",
+      "evidence": "docker-compose.yml lines 73-78, 103-104 confirmed"
     },
     {
       "id": "US-004",
-      "title": "Sidebar: replace mock tags with real tags from documents",
-      "description": "sidebar.tsx imports `tags` from mock-data. Tags should be derived from actual document metadata in the DB.",
+      "title": "docker-compose: add Redis service and REDIS_URL to ai-server",
       "acceptanceCriteria": [
-        "sidebar.tsx no longer imports `tags` from mock-data/bookmarks",
-        "Tags are fetched from /api/documents endpoint and derived from document metadata",
-        "Tag counts reflect real document counts",
-        "Tag filtering still works — clicking tag filters bookmarks",
-        "Empty tags section hidden or shows empty state when no tags exist"
+        "docker-compose has redis service using redis:7-alpine",
+        "ai-server environment has REDIS_URL=redis://redis:6379",
+        "ai-server depends_on includes redis"
       ],
-      "passes": false
+      "passes": true,
+      "completedAt": "2026-03-21",
+      "evidence": "docker-compose.yml lines 34-43, 92, 103 confirmed"
     },
     {
       "id": "US-005",
-      "title": "StatsCards: use real counts from DB instead of mock array lengths",
-      "description": "stats-cards.tsx uses mock collections.length and tags.length for Collections and Tags Used stats.",
+      "title": "install.sh: fix DATABASE_URL to use postgres container hostname",
       "acceptanceCriteria": [
-        "stats-cards.tsx no longer imports from mock-data/bookmarks",
-        "Collections count comes from real categories fetched from API",
-        "Tags Used count comes from real tags in bookmarks store",
-        "Total Bookmarks and Favorites counts remain correct (from bookmarks store)"
+        "install.sh generates DATABASE_URL with hostname 'postgres' not 'localhost'",
+        "pattern: postgres://postgres:${PG_PASSWORD}@postgres:5432/sayknowmind"
       ],
-      "passes": false
+      "passes": true,
+      "completedAt": "2026-03-21",
+      "evidence": "grep DATABASE_URL install.sh returns postgres://postgres:${PG_PASSWORD}@postgres:5432/sayknowmind"
     },
     {
       "id": "US-006",
-      "title": "Content component: remove mock-data imports",
-      "description": "content.tsx imports `collections` and `tags` from mock-data for display. Should use real data.",
+      "title": "Root Makefile with convenience targets",
       "acceptanceCriteria": [
-        "content.tsx no longer imports from mock-data/bookmarks",
-        "currentCollection name displayed comes from real categories or store state",
-        "activeTagsData comes from real tags in bookmarks store",
-        "Filter chips still work correctly"
+        "Makefile exists at project root",
+        "make up, make down, make logs, make status, make build, make clean targets all defined"
       ],
-      "passes": false
+      "passes": true,
+      "completedAt": "2026-03-21",
+      "evidence": "Makefile already existed with all required targets"
     },
     {
       "id": "US-007",
-      "title": "Sidebar: connect user avatar to real auth session",
-      "description": "Sidebar shows hardcoded /ln.png avatar and LN initials. Should use real logged-in user info from better-auth.",
+      "title": "Create docker/searxng/settings.yml for production SearXNG",
       "acceptanceCriteria": [
-        "Sidebar uses useSession() from auth-client to get current user",
-        "Avatar fallback shows real user initials (first 2 chars of name/email)",
-        "Hardcoded /ln.png and LN are replaced with dynamic values",
-        "Works correctly when session is loading or user is null"
+        "docker/searxng/settings.yml exists with secret_key placeholder and general/web search enabled",
+        "docker-compose searxng service mounts docker/searxng/settings.yml to /etc/searxng/settings.yml:ro"
       ],
-      "passes": false
+      "passes": true,
+      "completedAt": "2026-03-21",
+      "evidence": "docker/searxng/settings.yml created; docker-compose.yml line 186 confirmed"
     },
     {
       "id": "US-008",
-      "title": "Sidebar: remove hardcoded workspace entries",
-      "description": "Workspace dropdown has hardcoded 'Personal' and 'Work' entries that are not real workspaces.",
+      "title": "TypeScript build passes with 0 errors after all changes",
       "acceptanceCriteria": [
-        "Hardcoded 'Personal' and 'Work' workspace items removed",
-        "Workspace dropdown shows only the current user's workspace (app name)",
-        "Create Workspace item remains as future placeholder",
-        "Account Settings and Workspace Settings items remain"
+        "npx tsc --noEmit in apps/web exits with code 0, 0 errors"
       ],
-      "passes": false
-    },
-    {
-      "id": "US-009",
-      "title": "Add Bookmark button: wire to URL/text ingest endpoint",
-      "description": "Header has an 'Add Bookmark' button with no functionality. Should open a modal to ingest a URL.",
-      "acceptanceCriteria": [
-        "Clicking Add Bookmark opens a modal/dialog",
-        "Modal has a URL input field",
-        "Submitting calls POST /api/ingest/url with the provided URL",
-        "Shows loading state during ingest",
-        "On success: closes modal, refreshes bookmarks list",
-        "On error: shows error message in modal"
-      ],
-      "passes": false
-    },
-    {
-      "id": "US-010",
-      "title": "Build passes without TypeScript errors",
-      "description": "After all changes, the Next.js build (or tsc --noEmit) must pass without errors.",
-      "acceptanceCriteria": [
-        "cd apps/web && npx tsc --noEmit exits with code 0",
-        "No import errors from removed mock-data usage",
-        "All new components have correct TypeScript types"
-      ],
-      "passes": false
+      "passes": true,
+      "completedAt": "2026-03-21",
+      "evidence": "npx tsc --noEmit exits 0 — no output (zero errors)"
     }
   ]
 }
