@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Trash2, MoreHorizontal, RotateCcw, XCircle, ExternalLink } from "lucide-react";
 import Image from "next/image";
-import { type Bookmark } from "@/mock-data/bookmarks";
+import { type Bookmark } from "@/store/bookmarks-store";
 import { cn } from "@/lib/utils";
 
 function TrashedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {

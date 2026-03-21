@@ -20,8 +20,7 @@ import {
   Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useBookmarksStore } from "@/store/bookmarks-store";
-import { tags as allTags, type Bookmark } from "@/mock-data/bookmarks";
+import { useBookmarksStore, type Bookmark } from "@/store/bookmarks-store";
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
@@ -34,7 +33,7 @@ export function BookmarkCard({
 }: BookmarkCardProps) {
   const { toggleFavorite, archiveBookmark, trashBookmark } =
     useBookmarksStore();
-  const bookmarkTags = allTags.filter((tag) => bookmark.tags.includes(tag.id));
+  const bookmarkTags = bookmark.tags;
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(bookmark.url);
@@ -64,13 +63,10 @@ export function BookmarkCard({
               <div className="hidden sm:flex items-center gap-1">
                 {bookmarkTags.slice(0, 2).map((tag) => (
                   <span
-                    key={tag.id}
-                    className={cn(
-                      "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
-                      tag.color
-                    )}
+                    key={tag}
+                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
                   >
-                    {tag.name}
+                    {tag}
                   </span>
                 ))}
                 {bookmarkTags.length > 2 && (
@@ -226,13 +222,10 @@ export function BookmarkCard({
             <div className="flex flex-wrap gap-1 pt-1">
               {bookmarkTags.slice(0, 3).map((tag) => (
                 <span
-                  key={tag.id}
-                  className={cn(
-                    "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
-                    tag.color
-                  )}
+                  key={tag}
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
                 >
-                  {tag.name}
+                  {tag}
                 </span>
               ))}
               {bookmarkTags.length > 3 && (

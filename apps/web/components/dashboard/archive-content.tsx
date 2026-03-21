@@ -11,12 +11,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Archive, MoreHorizontal, RotateCcw, Trash2, ExternalLink } from "lucide-react";
 import Image from "next/image";
-import { tags as allTags, type Bookmark } from "@/mock-data/bookmarks";
+import { type Bookmark } from "@/store/bookmarks-store";
 import { cn } from "@/lib/utils";
 
 function ArchivedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
   const { restoreFromArchive, trashBookmark } = useBookmarksStore();
-  const bookmarkTags = allTags.filter((tag) => bookmark.tags.includes(tag.id));
+  const bookmarkTags = bookmark.tags;
 
   return (
     <div className="group flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
@@ -37,13 +37,10 @@ function ArchivedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
             <div className="hidden sm:flex items-center gap-1">
               {bookmarkTags.slice(0, 2).map((tag) => (
                 <span
-                  key={tag.id}
-                  className={cn(
-                    "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
-                    tag.color
-                  )}
+                  key={tag}
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
                 >
-                  {tag.name}
+                  {tag}
                 </span>
               ))}
             </div>
