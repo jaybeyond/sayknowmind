@@ -1,29 +1,16 @@
 -- SayknowMind v0.1.0 Database Schema
 -- This runs AFTER EdgeQuake init scripts (01-03)
+-- NOTE: Auth tables (user, session, account, etc.) are created by 07-better-auth.sql
+--       user_id columns use TEXT to match better-auth's generated IDs
 
 -- Enable extensions (idempotent)
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(255),
-    created_at TIMESTAMP DEFAULT NOW(),
-    last_login TIMESTAMP,
-    failed_login_count INTEGER DEFAULT 0,
-    locked_until TIMESTAMP,
-    settings JSONB DEFAULT '{}'::jsonb
-);
-
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-
 -- Documents table
 CREATE TABLE IF NOT EXISTS documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     summary TEXT,
@@ -58,7 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type);
 -- Categories table
 CREATE TABLE IF NOT EXISTS categories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
     parent_id UUID REFERENCES categories(id) ON DELETE SET NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
@@ -109,7 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_graph_nodes_entity_id ON graph_nodes(entity_id);
 -- Conversations table
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -134,7 +121,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation
 CREATE TABLE IF NOT EXISTS shared_content (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
     ipfs_cid TEXT,
     arweave_tx_id TEXT,
     ceramic_stream_id TEXT,
