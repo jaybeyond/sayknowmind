@@ -20,7 +20,9 @@ type FilterType = "all" | "favorites" | "with-tags" | "without-tags";
 /** Map a DB document row to the Bookmark shape used by the UI */
 function documentToBookmark(row: Record<string, unknown>): Bookmark {
   const metadata = (row.metadata ?? {}) as Record<string, unknown>;
-  const tags = (Array.isArray(metadata.tags) ? metadata.tags : []) as string[];
+  const tags = (Array.isArray(metadata.tags) ? metadata.tags : []).filter(
+    (t): t is string => typeof t === "string"
+  );
   const categories = (row.categories ?? []) as Array<{ id: string; name: string }>;
 
   return {
@@ -138,45 +140,93 @@ export const useBookmarksStore = create<BookmarksState>((set, get) => ({
     });
   },
 
-  archiveBookmark: (bookmarkId) =>
-    set((state) => {
-      const bookmark = state.bookmarks.find((b) => b.id === bookmarkId);
-      if (!bookmark) return state;
-      return {
-        bookmarks: state.bookmarks.filter((b) => b.id !== bookmarkId),
-        archivedBookmarks: [...state.archivedBookmarks, bookmark],
-      };
-    }),
+  archiveBookmark: (bookmarkId) => {
+    const state = get();
+    const bookmark = state.bookmarks.find((b) => b.id === bookmarkId);
+    if (!bookmark) return;
 
-  restoreFromArchive: (bookmarkId) =>
-    set((state) => {
-      const bookmark = state.archivedBookmarks.find((b) => b.id === bookmarkId);
-      if (!bookmark) return state;
-      return {
-        archivedBookmarks: state.archivedBookmarks.filter((b) => b.id !== bookmarkId),
-        bookmarks: [...state.bookmarks, bookmark],
-      };
-    }),
+    set({
+      bookmarks: state.bookmarks.filter((b) => b.id !== bookmarkId),
+      archivedBookmarks: [...state.archivedBookmarks, bookmark],
+    });
 
-  trashBookmark: (bookmarkId) =>
-    set((state) => {
-      const bookmark = state.bookmarks.find((b) => b.id === bookmarkId);
-      if (!bookmark) return state;
-      return {
-        bookmarks: state.bookmarks.filter((b) => b.id !== bookmarkId),
-        trashedBookmarks: [...state.trashedBookmarks, bookmark],
-      };
-    }),
+    fetch(`/api/documents/${bookmarkId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metadata: { status: "archived" } }),
+    }).catch(() => {
+      set((s) => ({
+        bookmarks: [...s.bookmarks, bookmark],
+        archivedBookmarks: s.archivedBookmarks.filter((b) => b.id !== bookmarkId),
+      }));
+    });
+  },
 
-  restoreFromTrash: (bookmarkId) =>
-    set((state) => {
-      const bookmark = state.trashedBookmarks.find((b) => b.id === bookmarkId);
-      if (!bookmark) return state;
-      return {
-        trashedBookmarks: state.trashedBookmarks.filter((b) => b.id !== bookmarkId),
-        bookmarks: [...state.bookmarks, bookmark],
-      };
-    }),
+  restoreFromArchive: (bookmarkId) => {
+    const state = get();
+    const bookmark = state.archivedBookmarks.find((b) => b.id === bookmarkId);
+    if (!bookmark) return;
+
+    set({
+      archivedBookmarks: state.archivedBookmarks.filter((b) => b.id !== bookmarkId),
+      bookmarks: [...state.bookmarks, bookmark],
+    });
+
+    fetch(`/api/documents/${bookmarkId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metadata: { status: "active" } }),
+    }).catch(() => {
+      set((s) => ({
+        bookmarks: s.bookmarks.filter((b) => b.id !== bookmarkId),
+        archivedBookmarks: [...s.archivedBookmarks, bookmark],
+      }));
+    });
+  },
+
+  trashBookmark: (bookmarkId) => {
+    const state = get();
+    const bookmark = state.bookmarks.find((b) => b.id === bookmarkId);
+    if (!bookmark) return;
+
+    set({
+      bookmarks: state.bookmarks.filter((b) => b.id !== bookmarkId),
+      trashedBookmarks: [...state.trashedBookmarks, bookmark],
+    });
+
+    fetch(`/api/documents/${bookmarkId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metadata: { status: "trashed" } }),
+    }).catch(() => {
+      set((s) => ({
+        bookmarks: [...s.bookmarks, bookmark],
+        trashedBookmarks: s.trashedBookmarks.filter((b) => b.id !== bookmarkId),
+      }));
+    });
+  },
+
+  restoreFromTrash: (bookmarkId) => {
+    const state = get();
+    const bookmark = state.trashedBookmarks.find((b) => b.id === bookmarkId);
+    if (!bookmark) return;
+
+    set({
+      trashedBookmarks: state.trashedBookmarks.filter((b) => b.id !== bookmarkId),
+      bookmarks: [...state.bookmarks, bookmark],
+    });
+
+    fetch(`/api/documents/${bookmarkId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metadata: { status: "active" } }),
+    }).catch(() => {
+      set((s) => ({
+        bookmarks: s.bookmarks.filter((b) => b.id !== bookmarkId),
+        trashedBookmarks: [...s.trashedBookmarks, bookmark],
+      }));
+    });
+  },
 
   permanentlyDelete: (bookmarkId) => {
     set((state) => ({
@@ -190,14 +240,27 @@ export const useBookmarksStore = create<BookmarksState>((set, get) => ({
   fetchBookmarks: async () => {
     set({ isLoading: true, error: null });
     try {
-      const res = await fetch("/api/documents?limit=100");
-      if (!res.ok) {
-        set({ isLoading: false, error: res.status === 401 ? null : "Failed to load bookmarks" });
+      const [activeRes, archivedRes, trashedRes] = await Promise.all([
+        fetch("/api/documents?limit=100&status=active"),
+        fetch("/api/documents?limit=100&status=archived"),
+        fetch("/api/documents?limit=100&status=trashed"),
+      ]);
+
+      if (!activeRes.ok) {
+        set({ isLoading: false, error: activeRes.status === 401 ? null : "Failed to load bookmarks" });
         return;
       }
-      const data = await res.json();
+
+      const [activeData, archivedData, trashedData] = await Promise.all([
+        activeRes.json(),
+        archivedRes.ok ? archivedRes.json() : { documents: [] },
+        trashedRes.ok ? trashedRes.json() : { documents: [] },
+      ]);
+
       set({
-        bookmarks: Array.isArray(data.documents) ? data.documents.map(documentToBookmark) : [],
+        bookmarks: Array.isArray(activeData.documents) ? activeData.documents.map(documentToBookmark) : [],
+        archivedBookmarks: Array.isArray(archivedData.documents) ? archivedData.documents.map(documentToBookmark) : [],
+        trashedBookmarks: Array.isArray(trashedData.documents) ? trashedData.documents.map(documentToBookmark) : [],
         isLoading: false,
       });
     } catch {

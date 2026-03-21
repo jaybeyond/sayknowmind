@@ -1,0 +1,65 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/dev/tooling/cli/schema.json",
+  "productName": "SayknowMind",
+  "version": "0.1.0",
+  "identifier": "com.sayknowmind.desktop",
+  "build": {
+    "frontendDist": "../../web/.next",
+    "devUrl": "http://localhost:3000",
+    "beforeBuildCommand": "cd ../../web && pnpm build",
+    "beforeDevCommand": "cd ../../web && pnpm dev"
+  },
+  "app": {
+    "title": "SayknowMind",
+    "windows": [
+      {
+        "title": "SayknowMind - Agentic Second Brain",
+        "width": 1280,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    },
+    "trayIcon": {
+      "iconPath": "icons/tray.png",
+      "tooltip": "SayknowMind"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "wix": null
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://releases.sayknowmind.ai/{{target}}/{{arch}}/{{current_version}}"],
+      "dialog": true,
+      "pubkey": ""
+    },
+    "global-shortcut": {}
+  }
+}

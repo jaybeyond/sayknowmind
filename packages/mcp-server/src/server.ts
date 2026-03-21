@@ -9,10 +9,11 @@ import { registerGraphTools } from "./tools/graph.js";
 import { registerHealthTools } from "./tools/health.js";
 import { registerQueryTools } from "./tools/query.js";
 import { registerWorkspaceTools } from "./tools/workspace.js";
+import { registerSayknowmindTools } from "./tools/sayknowmind.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
-    name: "edgequake",
+    name: "sayknowmind",
     version: "0.1.0",
   });
 
@@ -21,6 +22,7 @@ export function createServer(): McpServer {
   registerDocumentTools(server);
   registerQueryTools(server);
   registerGraphTools(server);
+  registerSayknowmindTools(server);
   registerResources(server);
   registerPrompts(server);
 

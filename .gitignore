@@ -61,3 +61,5 @@ venv/
 *.tgz
 *.tar.gz
 .claude/
+.omc/
+.superset/

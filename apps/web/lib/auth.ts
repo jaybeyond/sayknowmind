@@ -35,15 +35,15 @@ export const auth = betterAuth({
     enabled: true,
     window: 60 * 15, // 15-minute window
     max: 100,
-    storage: "memory",
+    storage: "database",
     customRules: {
       "/sign-in/email": {
         window: 60 * 15, // 15-minute window
-        max: 5, // 5 consecutive failures → locked for 15 min
+        max: 20, // 20 attempts per 15 min
       },
       "/sign-up/email": {
         window: 60,
-        max: 3,
+        max: 10,
       },
     },
   },

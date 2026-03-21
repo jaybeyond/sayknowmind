@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Sidebar,
   SidebarContent,
@@ -45,7 +45,7 @@ import {
 } from "lucide-react";
 import { useBookmarksStore } from "@/store/bookmarks-store";
 import { useCategoriesStore } from "@/store/categories-store";
-import { useSession } from "@/lib/auth-client";
+import { useSession, signOut } from "@/lib/auth-client";
 import { useTranslation } from "@/lib/i18n";
 
 const navItemKeys = [
@@ -58,6 +58,7 @@ export function BookmarksSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collectionsOpen, setCollectionsOpen] = React.useState(true);
   const [tagsOpen, setTagsOpen] = React.useState(true);
   const {
@@ -134,7 +135,13 @@ export function BookmarksSidebar({
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={async () => {
+                  await signOut();
+                  router.push("/login");
+                }}
+              >
                 <LogOut className="size-4 mr-2" />
                 {t("sidebar.logOut")}
               </DropdownMenuItem>

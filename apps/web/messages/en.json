@@ -1,0 +1,95 @@
+{
+  "app": {
+    "title": "SayknowMind",
+    "subtitle": "Agentic Second Brain",
+    "description": "Everything you say, we know, and mind forever."
+  },
+  "sidebar": {
+    "searchPlaceholder": "Search Bookmarks...",
+    "collections": "COLLECTIONS",
+    "tags": "TAGS",
+    "clearTags": "Clear",
+    "favorites": "Favorites",
+    "archive": "Archive",
+    "trash": "Trash",
+    "workspaces": "Workspaces",
+    "createWorkspace": "Create Workspace",
+    "accountSettings": "Account Settings",
+    "workspaceSettings": "Workspace Settings",
+    "logOut": "Log out",
+    "allBookmarks": "All Bookmarks"
+  },
+  "header": {
+    "bookmarks": "Bookmarks",
+    "searchPlaceholder": "Search...",
+    "addBookmark": "Add Bookmark",
+    "sortBy": "Sort by",
+    "filterBy": "Filter by",
+    "clearFilter": "Clear filter"
+  },
+  "sort": {
+    "dateNewest": "Date Added (Newest)",
+    "dateOldest": "Date Added (Oldest)",
+    "alphaAZ": "Alphabetical (A-Z)",
+    "alphaZA": "Alphabetical (Z-A)"
+  },
+  "filter": {
+    "all": "All Bookmarks",
+    "favorites": "Favorites Only",
+    "withTags": "With Tags",
+    "withoutTags": "Without Tags"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "confirm": "Confirm",
+    "noResults": "No results found"
+  },
+  "auth": {
+    "login": "Log in",
+    "signup": "Sign up",
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "confirmPassword": "Confirm Password",
+    "passwordMismatch": "Passwords do not match",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "chat": {
+    "placeholder": "Ask anything about your knowledge...",
+    "thinking": "Thinking...",
+    "simpleMode": "Simple",
+    "agenticMode": "Agentic",
+    "newConversation": "New Conversation"
+  },
+  "ingest": {
+    "addUrl": "Add URL",
+    "uploadFile": "Upload File",
+    "pasteText": "Paste Text",
+    "processing": "Processing...",
+    "urlPlaceholder": "Enter URL to save...",
+    "dragDrop": "Drag and drop files here"
+  },
+  "categories": {
+    "title": "Categories",
+    "create": "Create Category",
+    "edit": "Edit Category",
+    "delete": "Delete Category",
+    "merge": "Merge Categories",
+    "uncategorized": "Uncategorized"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "defaultQueryMode": "Default Query Mode"
+  }
+}

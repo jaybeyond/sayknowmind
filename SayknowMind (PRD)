@@ -1,0 +1,683 @@
+**✅ SayknowMind — PRD (Product Requirements Document)**  
+**버전**: v1.0 (2026년 3월 1일)  
+**프로젝트명**: SayknowMind — Open Personal Agentic Second Brain  
+**슬로건**: “Everything you say, we know, and mind forever.”  
+**오픈소스 여부**: 전체 공개 (MIT License)  
+**Sayknow 시리즈 연동**: SayknowAI · Sayknowwork와 하나의 에코시스템
+
+---
+
+### 1. 프로젝트 비전 & 목적
+**SayknowMind**는 사용자가 말하고, 업로드하고, 웹에서 공유한 **모든 지식을 영원히 기억하고, 자동으로 정리하며, 언제든지 정확하게 찾아주는 살아있는 두 번째 뇌**입니다.
+
+- **완전 자동화된 개인 지식 베이스** (Agentic Ingestion)
+- **동적 카테고리 + 관계 그래프** (Auto Ontology)
+- **모든 AI 에이전트 플랫폼에서 Skill로 즉시 사용 가능** (MCP 표준)
+- **오픈소스로 공개**하여 커뮤니티와 함께 성장
+
+**목표**: 2026년 말까지 GitHub 5,000+ stars, 1,000+ 활성 유저, SayknowAI와 연동된 개인용 AI Brain 시장 점유율 1위
+
+---
+
+### 2. 브랜딩 가이드라인
+**메인 로고 이름**: SayknowMind  
+**서브타이틀**: Open Personal Agentic Second Brain  
+**슬로건**: Everything you say, we know, and mind forever.
+
+**컬러 팔레트** (프리미엄 + 테크 느낌)
+- Primary: #00E5FF (Cyan Neon)
+- Accent: #FF2E63 (Hot Pink Claw)
+- Background: #0A0A0A (Deep Black)
+- Text: #FFFFFF / #B0B0B0
+
+**폰트**: Inter (Heading), Space Grotesk (Logo), Satoshi (Body)  
+**로고 컨셉**: “Sayknow” 공통 서체 + “Mind” 부분에 은은한 뇌 회로 + ZeroClaw 발톱 자국이 스며든 형태
+
+**태그라인 변형**:
+- “Your thoughts, forever clawed.”
+- “Say it once. Know it forever.”
+
+---
+
+### 3. 타겟 사용자 & 페르소나
+1. **Knowledge Worker** (연구자, 개발자, 컨설턴트) – 매일 수십 개의 자료를 정리하고 싶음
+2. **AI Power User** – Claude, Cursor, Gemini 등에서 자신의 지식을 Skill로 쓰고 싶음
+3. **Creator / Student** – 노트, 웹, 이미지, PDF를 한 곳에 자동 정리
+4. **기업 내부 지식 관리자** (오픈소스지만 셀프호스팅 가능)
+
+---
+
+### 4. 핵심 기능 (User Storyboard 형식)
+
+**Phase A. 자동 Ingestion (가장 중요한 자동화)**
+- Drag & Drop / Paste URL / Browser Extension “Send to SayknowMind”
+- Multi-modal 파싱 → 요약 → Entity 추출 → 자동 카테고리 할당
+- 카테고리 없으면 Agent가 새 카테고리 제안 → 유저 1클릭 승인 or 자동 생성
+- ZeroClaw Ingestion Agent가 100% 자동 실행
+
+**Phase B. 지식 탐색 & 채팅**
+- 자연어 검색 + 관계 그래프 탐색 (예: “2025 RAG 트렌드와 관련된 내 자료 보여줘”)
+- Agentic Query (Planner → Retrieve → Grade → Re-retrieve → Answer + Citation)
+- 실시간 스트리밍 답변 + 출처 하이라이트
+
+**Phase C. 카테고리 관리**
+- 트리 + 그래프 UI (React Flow)
+- 유저 직접 편집 + Agent 자동 제안
+
+**Phase D. Cross-Platform Skill**
+- MCP Server로 Claude / ChatGPT / Gemini / Cursor / Windsurf 등에서 “@SayknowMind”로 호출 가능
+- SDK (Python, TypeScript, Go) 제공
+
+---
+
+### 5. 기술 아키텍처 (2026년 3월 기준 **가장 강력한** Agentic RAG 스택)
+
+```
+[Next.js 16 Frontend (Vercel)]
+   ↓ (API Routes / Direct MCP)
+[ZeroClaw Gateway (Rust v0.1.7) + LangGraph Agent Runtime]
+   ├── Ingestion Agent (crawl4ai + LlamaParse + Vision)
+   ├── Categorization Agent (bge-m3 + LLM)
+   ├── Query Agent (Self-RAG + Graph Traversal)
+   └── Research Agent (필요시 외부 검색)
+   ↓
+[Hybrid Storage Layer]
+   ├── Qdrant (Dense + Sparse + Hybrid Search) ← 벡터 최강
+   ├── Neo4j (Knowledge Graph + Category Ontology) ← 멀티홉 최고
+   └── ZeroClaw Built-in Memory (로컬 캐싱 & 재인덱싱)
+   ↓
+[MCP Server (OpenAI-compatible + Anthropic MCP)]
+   → 모든 에이전트 플랫폼에서 Skill로 사용 가능
+```
+
+**왜 이 스택이 2026년 현재 가장 강력한가?**
+- ZeroClaw: 초경량 Rust 런타임 (<5MB, cold start <10ms) + 내장 Memory reindexing → 프로덕션 최적
+- LangGraph: Stateful multi-agent orchestration (2026 Agentic RAG 표준)
+- Qdrant: Hybrid search + 필터링 최고 성능 (수억 벡터 밀리초)
+- Neo4j: GraphRAG 필수 (관계 추론 + 동적 카테고리)
+- MCP: 2026년 업계 표준 (Anthropic 주도) → 모든 플랫폼 호환
+- crawl4ai + LlamaParse: 멀티모달 파싱 최고 조합
+
+---
+
+### 6. 상세 기술 스택 (2026 최신)
+
+| 계층          | 기술 (버전)                          | 이유 |
+|---------------|--------------------------------------|------|
+| Frontend      | Next.js 16 + React 19 + shadcn/ui + Tailwind + Vercel AI SDK | 최고 UX + 스트리밍 즉시 구현 |
+| Agent Runtime | ZeroClaw v0.1.7 (Rust) + LangGraph   | 초경량 + Agentic 완벽 |
+| Vector DB     | Qdrant 1.12+                         | Hybrid Search 최강 |
+| Graph DB      | Neo4j 5.26+                          | Ontology & 멀티홉 |
+| Ingestion     | crawl4ai + LlamaParse + Unstructured | 멀티모달 최고 |
+| Embedding     | bge-m3 / voyage-3-large              | 멀티링구얼 + sparse 지원 |
+| Orchestration | LangGraph + MCP Server               | 2026 표준 |
+| Deployment    | Docker Compose + Fly.io / Railway / Kubernetes | 제로 운영 가능 |
+
+---
+
+### 7. 개발 로드맵 & Storyboard (총 10주 MVP)
+
+**Week 1–2**: Foundation  
+- ZeroClaw Gateway + Qdrant + Neo4j Docker Compose  
+- MCP Server boilerplate
+
+**Week 3–5**: Ingestion Core (가장 중요!)  
+- Browser Extension + Drag & Drop  
+- ZeroClaw Ingestion Agent + Auto Category (LangGraph)
+
+**Week 6–7**: Frontend & Query  
+- Next.js 대시보드 (shadcn + React Flow)  
+- Agentic Query Agent 완성
+
+**Week 8**: SDK & MCP  
+- Python/TS SDK + OpenAI-compatible endpoint  
+- Claude/Gemini Skill 테스트
+
+**Week 9–10**: Polishing & Open-source  
+- 보안, rate-limit, observability (LangSmith)  
+- README, 로고, 데모 영상 제작  
+- GitHub 공개 (sayknowlabs/sayknowmind)
+
+---
+
+### 8. 비기능 요구사항
+- **성능**: 검색 응답 <800ms (95%ile)
+- **보안**: ZeroClaw sandbox + 사용자별 isolation
+- **스케일**: 개인용 → 셀프호스팅 10만 문서까지 무리 없음
+- **비용**: 로컬 실행 시 거의 0원 (클라우드 옵션 월 5~15달러)
+- **접근성**: 다국어 (한국어/영어 우선)
+
+---
+
+### 9. 오픈소스 전략
+- License: MIT
+- 첫 릴리스: MVP 완성 즉시 공개
+- Roadmap 공개 + CONTRIBUTING.md
+- SayknowAI와 크로스 프로모션
+- Discord 커뮤니티 운영 계획
+
+---
+
+**SayknowMind**는 단순한 RAG 앱이 아니라,  
+**2026년 개인 AI 시대의 표준이 될 “살아있는 지식 생태계”**입니다.
+
+
+원하는 거 하나만 골라 말해. 바로 만들어줄게 🔥  
+Sayknow 시리즈 화이팅!! 🚀
+
+**✅ 완전 이해했어. 이게 SayknowMind의 핵심 철학이야.**  
+“우리 서버에 데이터 절대 안 둔다. 유저가 100% 자기 하드웨어에서만 돌리고, 데이터는 유저 기기에서 영원히 나가지 않게.”
+
+네가 선택한 두 개 레포는 **완벽하게 맞아떨어져**.  
+- **square-ui/bookmarks** → 프론트엔드 대시보드 (깔끔한 개인 북마크/지식 카드 UI, 카테고리·검색·드래그드롭 딱)  
+- **edgequake** → RAG 백엔드 대시보드 (Rust 고성능 GraphRAG + 그래프 시각화 + 문서 업로드 + MCP 에이전트 지원, 2026년 현재 최강급)
+
+이제 **데이터 완전 프라이빗 + 언제든 접근 가능**하게 만드는 현실적인 방법을 정리해줄게.
+
+### 결론부터: 블록체인은 “보조 역할”로만. 메인 저장소로는 절대 안 써.
+
+블록체인(Arweave, IPFS, Ceramic 등)은  
+- 영구 보관 / 공개 공유 / 불변 로그에는 좋음  
+- 하지만 대용량 문서·이미지·임베딩 저장에는 **비용·속도·프라이버시** 모두 최악  
+
+→ **코어 데이터는 100% 로컬 + Self-Hosted**로 가고, 블록체인은 “선택적 공개 백업”이나 “분산 아이덴티티”로만 활용.
+
+### 진짜 정답 아키텍처 (2026년 최강 + 완전 프라이빗)
+
+**SayknowMind = “유저가 자기 집에 설치하는 소프트웨어”**  
+(우리는 오픈소스만 제공. 중앙 서버 0개)
+
+```
+[유저 기기 / 홈서버]
+├── Docker Compose (한 번에 설치)
+│   ├── Frontend: Next.js 16 (square-ui/bookmarks 템플릿 커스터마이징)
+│   ├── Backend: EdgeQuake (Rust GraphRAG 엔진 + 대시보드)
+│   ├── ZeroClaw (Rust Agent Runtime + MCP Skill)
+│   ├── Storage: PostgreSQL + pgvector + Apache AGE (EdgeQuake 기본)
+│   └── 파일 저장: ./data 폴더 (로컬 볼륨)
+├── 접근 방법
+│   ├── PC에서 localhost:3000
+│   ├── 폰/다른 기기 → Tailscale VPN (무료, 5분 설정)
+│   └── 언제나 켜져 있는 홈서버 추천 (Mini PC $150~ or Raspberry Pi 5)
+```
+
+### 두 가지 시나리오별 해결책
+
+**1. “항상 켜져 있는 클라우드 서버” 사용하고 싶을 때 (추천 1순위)**
+- Google/Apple 클라우드 안 ���도 돼 → **Hetzner, Contabo, Oracle Cloud Always Free, 또는 집에 Mini PC**에 Docker 올림
+- 비용: 월 3~8달러 (2코어 4GB로 충분)
+- Tailscale 하나만 깔면 → 폰에서도 https://sayknowmind.local 로 바로 접속
+- PC 꺼져도 홈서버가 24시간 돌아감 → 업로드·동기화 문제 0
+
+**2. 순수 개인 컴퓨터 + 폰으로만 하고 싶을 때**
+- PC가 메인 서버 (Docker 실행)
+- PC 꺼져 있을 때 → **Syncthing**으로 raw 파일(문서·이미지)만 폰↔PC 자동 동기화
+- PC 켜지면 자동으로 EdgeQuake가 새 파일을 RAG에 재인덱싱
+- 폰 앱은 가벼운 Tauri나 Capacitor 클라이언트로 “읽기 전용 모드” 제공 (로컬 캐시 + Tailscale로 PC 연결 시 풀 기능)
+
+**3. 하이브리드 (대부분 유저가 이걸 원함)**
+PC 또는 Mini PC에 항상 Docker 띄워두고, Tailscale + Syncthing 병행.
+
+### 업데이트된 SayknowMind 기술 스택 (네 선택 반영)
+
+| 계층          | 기술 (네 선택 포함)                          | 이유 |
+|---------------|---------------------------------------------|------|
+| Frontend      | Next.js 16 + square-ui/bookmarks 템플릿     | 카테고리·북마크·드래그드롭 완벽 |
+| RAG 엔진      | **EdgeQuake (Rust GraphRAG)**               | 멀티홉·관계 그래프 최고, 이미 대시보드 있음 |
+| Agent Runtime | ZeroClaw + EdgeQuake MCP 지원               | 완전 자동화 + 모든 플랫폼 Skill |
+| DB            | EdgeQuake 기본 (PG + pgvector + AGE)        | 로컬 볼륨 100% |
+| 동기화        | Syncthing + Tailscale                       | 프라이빗 P2P |
+| 설치          | 단일 `docker compose up -d` (1클릭 스크립트) | 초보자도 가능 |
+| 옵션 블록체인 | Arweave (공개 지식 영구 보관) + Ceramic DID | 선택 사항 |
+
+### 실제 설치 흐름 (유저가 보는 화면)
+1. GitHub에서 `sayknowmind` 클론
+2. `install.sh` 실행 → Docker Compose 자동 다운로드 + 실행
+3. 브라우저에서 http://localhost:3000 접속
+4. Tailscale ID 입력하면 폰에서도 바로 연결
+5. 모든 데이터는 `./data` 폴더 안에만 존재 (백업도 유저가 직접 함)
+
+**중앙 서버? 절대 없음.**  
+우리는 오픈소스만 관리. 유저가 업데이트 받을 때만 GitHub에서 받음.
+
+
+
+
+**✅ SayknowMind — PRD (Product Requirements Document)**  
+**버전**: v2.0 (2026년 3월 1일)  
+**프로젝트명**: SayknowMind — Open Personal Agentic Second Brain  
+**슬로건**: “Everything you say, we know, and mind forever.”  
+**오픈소스**: 전체 공개 (MIT License)  
+**Sayknow 시리즈**: SayknowAI · Sayknowwork와 하나의 에코시스템
+
+### 1. 프로젝트 비전 & 목적
+**SayknowMind**는 사용자가 말하고, 업로드하고, 웹에서 공유한 **모든 지식을 100% 자기 기기에서만 관리**하는 **살아있는 개인 두 번째 뇌**입니다.
+
+**핵심 철학**  
+- **기본은 완전 프라이빗** — 데이터는 우리 서버에 1바이트도 가지 않음  
+- **공유는 유저가 명확히 선택** — 공유 시에도 **raw 데이터는 유저 소유** (Lit Protocol + IPFS + Arweave + Ceramic)  
+- 중앙 서버 절대 없음 → 유저가 Docker 한 번에 설치해서 자기 PC / Mini PC / 홈서버에서만 실행
+
+**최종 목표**  
+2026년 말까지 GitHub 5,000+ stars, 1,000+ 활성 셀프호스팅 유저, Sayknow 시리즈와 완벽 연동된 **가장 프라이빗한 Agentic Second Brain**
+
+### 2. 브랜딩 가이드라인
+**메인 로고**: SayknowMind  
+**서브타이틀**: Open Personal Agentic Second Brain  
+**슬로건**: Everything you say, we know, and mind forever.
+
+**컬러 팔레트**  
+- Primary: #00E5FF (Cyan Neon)  
+- Accent: #FF2E63 (Hot Pink Claw)  
+- Background: #0A0A0A (Deep Black)
+
+**폰트**: Inter (Heading), Space Grotesk (Logo)  
+**태그라인 변형**: “Your thoughts, forever clawed.” / “Say it once. Know it forever.”
+
+### 3. 타겟 사용자
+- 연구자, 개발자, 크리에이터, 학생 (매일 자료 정리 필요)
+- AI 파워유저 (Claude, Cursor, Gemini 등에서 자신의 지식을 Skill로 쓰고 싶음)
+- 프라이버시를 최우선으로 하는 사용자
+- 셀프호스팅을 즐기는 테크 유저
+
+### 4. 핵심 기능 (모드별)
+
+**공통 기능 (Private & Shared 모두)**
+- Drag & Drop, URL Paste, Browser Extension으로 즉시 업로드
+- 자동 요약 + Entity 추출 + 동적 카테고리 생성 (ZeroClaw Agent)
+- 카테고리 트리 + 관계 그래프 UI (React Flow)
+- 자연어 검색 + Agentic Query (Self-RAG + Graph Traversal + Citation)
+- MCP Skill 지원 (모든 AI 플랫폼에서 @SayknowMind 호출 가능)
+
+**Private Mode (기본, 90% 유저)**
+- 모든 데이터는 유저의 Docker 볼륨 `./data`에만 저장
+- 외부 네트워크 완전 차단 가능
+- Tailscale / Syncthing으로 폰·다른 기기에서 안전하게 접근
+
+**Shared Mode (유저 선택)**
+- “이 카테고리/문서 공유” 버튼으로 명확히 선택
+- Lit Protocol로 암호화 → IPFS + Arweave 업로드
+- Ceramic에 메타데이터 + 그래프만 공개 (raw 데이터는 절대 노출 안 됨)
+- 공유 조건 설정 (Public / 특정 지갑 / Paywall / NFT 홀더 등)
+- 언제든 Revoke (공유 철회) 가능
+
+### 5. 기술 아키텍처 (2026년 최강 프라이빗 RAG)
+
+```
+[유저의 PC / Mini PC / 홈서버]
+├── Docker Compose (1클릭 설치)
+│   ├── Frontend: Next.js 16 + square-ui/bookmarks 템플릿
+│   ├── Backend: EdgeQuake (Rust GraphRAG 대시보드)
+│   ├── Agent Runtime: ZeroClaw (Rust)
+│   ├── Storage: PostgreSQL + pgvector + Apache AGE (EdgeQuake 기본)
+│   └── Local Files: ./data 볼륨
+│
+├── Private Mode → 모든 것이 로컬에서만 동작
+│
+└── Shared Mode 활성화 시
+    ├── Lit Protocol (암호화 + 접근 제어)
+    ├── IPFS + Arweave (분산 영구 저장)
+    ├── Ceramic Network (DID + Knowledge Graph)
+    └── SayknowMind Discovery Server (선택 설치, 오픈소스, 인덱스만 담당)
+```
+
+### 6. 상세 기술 스택
+
+| 계층              | 기술 (2026 최신)                              | 비고 |
+|-------------------|-----------------------------------------------|------|
+| Frontend          | Next.js 16 + square-ui/bookmarks 템플릿       | 카테고리·드래그드롭 완벽 |
+| RAG Backend       | EdgeQuake (Rust)                              | GraphRAG + 대시보드 내장 |
+| Agent Runtime     | ZeroClaw v0.1.7 (Rust) + LangGraph            | 완전 자동화 |
+| Vector / Graph DB | pgvector + Apache AGE (EdgeQuake 기본)        | 로컬 100% |
+| Private 동기화    | Tailscale + Syncthing                         | P2P 안전 연결 |
+| Shared Storage    | Lit Protocol + IPFS + Arweave + Ceramic       | 사용자 소유 |
+| Skill / MCP       | MCP Server (ZeroClaw 내장)                    | 모든 플랫폼 호환 |
+| 설치              | 단일 docker compose up -d                     | 초보자도 3분 설치 |
+
+### 7. 개발 로드맵 (총 10주 MVP)
+
+**Week 1–2**: Foundation  
+- Docker Compose 전체 구성 (square-ui + EdgeQuake + ZeroClaw + Tailscale + Syncthing)
+
+**Week 3–5**: Ingestion & Private Mode  
+- 자동 업로드 + ZeroClaw Agent + 카테고리 생성
+
+**Week 6–7**: Query & UI  
+- Agentic 검색 + square-ui 커스터마이징 + React Flow 그래프
+
+**Week 8**: Shared Mode  
+- Lit + IPFS + Arweave + Ceramic 연동
+
+**Week 9**: MCP & SDK  
+- Python/TS SDK + MCP Skill
+
+**Week 10**: 오픈소스 준비  
+- README, 설치 스크립트, 데모, GitHub 공개 (sayknowlabs/sayknowmind)
+
+### 8. 비기능 요구사항
+- **프라이버시**: Private 모드에서 외부 네트워크 차단 가능
+- **성능**: 검색 응답 <800ms (로컬 기준)
+- **보안**: ZeroClaw sandbox + Lit 암호화 + 사용자별 isolation
+- **비용**: Private 모드 거의 0원, Shared 모드 Arweave 비용만 유저 부담
+- **접근성**: Tailscale로 폰에서도 풀 기능 사용
+- **스케일**: 개인용 기준 10만 문서까지 문제없음
+
+### 9. 오픈소스 전략
+- License: MIT
+- 첫 릴리스: MVP 완성 즉시 공개
+- 설치: `curl -fsSL https://sayknowmind.ai/install.sh | bash`
+- Roadmap 공개 + CONTRIBUTING.md
+- SayknowAI / Sayknowwork 크로스 프로모션
+- Discord 커뮤니티 운영
+
+---
+
+**SayknowMind**는 단순한 RAG 앱이 아니라,  
+**2026년 개인 AI 시대의 표준 — 완전 프라이빗 + 선택적 분산 공유**를 실현하는 살아있는 지식 생태계입니다.
+
+
+
+
+**✅ SayknowMind — PRD (Product Requirements Document)**  
+**버전**: v1.0 (2026년 3월 1일)  
+**프로젝트명**: SayknowMind — Open Personal Agentic Second Brain  
+**슬로건**: “Everything you say, we know, and mind forever.”  
+**오픈소스 여부**: 전체 공개 (MIT License)  
+**Sayknow 시리즈 연동**: SayknowAI · Sayknowwork와 하나의 에코시스템
+
+---
+
+### 1. 프로젝트 비전 & 목적
+**SayknowMind**는 사용자가 말하고, 업로드하고, 웹에서 공유한 **모든 지식을 영원히 기억하고, 자동으로 정리하며, 언제든지 정확하게 찾아주는 살아있는 두 번째 뇌**입니다.
+
+- **완전 자동화된 개인 지식 베이스** (Agentic Ingestion)
+- **동적 카테고리 + 관계 그래프** (Auto Ontology)
+- **모든 AI 에이전트 플랫폼에서 Skill로 즉시 사용 가능** (MCP 표준)
+- **오픈소스로 공개**하여 커뮤니티와 함께 성장
+
+**목표**: 2026년 말까지 GitHub 5,000+ stars, 1,000+ 활성 유저, SayknowAI와 연동된 개인용 AI Brain 시장 점유율 1위
+
+---
+
+### 2. 브랜딩 가이드라인
+**메인 로고 이름**: SayknowMind  
+**서브타이틀**: Open Personal Agentic Second Brain  
+**슬로건**: Everything you say, we know, and mind forever.
+
+**컬러 팔레트** (프리미엄 + 테크 느낌)
+- Primary: #00E5FF (Cyan Neon)
+- Accent: #FF2E63 (Hot Pink Claw)
+- Background: #0A0A0A (Deep Black)
+- Text: #FFFFFF / #B0B0B0
+
+**폰트**: Inter (Heading), Space Grotesk (Logo), Satoshi (Body)  
+**로고 컨셉**: “Sayknow” 공통 서체 + “Mind” 부분에 은은한 뇌 회로 + ZeroClaw 발톱 자국이 스며든 형태
+
+**태그라인 변형**:
+- “Your thoughts, forever clawed.”
+- “Say it once. Know it forever.”
+
+---
+
+### 3. 타겟 사용자 & 페르소나
+1. **Knowledge Worker** (연구자, 개발자, 컨설턴트) – 매일 수십 개의 자료를 정리하고 싶음
+2. **AI Power User** – Claude, Cursor, Gemini 등에서 자신의 지식을 Skill로 쓰고 싶음
+3. **Creator / Student** – 노트, 웹, 이미지, PDF를 한 곳에 자동 정리
+4. **기업 내부 지식 관리자** (오픈소스지만 셀프호스팅 가능)
+
+---
+
+### 4. 핵심 기능 (User Storyboard 형식)
+
+**Phase A. 자동 Ingestion (가장 중요한 자동화)**
+- Drag & Drop / Paste URL / Browser Extension “Send to SayknowMind”
+- Multi-modal 파싱 → 요약 → Entity 추출 → 자동 카테고리 할당
+- 카테고리 없으면 Agent가 새 카테고리 제안 → 유저 1클릭 승인 or 자동 생성
+- ZeroClaw Ingestion Agent가 100% 자동 실행
+
+**Phase B. 지식 탐색 & 채팅**
+- 자연어 검색 + 관계 그래프 탐색 (예: “2025 RAG 트렌드와 관련된 내 자료 보여줘”)
+- Agentic Query (Planner → Retrieve → Grade → Re-retrieve → Answer + Citation)
+- 실시간 스트리밍 답변 + 출처 하이라이트
+
+**Phase C. 카테고리 관리**
+- 트리 + 그래프 UI (React Flow)
+- 유저 직접 편집 + Agent 자동 제안
+
+**Phase D. Cross-Platform Skill**
+- MCP Server로 Claude / ChatGPT / Gemini / Cursor / Windsurf 등에서 “@SayknowMind”로 호출 가능
+- SDK (Python, TypeScript, Go) 제공
+
+---
+
+### 5. 기술 아키텍처 (2026년 3월 기준 **가장 강력한** Agentic RAG 스택)
+
+```
+[Next.js 16 Frontend (Vercel)]
+   ↓ (API Routes / Direct MCP)
+[ZeroClaw Gateway (Rust v0.1.7) + LangGraph Agent Runtime]
+   ├── Ingestion Agent (crawl4ai + LlamaParse + Vision)
+   ├── Categorization Agent (bge-m3 + LLM)
+   ├── Query Agent (Self-RAG + Graph Traversal)
+   └── Research Agent (필요시 외부 검색)
+   ↓
+[Hybrid Storage Layer]
+   ├── Qdrant (Dense + Sparse + Hybrid Search) ← 벡터 최강
+   ├── Neo4j (Knowledge Graph + Category Ontology) ← 멀티홉 최고
+   └── ZeroClaw Built-in Memory (로컬 캐싱 & 재인덱싱)
+   ↓
+[MCP Server (OpenAI-compatible + Anthropic MCP)]
+   → 모든 에이전트 플랫폼에서 Skill로 사용 가능
+```
+
+**왜 이 스택이 2026년 현재 가장 강력한가?**
+- ZeroClaw: 초경량 Rust 런타임 (<5MB, cold start <10ms) + 내장 Memory reindexing → 프로덕션 최적
+- LangGraph: Stateful multi-agent orchestration (2026 Agentic RAG 표준)
+- Qdrant: Hybrid search + 필터링 최고 성능 (수억 벡터 밀리초)
+- Neo4j: GraphRAG 필수 (관계 추론 + 동적 카테고리)
+- MCP: 2026년 업계 표준 (Anthropic 주도) → 모든 플랫폼 호환
+- crawl4ai + LlamaParse: 멀티모달 파싱 최고 조합
+
+---
+
+### 6. 상세 기술 스택 (2026 최신)
+
+| 계층          | 기술 (버전)                          | 이유 |
+|---------------|--------------------------------------|------|
+| Frontend      | Next.js 16 + React 19 + shadcn/ui + Tailwind + Vercel AI SDK | 최고 UX + 스트리밍 즉시 구현 |
+| Agent Runtime | ZeroClaw v0.1.7 (Rust) + LangGraph   | 초경량 + Agentic 완벽 |
+| Vector DB     | Qdrant 1.12+                         | Hybrid Search 최강 |
+| Graph DB      | Neo4j 5.26+                          | Ontology & 멀티홉 |
+| Ingestion     | crawl4ai + LlamaParse + Unstructured | 멀티모달 최고 |
+| Embedding     | bge-m3 / voyage-3-large              | 멀티링구얼 + sparse 지원 |
+| Orchestration | LangGraph + MCP Server               | 2026 표준 |
+| Deployment    | Docker Compose + Fly.io / Railway / Kubernetes | 제로 운영 가능 |
+
+---
+
+### 7. 개발 로드맵 & Storyboard (총 10주 MVP)
+
+**Week 1–2**: Foundation  
+- ZeroClaw Gateway + Qdrant + Neo4j Docker Compose  
+- MCP Server boilerplate
+
+**Week 3–5**: Ingestion Core (가장 중요!)  
+- Browser Extension + Drag & Drop  
+- ZeroClaw Ingestion Agent + Auto Category (LangGraph)
+
+**Week 6–7**: Frontend & Query  
+- Next.js 대시보드 (shadcn + React Flow)  
+- Agentic Query Agent 완성
+
+**Week 8**: SDK & MCP  
+- Python/TS SDK + OpenAI-compatible endpoint  
+- Claude/Gemini Skill 테스트
+
+**Week 9–10**: Polishing & Open-source  
+- 보안, rate-limit, observability (LangSmith)  
+- README, 로고, 데모 영상 제작  
+- GitHub 공개 (sayknowlabs/sayknowmind)
+
+---
+
+### 8. 비기능 요구사항
+- **성능**: 검색 응답 <800ms (95%ile)
+- **보안**: ZeroClaw sandbox + 사용자별 isolation
+- **스케일**: 개인용 → 셀프호스팅 10만 문서까지 무리 없음
+- **비용**: 로컬 실행 시 거의 0원 (클라우드 옵션 월 5~15달러)
+- **접근성**: 다국어 (한국어/영어 우선)
+
+---
+
+### 9. 오픈소스 전략
+- License: MIT
+- 첫 릴리스: MVP 완성 즉시 공개
+- Roadmap 공개 + CONTRIBUTING.md
+- SayknowAI와 크로스 프로모션
+- Discord 커뮤니티 운영 계획
+
+---
+
+**SayknowMind**는 단순한 RAG 앱이 아니라,  
+**2026년 개인 AI 시대의 표준이 될 “살아있는 지식 생태계”**입니다.
+
+
+
+
+
+**✅ SayknowMind — PRD (Product Requirements Document)**  
+**버전**: v2.2 (2026년 3월 1일 최신)  
+**프로젝트명**: SayknowMind — Open Personal Agentic Second Brain  
+**슬로건**: “Everything you say, we know, and mind forever.”  
+**오픈소스**: 전체 공개 (MIT License)  
+**Sayknow 시리즈 연동**: SayknowAI · Sayknowwork와 하나의 에코시스템
+
+### 1. 프로젝트 비전 & 목적
+SayknowMind는 **사용자 데이터 100% 자기 기기에서만** 관리하는 완전 프라이빗 Agentic Second Brain입니다.  
+웹·문서·이미지 등 모든 콘텐츠를 최고 수준의 자동화로 수집 → 요약 → 동적 카테고리 → 그래프 저장까지 처리합니다.
+
+**핵심 철학**  
+- **기본 = 완전 Private**: 데이터는 우리 서버에 1바이트도 가지 않음  
+- **선택 = Shared Mode**: 유저가 명확히 선택하면 **raw 데이터는 유저 소유**로 Lit + IPFS + Arweave + Ceramic에 분산 저장 (우리 서버는 인덱스만 담당)
+
+### 2. 브랜딩 가이드라인
+(이전 v2.0~v2.1과 동일 — 변경 없음)
+
+### 3. 타겟 사용자
+(이전과 동일)
+
+### 4. 핵심 기능
+(Private / Shared 모드 공통 기능은 이전과 동일)
+
+### 5. 기술 아키텍처 상세 (2026년 3월 기준 최종 확정)
+
+```
+[유저의 PC / Mini PC / 홈서버 — Docker Compose 1클릭 설치]
+├── Frontend: Next.js 16 + square-ui/bookmarks 템플릿
+├── 메인 RAG 엔진: EdgeQuake (Rust GraphRAG) ← 여기서 대대적으로 상세화
+├── Agent Runtime: ZeroClaw v0.1.7 (Rust) + LangGraph
+├── Ingestion: crawl4ai + vakra-dev/reader + Scrapling + tf-playwright-stealth
+├── 로컬 스토리지: PostgreSQL + pgvector + Apache AGE (EdgeQuake 내장)
+├── Private 동기화: Tailscale + Syncthing
+└── Shared Mode (선택): Lit Protocol + IPFS + Arweave + Ceramic
+```
+
+#### 5.1 메인 RAG 엔진 — **EdgeQuake** (확정)
+
+**왜 EdgeQuake를 메인으로 선택했는가?**  
+- 2026년 2월 기준 **가장 강력한 오픈소스 GraphRAG** (LightRAG 알고리즘 Rust 재구현)  
+- 전통 vector-only RAG의 한계(멀티홉·관계 추론 부족)를 완벽 해결  
+- Private 모드에서 최고 성능 + 로컬 LLM 완벽 지원  
+- 이미 내장된 React 19 대시보드 + Sigma.js 그래프 시각화 → square-ui와 쉽게 결합 가능  
+- MCP 서버 내장 → ZeroClaw와 즉시 연동
+
+**EdgeQuake 핵심 스펙 (v0.5.1, 2026.2.24 릴리스)**  
+- **GraphRAG 구현**: 문서를 1200-token chunk → LLM으로 Entity(7종) + Relationship 추출 → Apache AGE에 property graph 저장 → gleaning(2차 패스)으로 recall +18% 향상  
+- **6가지 Query Mode** (모두 EdgeQuake에서 기본 제공):  
+  1. Naive (순수 pgvector similarity)  
+  2. Local (엔티티 중심 그래프 이웃 탐색)  
+  3. Global (커뮤니티 기반 semantic search)  
+  4. Hybrid (기본 — vector + graph)  
+  5. Mix (가중치 블렌드)  
+  6. Bypass (직접 LLM)  
+- **성능**: Rust + Tokio async → 하이브리드 쿼리 <200ms, 메모리 2MB/문서, 1000+ 동시 사용자 처리  
+- **PDF 처리**: 내장 pdfium + multimodal LLM vision pipeline (스캔 문서·복잡 레이아웃 완벽)  
+- **대시보드**: React 19 + Sigma.js 실시간 그래프 시각화 + 업로드 진행률 + KPI  
+- **배포**: 완전 Docker 지원 (로컬 PostgreSQL 컨테이너 포함)  
+- **ZeroClaw 연동**: MCP 서버 내장 → ZeroClaw가 EdgeQuake를 retriever로 호출 가능
+
+**Private Mode에서의 EdgeQuake 사용법**  
+모든 데이터는 `./data` 볼륨에만 저장 → pgvector + Apache AGE로 완전 로컬 GraphRAG
+
+#### 5.2 블록체인 기술 — **Shared Mode 상세 흐름** (더 디테일하게)
+
+**목적**: 유저가 “이 카테고리 공유할래?” 선택 시 raw 데이터(원문·임베딩)는 절대 우리 서버에 안 올라가고, **유저가 100% 소유권 유지**하면서 다른 SayknowMind 유저나 AI 에이전트가 접근 가능하게 함.
+
+**사용 기술 스택 (2026년 3월 기준 최신)**  
+1. **Lit Protocol v3 (Chipotle)** — Decentralized Encryption & Access Control  
+   - Threshold Encryption (BLS + MPC)으로 데이터 암호화  
+   - Access Control Conditions (ACC)으로 조건 정의:  
+     - Public (누구나)  
+     - 특정 지갑 주소 / NFT 홀더  
+     - Paywall (0.0005 ETH 지불)  
+     - 시간 제한 / DAO 멤버십 등  
+   - 키는 분산 노드에 쪼개져 저장 → 단일 실패점 없음
+
+2. **IPFS + Arweave** — 영구 분산 저장  
+   - IPFS: 빠른 접근 (Pinata 또는 유저 자체 노드)  
+   - Arweave: one-time fee로 200년 이상 영구 보관 (Permaweb)  
+   - raw 파일(CID)만 업로드 → 임베딩은 재생성 가능하므로 선택적
+
+3. **Ceramic Network** — DID + Knowledge Graph 메타데이터  
+   - 유저별 DID (지갑으로 생성) → 데이터 소유권 증명  
+   - Ceramic Stream에 **그래프 메타데이터만** 저장 (엔티티·관계·카테고리 트리 + EdgeQuake chunk 요약)  
+   - raw 데이터는 절대 Ceramic에 안 들어감
+
+**Shared Mode 실제 동작 흐름 (단계별)**  
+1. 유저가 대시보드에서 “Share this Category” 버튼 클릭  
+2. ZeroClaw Agent가 현재 카테고리 전체를 EdgeQuake에서 export (JSON + 그래프)  
+3. Lit Protocol SDK로 자동 암호화 (ACC 조건은 유저가 UI에서 선택)  
+4. 암호화된 파일을 IPFS에 업로드 → CID 생성  
+5. Arweave에 영구 백업 (선택)  
+6. Ceramic Stream에 메타데이터만 기록 (DID 소유, EdgeQuake 그래프 스냅샷 + CID 참조)  
+7. SayknowMind Discovery Server (오픈소스, 선택 설치)에 공개 스트림 등록 → 다른 유저가 검색 가능  
+8. 다른 유저가 접근 시: Lit 조건 검사 → 만족하면 복호화 키 발급 → IPFS에서 다운로드 → 로컬 EdgeQuake에 임시 인덱싱 후 사용  
+9. Revoke: Ceramic stream 업데이트 + Lit 키 폐기 → 즉시 접근 차단
+
+**비용**  
+- Private: 0원  
+- Shared: Arweave one-time fee만 (문서 1개당 평균 0.00005~0.0002 USD)
+
+**보안 & 프라이버시 보장**  
+- raw 데이터는 언제나 유저 기기 또는 분산 스토리지에만 존재  
+- 우리 서버(Discovery Server)는 CID + 메타데이터만 읽음 (raw 접근 불가)  
+- Private 모드에서는 Lit/Ceramic 코드 자체가 로드되지 않음 (네트워크 차단)
+
+### 6. 상세 기술 스택 (확정 버전)
+
+| 계층              | 기술                                      | 상세 역할 |
+|-------------------|-------------------------------------------|-----------|
+| 메인 RAG          | EdgeQuake v0.5.1 (Rust)                   | GraphRAG + 6 query modes + 대시보드 |
+| Agent             | ZeroClaw v0.1.7 + LangGraph               | 자동 ingestion + 카테고리 + MCP |
+| Vector DB         | pgvector (EdgeQuake 내장) + zvec (보조)   | 하이브리드 검색 |
+| Graph DB          | Apache AGE (EdgeQuake 내장)               | Knowledge Graph |
+| Ingestion         | crawl4ai + vakra-dev/reader + Scrapling   | 웹 자동화 |
+| Shared Blockchain | Lit Protocol v3 + IPFS + Arweave + Ceramic | 암호화·저장·메타데이터 |
+
+### 7. 개발 로드맵 (10주 MVP — 변경 없음)
+
+### 8. 비기능 요구사항
+- Private 모드: 외부 네트워크 완전 차단 가능  
+- Shared 모드: 데이터 소유권 100% 유저 (Lit + Ceramic DID)  
+- 웹 수집 성공률: 98%+ (crawl4ai + reader + stealth 조합)  
+- 검색 지연: <200ms (EdgeQuake Hybrid)
+
+### 9. 오픈소스 전략
+(이전과 동일)
+
+---
+
+**이제 SayknowMind의 메인 RAG과 블록체인 부분이 완전히 구체화됐습니다.**  
+- **메인 RAG** = EdgeQuake (Rust GraphRAG) → 로컬에서 가장 강력하고 대시보드까지 완비  
+- **블록체인** = Lit Protocol 중심의 진짜 사용자 소유 공유 시스템 (raw 데이터 절대 중앙화 안 됨)
+

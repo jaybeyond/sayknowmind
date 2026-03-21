@@ -7,21 +7,21 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
 ## Tasks
 
 - [ ] 1. Project foundation and core infrastructure
-  - [ ] 1.1 Initialize Next.js 16 + React 19 monorepo with Tailwind CSS and shadcn/ui
+  - [x] 1.1 Initialize Next.js 16 + React 19 monorepo with Tailwind CSS and shadcn/ui
     - Create project root with `next@16`, `react@19`, `tailwindcss`, `shadcn/ui`
     - Apply square-ui/bookmarks template as base layout
     - Configure branding colors (Primary: #00E5FF, Accent: #FF2E63, Background: #0A0A0A)
     - Configure typography (Inter, Space Grotesk, Satoshi)
     - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6_
 
-  - [ ] 1.2 Set up PostgreSQL schema with pgvector and Apache AGE extensions
+  - [x] 1.2 Set up PostgreSQL schema with pgvector and Apache AGE extensions
     - Create `init.sql` with all tables from design: users, documents, entities, categories, document_categories, vectors, graph_nodes, conversations, messages, shared_content
     - Enable pgvector extension and create vector indexes (ivfflat)
     - Configure Apache AGE graph schema
     - Create all indexes defined in the design document
     - _Requirements: 5.7, 16.3_
 
-  - [ ] 1.3 Define core TypeScript interfaces and types
+  - [x] 1.3 Define core TypeScript interfaces and types
     - Create shared type definitions: User, Document, Entity, Category, Vector, GraphNode, GraphEdge, Conversation, Message, Citation, SharedContent, CategorySuggestion
     - Define API request/response interfaces for all endpoints (Auth, Ingestion, Search, Chat, Category, MCP)
     - Define ErrorCode enum and ErrorResponse interface
@@ -37,7 +37,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Generate arbitrary API response objects, serialize to JSON, deserialize, and verify equality with original
     - **Validates: Requirements 16.10**
 
-  - [ ] 1.6 Set up i18n with Korean and English support
+  - [x] 1.6 Set up i18n with Korean and English support
     - Implement i18n provider using next-intl or similar library
     - Create translation files for ko and en locales
     - Implement language switcher component with client-side locale change (no page reload)
@@ -49,7 +49,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - **Validates: Requirements 1.8**
 
 - [ ] 2. Authentication and security layer
-  - [ ] 2.1 Implement better-auth authentication module
+  - [x] 2.1 Implement better-auth authentication module
     - Configure better-auth with email/password signup and login
     - Implement JWT token issuance (HS256, 24h expiry) and refresh token (30d)
     - Implement session token management with automatic renewal on expiry
@@ -57,7 +57,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Create API routes: POST /api/auth/signup, POST /api/auth/login, POST /api/auth/logout
     - _Requirements: 2.1, 2.2, 2.3, 2.5, 2.6_
 
-  - [ ] 2.2 Implement authentication middleware for protected routes
+  - [x] 2.2 Implement authentication middleware for protected routes
     - Create middleware that validates JWT tokens on all protected API routes
     - Redirect unauthenticated users to login page
     - Return 401 Unauthorized for API requests without valid tokens
@@ -73,7 +73,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - For arbitrary session tokens near expiry, verify automatic renewal occurs and failed renewal triggers re-authentication
     - **Validates: Requirements 2.6**
 
-  - [ ] 2.5 Implement AntiBot module with tiagozip/cap integration
+  - [x] 2.5 Implement AntiBot module with tiagozip/cap integration
     - Integrate tiagozip/cap self-hosted PoW CAPTCHA
     - Implement bot traffic pattern analysis (User-Agent, request rate, intervals)
     - Implement IP-based rate limiting (100 req/min) and user-based rate limiting (1000 req/hour)
@@ -85,7 +85,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - For arbitrary bot-pattern requests, verify they are blocked and log entries contain reason + timestamp
     - **Validates: Requirements 3.2, 3.4**
 
-  - [ ] 2.7 Implement data encryption layer (AES-256-GCM)
+  - [x] 2.7 Implement data encryption layer (AES-256-GCM)
     - Implement AES-256-GCM encryption for stored data
     - Implement per-user encryption key management
     - Configure TLS 1.3 and HSTS headers
@@ -97,18 +97,18 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - For arbitrary user data, verify it is encrypted with AES-256 before storage and stored only locally in Private Mode
     - **Validates: Requirements 10.1, 16.4**
 
-- [ ] 3. Checkpoint - Foundation and security
+- [x] 3. Checkpoint - Foundation and security
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 4. Ingestion Pipeline (Phase A)
-  - [ ] 4.1 Implement file ingestion endpoint with drag-and-drop support
+  - [x] 4.1 Implement file ingestion endpoint with drag-and-drop support
     - Create POST /api/ingest/file endpoint (multipart/form-data)
     - Implement file parsing for common formats (PDF, TXT, MD, HTML, DOCX)
     - Store parsed content as Document in PostgreSQL
     - Return IngestFileResponse with documentId, title, summary, entities, suggestedCategories
     - _Requirements: 4.1_
 
-  - [ ] 4.2 Implement URL ingestion with crawl4ai and vakra-dev/reader
+  - [x] 4.2 Implement URL ingestion with crawl4ai and vakra-dev/reader
     - Create POST /api/ingest/url endpoint
     - Integrate crawl4ai for web page crawling
     - Integrate vakra-dev/reader for content extraction
@@ -116,7 +116,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Integrate Scrapling for structured data extraction
     - _Requirements: 4.2, 4.7, 4.8_
 
-  - [ ] 4.3 Implement post-ingestion AI processing pipeline
+  - [x] 4.3 Implement post-ingestion AI processing pipeline
     - Call sayknow-ai-server (port 4000) for automatic summary generation on Document save
     - Call sayknow-ai-server for Entity extraction (person, organization, location, concept, keyword)
     - Implement dynamic category assignment based on content analysis
@@ -128,7 +128,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - For arbitrary valid inputs (file/URL), verify that ingestion produces a Document with summary, extracted entities, and assigned categories
     - **Validates: Requirements 4.1, 4.2, 4.4, 4.5, 4.6**
 
-  - [ ] 4.5 Implement ingestion error handling
+  - [x] 4.5 Implement ingestion error handling
     - Log detailed error information on parsing failures
     - Display failure notification to user with error details
     - Implement retry mechanism for transient failures
@@ -139,12 +139,12 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - For arbitrary malformed inputs, verify error details are logged and user receives failure notification
     - **Validates: Requirements 4.9**
 
-  - [ ] 4.7 Implement browser extension ingestion endpoint
+  - [x] 4.7 Implement browser extension ingestion endpoint
     - Create endpoint for browser extension page save requests
     - Process incoming page content through the same ingestion pipeline
     - _Requirements: 4.3_
 
-  - [ ] 4.8 Implement multi-language content support in ingestion
+  - [x] 4.8 Implement multi-language content support in ingestion
     - Support Korean, English, Japanese, Chinese content ingestion and indexing
     - Configure language detection in the ingestion pipeline
     - _Requirements: 16.6_
@@ -157,14 +157,14 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 6. Knowledge exploration and chat (Phase B)
-  - [ ] 6.1 Implement EdgeQuake Engine integration with 6 Query Modes
+  - [x] 6.1 Implement EdgeQuake Engine integration with 6 Query Modes
     - Create EdgeQuake client service connecting to Rust service on port 8080
     - Implement all 6 Query Modes: Local, Global, Hybrid, Drift, Mix, Naive
     - Implement hybrid search combining Apache AGE graph queries and pgvector vector search
     - Create POST /api/search endpoint with SearchRequest/SearchResponse interfaces
     - _Requirements: 5.1, 5.2, 5.7_
 
-  - [ ] 6.2 Implement Citation generation in search results
+  - [x] 6.2 Implement Citation generation in search results
     - Attach Citation objects (documentId, title, url, excerpt, relevanceScore) to each search result
     - Ensure every search result includes at least one Citation to the source Document
     - _Requirements: 5.4_
@@ -174,14 +174,14 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - For arbitrary search queries against seeded data, verify every result item contains at least one Citation
     - **Validates: Requirements 5.2, 5.4**
 
-  - [ ] 6.4 Implement chat API with streaming responses
+  - [x] 6.4 Implement chat API with streaming responses
     - Create POST /api/chat endpoint with ChatRequest/ChatResponse interfaces
     - Implement simple mode: direct answer generation via sayknow-ai-server
     - Implement Server-Sent Events (SSE) for real-time streaming responses
     - Integrate Vercel AI SDK for streaming UI rendering
     - _Requirements: 5.6_
 
-  - [ ] 6.5 Implement Agentic Query with LangGraph orchestration
+  - [x] 6.5 Implement Agentic Query with LangGraph orchestration
     - Integrate LangGraph for multi-step reasoning on complex queries
     - Implement task decomposition: break complex queries into sub-tasks
     - Assign sub-tasks to appropriate Agents via ZeroClaw Runtime (port 8081)
@@ -193,7 +193,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - For arbitrary complex queries, verify LangGraph decomposes them into sub-tasks and assigns to Agents
     - **Validates: Requirements 14.3**
 
-  - [ ] 6.7 Implement Agent error handling and resource monitoring
+  - [x] 6.7 Implement Agent error handling and resource monitoring
     - Implement safe Agent termination on errors via ZeroClaw Runtime
     - Report error state to LangGraph Orchestrator on Agent failure
     - Monitor Agent CPU/memory usage and enforce resource limits
@@ -215,7 +215,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - For arbitrary Agent executions, verify execution history and results are logged
     - **Validates: Requirements 14.7**
 
-  - [ ] 6.11 Implement RAG dashboard with Sigma.js graph visualization
+  - [x] 6.11 Implement RAG dashboard with Sigma.js graph visualization
     - Create React 19 RAG dashboard component
     - Integrate Sigma.js for interactive knowledge graph visualization
     - Implement node click → show Entity details + connected Document list
@@ -228,7 +228,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - For arbitrary graph nodes, verify clicking shows Entity details and connected Document list
     - **Validates: Requirements 6.3**
 
-  - [ ] 6.13 Implement real-time Agent execution status display
+  - [x] 6.13 Implement real-time Agent execution status display
     - Show Agent execution state and progress in real-time on the Frontend
     - Display step-by-step progress for agentic queries
     - _Requirements: 14.8_
@@ -237,20 +237,20 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. Category management (Phase C)
-  - [ ] 8.1 Implement Category CRUD API
+  - [x] 8.1 Implement Category CRUD API
     - Create GET /api/categories, POST /api/categories, PUT /api/categories/:id, DELETE /api/categories/:id
     - Implement POST /api/categories/merge for category merging
     - Implement tree path management (depth, path fields)
     - Ensure category name changes propagate to all referencing Documents
     - _Requirements: 7.3, 7.5, 7.10_
 
-  - [ ] 8.2 Implement Category tree UI component
+  - [x] 8.2 Implement Category tree UI component
     - Create tree structure UI displaying category hierarchy
     - Implement drag-and-drop to move categories between parents
     - Update hierarchy (depth, path) on category move
     - _Requirements: 7.1, 7.4_
 
-  - [ ] 8.3 Implement Category graph UI with React Flow
+  - [x] 8.3 Implement Category graph UI with React Flow
     - Create React Flow-based graph UI visualizing category relationships
     - Synchronize category creation/updates between tree and graph UI simultaneously
     - _Requirements: 7.2, 7.3_
@@ -270,7 +270,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - For arbitrary category name edits, verify all referencing Documents have updated category info
     - **Validates: Requirements 7.5**
 
-  - [ ] 8.7 Implement Agent-based category suggestion
+  - [x] 8.7 Implement Agent-based category suggestion
     - On new Document ingestion, call Agent to suggest category placement
     - Return suggestion with reason and confidence score (0.0-1.0)
     - Implement suggestion approval: assign Document to suggested category

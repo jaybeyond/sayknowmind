@@ -1,0 +1,95 @@
+{
+  "app": {
+    "title": "SayknowMind",
+    "subtitle": "에이전틱 세컨드 브레인",
+    "description": "당신이 말하는 모든 것을 기억하고 관리합니다."
+  },
+  "sidebar": {
+    "searchPlaceholder": "북마크 검색...",
+    "collections": "컬렉션",
+    "tags": "태그",
+    "clearTags": "초기화",
+    "favorites": "즐겨찾기",
+    "archive": "보관함",
+    "trash": "휴지통",
+    "workspaces": "워크스페이스",
+    "createWorkspace": "워크스페이스 만들기",
+    "accountSettings": "계정 설정",
+    "workspaceSettings": "워크스페이스 설정",
+    "logOut": "로그아웃",
+    "allBookmarks": "전체 북마크"
+  },
+  "header": {
+    "bookmarks": "북마크",
+    "searchPlaceholder": "검색...",
+    "addBookmark": "북마크 추가",
+    "sortBy": "정렬",
+    "filterBy": "필터",
+    "clearFilter": "필터 해제"
+  },
+  "sort": {
+    "dateNewest": "최신순",
+    "dateOldest": "오래된순",
+    "alphaAZ": "가나다순 (ㄱ-ㅎ)",
+    "alphaZA": "가나다역순 (ㅎ-ㄱ)"
+  },
+  "filter": {
+    "all": "전체 북마크",
+    "favorites": "즐겨찾기만",
+    "withTags": "태그 있음",
+    "withoutTags": "태그 없음"
+  },
+  "common": {
+    "loading": "로딩 중...",
+    "error": "오류가 발생했습니다",
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "edit": "편집",
+    "confirm": "확인",
+    "noResults": "결과가 없습니다"
+  },
+  "auth": {
+    "login": "로그인",
+    "signup": "회원가입",
+    "email": "이메일",
+    "password": "비밀번호",
+    "name": "이름",
+    "confirmPassword": "비밀번호 확인",
+    "passwordMismatch": "비밀번호가 일치하지 않습니다",
+    "showPassword": "비밀번호 보기",
+    "hidePassword": "비밀번호 숨기기",
+    "forgotPassword": "비밀번호를 잊으셨나요?",
+    "noAccount": "계정이 없으신가요?",
+    "hasAccount": "이미 계정이 있으신가요?"
+  },
+  "chat": {
+    "placeholder": "지식에 대해 무엇이든 물어보세요...",
+    "thinking": "생각 중...",
+    "simpleMode": "심플",
+    "agenticMode": "에이전틱",
+    "newConversation": "새 대화"
+  },
+  "ingest": {
+    "addUrl": "URL 추가",
+    "uploadFile": "파일 업로드",
+    "pasteText": "텍스트 붙여넣기",
+    "processing": "처리 중...",
+    "urlPlaceholder": "저장할 URL을 입력하세요...",
+    "dragDrop": "파일을 여기에 드래그 앤 드롭하세요"
+  },
+  "categories": {
+    "title": "카테고리",
+    "create": "카테고리 만들기",
+    "edit": "카테고리 편집",
+    "delete": "카테고리 삭제",
+    "merge": "카테고리 병합",
+    "uncategorized": "미분류"
+  },
+  "settings": {
+    "title": "설정",
+    "language": "언어",
+    "theme": "테마",
+    "defaultQueryMode": "기본 검색 모드"
+  }
+}
