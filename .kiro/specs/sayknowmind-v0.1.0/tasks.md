@@ -27,12 +27,12 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Define ErrorCode enum and ErrorResponse interface
     - _Requirements: 16.9_
 
-  - [ ]* 1.4 Write property test for API response JSON format (Property 35)
+  - [x]* 1.4 Write property test for API response JSON format (Property 35)
     - **Property 35: API response JSON format**
     - Generate arbitrary API response objects and verify they serialize to valid JSON
     - **Validates: Requirements 16.9**
 
-  - [ ]* 1.5 Write property test for API response serialization round-trip (Property 36)
+  - [x]* 1.5 Write property test for API response serialization round-trip (Property 36)
     - **Property 36: API response serialization round-trip**
     - Generate arbitrary API response objects, serialize to JSON, deserialize, and verify equality with original
     - **Validates: Requirements 16.10**
@@ -43,7 +43,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Implement language switcher component with client-side locale change (no page reload)
     - _Requirements: 1.7, 1.8_
 
-  - [ ]* 1.7 Write property test for language switching (Property 1)
+  - [x]* 1.7 Write property test for language switching (Property 1)
     - **Property 1: Language switching UI text change**
     - For arbitrary UI text keys, verify that switching locale changes the displayed text without page reload
     - **Validates: Requirements 1.8**
@@ -63,12 +63,12 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Return 401 Unauthorized for API requests without valid tokens
     - _Requirements: 2.4_
 
-  - [ ]* 2.3 Write property test for unauthenticated access blocking (Property 2)
+  - [x]* 2.3 Write property test for unauthenticated access blocking (Property 2)
     - **Property 2: Unauthenticated access blocking**
     - For arbitrary protected route paths, verify that requests without valid auth tokens are blocked and redirected
     - **Validates: Requirements 2.4**
 
-  - [ ]* 2.4 Write property test for session token auto-renewal (Property 3)
+  - [x]* 2.4 Write property test for session token auto-renewal (Property 3)
     - **Property 3: Session token auto-renewal**
     - For arbitrary session tokens near expiry, verify automatic renewal occurs and failed renewal triggers re-authentication
     - **Validates: Requirements 2.6**
@@ -80,7 +80,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Create blocking log entries with reason and timestamp
     - _Requirements: 3.1, 3.2, 3.4_
 
-  - [ ]* 2.6 Write property test for bot traffic blocking and logging (Property 4)
+  - [x]* 2.6 Write property test for bot traffic blocking and logging (Property 4)
     - **Property 4: Bot traffic blocking and logging**
     - For arbitrary bot-pattern requests, verify they are blocked and log entries contain reason + timestamp
     - **Validates: Requirements 3.2, 3.4**
@@ -92,7 +92,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Apply OWASP Top 10 defenses: input validation, CSP headers, prepared statements, JSON schema validation
     - _Requirements: 16.4, 16.5_
 
-  - [ ]* 2.8 Write property test for data encryption (Property 18)
+  - [x]* 2.8 Write property test for data encryption (Property 18)
     - **Property 18: Private Mode data local storage and encryption**
     - For arbitrary user data, verify it is encrypted with AES-256 before storage and stored only locally in Private Mode
     - **Validates: Requirements 10.1, 16.4**
@@ -123,7 +123,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Create GET /api/ingest/status/:jobId for async job tracking
     - _Requirements: 4.4, 4.5, 4.6_
 
-  - [ ]* 4.4 Write property test for Document ingestion completeness (Property 5)
+  - [x]* 4.4 Write property test for Document ingestion completeness (Property 5)
     - **Property 5: Document ingestion completeness**
     - For arbitrary valid inputs (file/URL), verify that ingestion produces a Document with summary, extracted entities, and assigned categories
     - **Validates: Requirements 4.1, 4.2, 4.4, 4.5, 4.6**
@@ -134,7 +134,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Implement retry mechanism for transient failures
     - _Requirements: 4.9_
 
-  - [ ]* 4.6 Write property test for ingestion error handling (Property 6)
+  - [x]* 4.6 Write property test for ingestion error handling (Property 6)
     - **Property 6: Ingestion error handling**
     - For arbitrary malformed inputs, verify error details are logged and user receives failure notification
     - **Validates: Requirements 4.9**
@@ -149,7 +149,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Configure language detection in the ingestion pipeline
     - _Requirements: 16.6_
 
-  - [ ]* 4.9 Write property test for multi-language content (Property related to 16.6)
+  - [x]* 4.9 Write property test for multi-language content (Property related to 16.6)
     - Generate arbitrary multi-language content (ko, en, ja, zh) and verify successful ingestion and searchability
     - **Validates: Requirements 16.6**
 
@@ -169,7 +169,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Ensure every search result includes at least one Citation to the source Document
     - _Requirements: 5.4_
 
-  - [ ]* 6.3 Write property test for search results with Citation (Property 7)
+  - [x]* 6.3 Write property test for search results with Citation (Property 7)
     - **Property 7: Search results Citation inclusion**
     - For arbitrary search queries against seeded data, verify every result item contains at least one Citation
     - **Validates: Requirements 5.2, 5.4**
@@ -188,7 +188,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Return AgentStep array in ChatResponse for agentic mode
     - _Requirements: 5.5, 14.2, 14.3_
 
-  - [ ]* 6.6 Write property test for Agent task decomposition (Property 28)
+  - [x]* 6.6 Write property test for Agent task decomposition (Property 28)
     - **Property 28: Agent complex query decomposition**
     - For arbitrary complex queries, verify LangGraph decomposes them into sub-tasks and assigns to Agents
     - **Validates: Requirements 14.3**
@@ -200,17 +200,17 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Log Agent execution history and results
     - _Requirements: 14.4, 14.5, 14.6, 14.7_
 
-  - [ ]* 6.8 Write property test for Agent error handling (Property 29)
+  - [x]* 6.8 Write property test for Agent error handling (Property 29)
     - **Property 29: Agent error handling**
     - For arbitrary Agent execution errors, verify safe termination and error state reporting to orchestrator
     - **Validates: Requirements 14.5**
 
-  - [ ]* 6.9 Write property test for Agent resource limits (Property 30)
+  - [x]* 6.9 Write property test for Agent resource limits (Property 30)
     - **Property 30: Agent resource limits**
     - For arbitrary Agent resource usage exceeding limits, verify execution is restricted
     - **Validates: Requirements 14.6**
 
-  - [ ]* 6.10 Write property test for Agent execution logging (Property 31)
+  - [x]* 6.10 Write property test for Agent execution logging (Property 31)
     - **Property 31: Agent execution logging**
     - For arbitrary Agent executions, verify execution history and results are logged
     - **Validates: Requirements 14.7**
@@ -223,7 +223,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Implement zoom, panning, and filtering interactions
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-  - [ ]* 6.12 Write property test for graph node detail display (Property 8)
+  - [x]* 6.12 Write property test for graph node detail display (Property 8)
     - **Property 8: Graph node detail display**
     - For arbitrary graph nodes, verify clicking shows Entity details and connected Document list
     - **Validates: Requirements 6.3**
@@ -255,17 +255,17 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Synchronize category creation/updates between tree and graph UI simultaneously
     - _Requirements: 7.2, 7.3_
 
-  - [ ]* 8.4 Write property test for category creation UI sync (Property 9)
+  - [x]* 8.4 Write property test for category creation UI sync (Property 9)
     - **Property 9: Category creation UI synchronization**
     - For arbitrary category creations, verify the category appears in both tree UI and graph UI simultaneously
     - **Validates: Requirements 7.3**
 
-  - [ ]* 8.5 Write property test for category move hierarchy update (Property 10)
+  - [x]* 8.5 Write property test for category move hierarchy update (Property 10)
     - **Property 10: Category move hierarchy update**
     - For arbitrary category drag-and-drop moves, verify hierarchy (depth, path) is correctly updated
     - **Validates: Requirements 7.4**
 
-  - [ ]* 8.6 Write property test for category rename reference update (Property 11)
+  - [x]* 8.6 Write property test for category rename reference update (Property 11)
     - **Property 11: Category rename reference update**
     - For arbitrary category name edits, verify all referencing Documents have updated category info
     - **Validates: Requirements 7.5**
@@ -277,12 +277,12 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Implement suggestion rejection: store rejection feedback as learning data
     - _Requirements: 7.6, 7.7, 7.8, 7.9_
 
-  - [ ]* 8.8 Write property test for category auto-suggestion (Property 12)
+  - [x]* 8.8 Write property test for category auto-suggestion (Property 12)
     - **Property 12: Document ingestion category auto-suggestion**
     - For arbitrary new Documents, verify Agent provides category suggestion with reason and confidence score
     - **Validates: Requirements 7.6, 7.7**
 
-  - [ ]* 8.9 Write property test for category suggestion approval/rejection (Property 13)
+  - [x]* 8.9 Write property test for category suggestion approval/rejection (Property 13)
     - **Property 13: Category suggestion approval/rejection handling**
     - For arbitrary suggestion approvals, verify Document is assigned to category; for rejections, verify feedback is stored
     - **Validates: Requirements 7.8, 7.9**
@@ -298,12 +298,12 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Block all telemetry data collection and transmission
     - _Requirements: 10.3, 10.8_
 
-  - [ ]* 10.2 Write property test for Private Mode network blocking (Property 19)
+  - [x]* 10.2 Write property test for Private Mode network blocking (Property 19)
     - **Property 19: Private Mode network blocking**
     - For arbitrary external URLs, verify all outbound connections are blocked in Private Mode
     - **Validates: Requirements 10.3**
 
-  - [ ]* 10.3 Write property test for Private Mode telemetry blocking (Property 21)
+  - [x]* 10.3 Write property test for Private Mode telemetry blocking (Property 21)
     - **Property 21: Private Mode telemetry blocking**
     - Verify no telemetry data is collected or transmitted while Private Mode is active
     - **Validates: Requirements 10.8**
@@ -319,7 +319,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Implement sync conflict detection and manual resolution UI
     - _Requirements: 10.4, 10.5, 10.6_
 
-  - [ ]* 10.6 Write property test for sync conflict handling (Property 20)
+  - [x]* 10.6 Write property test for sync conflict handling (Property 20)
     - **Property 20: Private Mode sync conflict handling**
     - For arbitrary sync conflicts, verify conflict items are displayed to user with manual resolution options
     - **Validates: Requirements 10.6**
@@ -333,7 +333,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Create shared_content records with access conditions (wallet, token, NFT, public)
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
 
-  - [ ]* 10.8 Write property test for Shared Mode document encryption and upload (Property 22)
+  - [x]* 10.8 Write property test for Shared Mode document encryption and upload (Property 22)
     - **Property 22: Shared Mode Document encryption and upload**
     - For arbitrary Documents shared, verify they are encrypted before upload to distributed network
     - **Validates: Requirements 11.5**
@@ -344,12 +344,12 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Block unauthorized access attempts with permission-denied message
     - _Requirements: 11.6, 11.7, 11.8_
 
-  - [ ]* 10.10 Write property test for Shared Mode permission revocation (Property 23)
+  - [x]* 10.10 Write property test for Shared Mode permission revocation (Property 23)
     - **Property 23: Shared Mode permission revocation**
     - For arbitrary share revocations, verify access conditions are immediately invalidated
     - **Validates: Requirements 11.7**
 
-  - [ ]* 10.11 Write property test for Shared Mode unauthorized access blocking (Property 24)
+  - [x]* 10.11 Write property test for Shared Mode unauthorized access blocking (Property 24)
     - **Property 24: Shared Mode unauthorized access blocking**
     - For arbitrary unauthorized access attempts, verify access is blocked with permission-denied message
     - **Validates: Requirements 11.8**
@@ -372,7 +372,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Cache essential data for offline access
     - _Requirements: 12.7_
 
-  - [ ]* 12.3 Write property test for Desktop App offline functionality (Property 25)
+  - [x]* 12.3 Write property test for Desktop App offline functionality (Property 25)
     - **Property 25: Desktop App offline functionality**
     - For arbitrary offline states, verify search and exploration work using local data
     - **Validates: Requirements 12.7**
@@ -384,7 +384,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Implement push notifications for Agent suggestions and ingestion completion
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.7_
 
-  - [ ]* 12.5 Write property test for Mobile App share intent handling (Property 26)
+  - [x]* 12.5 Write property test for Mobile App share intent handling (Property 26)
     - **Property 26: Mobile App share intent handling**
     - For arbitrary share intents from mobile browser, verify they are received and forwarded to Ingestion Pipeline
     - **Validates: Requirements 13.4**
@@ -394,7 +394,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Auto-sync offline-collected data when network connection is restored
     - _Requirements: 13.5, 13.6_
 
-  - [ ]* 12.7 Write property test for Mobile App network recovery sync (Property 27)
+  - [x]* 12.7 Write property test for Mobile App network recovery sync (Property 27)
     - **Property 27: Mobile App network recovery sync**
     - For arbitrary network recovery events, verify offline-collected data is automatically synced
     - **Validates: Requirements 13.6**
@@ -417,17 +417,17 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Ensure compatibility with Claude Desktop, ChatGPT Plugin, Cursor, Windsurf
     - _Requirements: 8.3, 8.4, 8.6_
 
-  - [ ]* 14.3 Write property test for MCP search request handling (Property 14)
+  - [x]* 14.3 Write property test for MCP search request handling (Property 14)
     - **Property 14: MCP search request handling**
     - For arbitrary MCP search requests, verify EdgeQuake Engine performs search and returns results
     - **Validates: Requirements 8.3**
 
-  - [ ]* 14.4 Write property test for MCP ingest request handling (Property 15)
+  - [x]* 14.4 Write property test for MCP ingest request handling (Property 15)
     - **Property 15: MCP ingest request handling**
     - For arbitrary MCP ingest requests, verify Ingestion Pipeline collects the content
     - **Validates: Requirements 8.4**
 
-  - [ ]* 14.5 Write property test for MCP auth token verification (Property 16)
+  - [x]* 14.5 Write property test for MCP auth token verification (Property 16)
     - **Property 16: MCP auth token verification**
     - For arbitrary MCP requests with valid/invalid tokens, verify valid tokens are processed and invalid tokens are blocked
     - **Validates: Requirements 8.5**
@@ -453,7 +453,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Implement idiomatic error handling with error return values
     - _Requirements: 9.1, 9.2, 9.4, 9.6_
 
-  - [ ]* 14.9 Write property test for SDK serialization round-trip (Property 17)
+  - [x]* 14.9 Write property test for SDK serialization round-trip (Property 17)
     - **Property 17: SDK serialization round-trip**
     - For arbitrary valid API request objects in each SDK language, verify serialize → deserialize produces identical object
     - Use fast-check for TypeScript, Hypothesis for Python, gopter for Go
@@ -471,12 +471,12 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Configure resource limits (ai-server: 8G memory limit, 4G reservation)
     - _Requirements: 15.1, 15.5, 15.6, 15.7, 15.8_
 
-  - [ ]* 16.2 Write property test for Docker container auto-restart (Property 32)
+  - [x]* 16.2 Write property test for Docker container auto-restart (Property 32)
     - **Property 32: Docker container auto-restart**
     - Verify docker-compose.yml has restart: unless-stopped for all services
     - **Validates: Requirements 15.6**
 
-  - [ ]* 16.3 Write property test for Docker Volume data persistence (Property 33)
+  - [x]* 16.3 Write property test for Docker Volume data persistence (Property 33)
     - **Property 33: Docker Volume data persistence**
     - For arbitrary data stored in volumes, verify data persists across container restarts
     - **Validates: Requirements 15.7**
@@ -495,7 +495,7 @@ This plan implements SayknowMind, an open-source Personal Agentic Second Brain p
     - Implement query timeout (10s) with automatic rollback
     - _Requirements: 16.7_
 
-  - [ ]* 16.6 Write property test for system fault recovery (Property 34)
+  - [x]* 16.6 Write property test for system fault recovery (Property 34)
     - **Property 34: System fault auto-recovery**
     - For arbitrary simulated system faults, verify automatic recovery is attempted and service resumes without data loss
     - **Validates: Requirements 16.7**
