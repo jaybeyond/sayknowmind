@@ -1,0 +1,40 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { WifiOff } from "lucide-react";
+
+/**
+ * Offline banner — shows when network connectivity is lost.
+ * Works for both desktop (Tauri) and mobile (Capacitor) since both use
+ * the web view's navigator.onLine API.
+ *
+ * Requirements: 12.2, 12.6
+ */
+export function OfflineBanner() {
+  const [offline, setOffline] = useState(false);
+
+  useEffect(() => {
+    // Set initial state (SSR-safe)
+    setOffline(!navigator.onLine);
+
+    const handleOffline = () => setOffline(true);
+    const handleOnline = () => setOffline(false);
+
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, []);
+
+  if (!offline) return null;
+
+  return (
+    <div className="fixed top-0 inset-x-0 z-50 flex items-center justify-center gap-2 bg-yellow-500/90 px-4 py-2 text-sm font-medium text-black backdrop-blur-sm">
+      <WifiOff className="h-4 w-4 shrink-0" />
+      <span>오프라인 — 로컬 데이터만 표시됩니다. 연결 복구 시 자동 동기화됩니다.</span>
+    </div>
+  );
+}
