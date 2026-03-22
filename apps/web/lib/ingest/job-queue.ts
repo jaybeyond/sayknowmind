@@ -1,6 +1,6 @@
 import { pool } from "@/lib/db";
 import type { IngestStatus, IngestStatusResponse } from "@/lib/types";
-import { getDocument, updateDocument, insertEntities } from "./document-store";
+import { getDocument, updateDocument, insertEntities, assignDocumentCategory } from "./document-store";
 import { generateSummary, extractEntities, suggestCategories, generateStructuredMetadata, type StructuredMetadata } from "./ai-processor";
 import { indexDocument } from "@/lib/edgequake/client";
 import { detectLanguage } from "./language-detect";
@@ -173,11 +173,27 @@ async function processJob(job: JobRow): Promise<void> {
 
       const suggestions = await suggestCategories(doc.content, userId, existingCategories);
 
-      // Store suggestions in document metadata
-      if (suggestions.length > 0) {
-        await updateDocument(documentId, {
-          metadata: { suggestedCategories: suggestions, language },
-        });
+      // Auto-assign categories based on AI suggestions
+      for (const suggestion of suggestions) {
+        if (suggestion.confidence < 0.5) continue;
+
+        let categoryId = suggestion.categoryId;
+
+        // Create new category if AI suggests one that doesn't exist
+        if (categoryId === "new" && suggestion.categoryName) {
+          const insertResult = await pool.query(
+            `INSERT INTO categories (user_id, name) VALUES ($1, $2)
+             ON CONFLICT (user_id, name, COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'))
+             DO UPDATE SET name = EXCLUDED.name
+             RETURNING id`,
+            [userId, suggestion.categoryName],
+          );
+          categoryId = insertResult.rows[0]?.id;
+        }
+
+        if (categoryId && categoryId !== "new") {
+          await assignDocumentCategory(documentId, categoryId);
+        }
       }
     } catch (err) {
       console.error(`[job-queue] Category suggestion failed for job ${jobId}:`, err);

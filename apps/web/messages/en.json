@@ -5,7 +5,7 @@
     "description": "Everything you say, we know, and mind forever."
   },
   "sidebar": {
-    "searchPlaceholder": "Search Bookmarks...",
+    "searchPlaceholder": "Search Memories...",
     "collections": "COLLECTIONS",
     "tags": "TAGS",
     "clearTags": "Clear",
@@ -17,16 +17,16 @@
     "accountSettings": "Account Settings",
     "workspaceSettings": "Workspace Settings",
     "logOut": "Log out",
-    "allBookmarks": "All Bookmarks",
+    "allMemories": "All Memories",
     "chat": "Chat",
     "knowledge": "Knowledge Graph",
     "categories": "Categories",
     "settings": "Settings"
   },
   "header": {
-    "bookmarks": "Bookmarks",
+    "memory": "Memory",
     "searchPlaceholder": "Search...",
-    "addBookmark": "Add Bookmark",
+    "addMemory": "Add Memory",
     "sortBy": "Sort by",
     "filterBy": "Filter by",
     "clearFilter": "Clear filter"
@@ -38,7 +38,7 @@
     "alphaZA": "Alphabetical (Z-A)"
   },
   "filter": {
-    "all": "All Bookmarks",
+    "all": "All Memories",
     "favorites": "Favorites Only",
     "withTags": "With Tags",
     "withoutTags": "Without Tags"

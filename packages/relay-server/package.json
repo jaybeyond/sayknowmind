@@ -1,0 +1,29 @@
+{
+  "name": "@sayknowmind/relay-server",
+  "version": "0.1.0",
+  "description": "Cloud relay server for SayKnowMind — encrypted temporary storage for offline sync",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch & node --watch dist/index.js",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.11",
+    "hono": "^4.7.0",
+    "pg": "^8.13.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.7.0"
+  }
+}

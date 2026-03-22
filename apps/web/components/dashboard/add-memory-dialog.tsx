@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useBookmarksStore } from "@/store/bookmarks-store";
+import { useMemoryStore } from "@/store/memory-store";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Link, FileUp, FileText } from "lucide-react";
@@ -20,12 +20,12 @@ type Tab = "url" | "file" | "text";
 const ACCEPTED_TYPES = ".pdf,.docx,.txt,.md,.html";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-interface AddBookmarkDialogProps {
+interface AddMemoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function AddBookmarkDialog({ open, onOpenChange }: AddBookmarkDialogProps) {
+export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
   const [tab, setTab] = React.useState<Tab>("url");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -42,7 +42,7 @@ export function AddBookmarkDialog({ open, onOpenChange }: AddBookmarkDialogProps
   const [textContent, setTextContent] = React.useState("");
   const [textTitle, setTextTitle] = React.useState("");
 
-  const { fetchBookmarks } = useBookmarksStore();
+  const { fetchMemories } = useMemoryStore();
 
   const reset = () => {
     setUrl("");
@@ -63,7 +63,7 @@ export function AddBookmarkDialog({ open, onOpenChange }: AddBookmarkDialogProps
 
   const handleSuccess = async () => {
     toast.success("Saved!");
-    await fetchBookmarks();
+    await fetchMemories();
     reset();
     onOpenChange(false);
   };

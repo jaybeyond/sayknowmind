@@ -68,6 +68,16 @@ const TELEMETRY_DOMAINS = new Set([
  * Check if a URL is allowed in Private Mode.
  * Returns true if the request should be allowed.
  */
+// Relay URL hostname — auto-whitelisted in Private Mode when configured
+const RELAY_HOSTNAME: string | null = (() => {
+  try {
+    const relayUrl = process.env.RELAY_URL;
+    return relayUrl ? new URL(relayUrl).hostname : null;
+  } catch {
+    return null;
+  }
+})();
+
 export function isAllowedInPrivateMode(url: string): boolean {
   if (!isPrivateMode()) return true;
 
@@ -77,6 +87,9 @@ export function isAllowedInPrivateMode(url: string): boolean {
 
     // Allow localhost and Docker internal hosts
     if (PRIVATE_MODE_ALLOWED_HOSTS.has(hostname)) return true;
+
+    // Allow configured relay server
+    if (RELAY_HOSTNAME && hostname === RELAY_HOSTNAME) return true;
 
     // Allow Tailscale IPs (100.x.x.x)
     if (hostname.startsWith("100.")) return true;

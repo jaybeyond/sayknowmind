@@ -1,13 +1,13 @@
 "use client";
 
-import { useBookmarksStore } from "@/store/bookmarks-store";
-import { BookmarkCard } from "./bookmark-card";
+import { useMemoryStore } from "@/store/memory-store";
+import { MemoryCard } from "./memory-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star } from "lucide-react";
 
 export function FavoritesContent() {
-  const { getFavoriteBookmarks, viewMode, isLoading } = useBookmarksStore();
-  const favoriteBookmarks = getFavoriteBookmarks();
+  const { getFavoriteMemories, viewMode, isLoading } = useMemoryStore();
+  const favoriteMemories = getFavoriteMemories();
 
   if (isLoading) {
     return (
@@ -32,15 +32,15 @@ export function FavoritesContent() {
             <Star className="size-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Favorite Bookmarks</h2>
+            <h2 className="text-lg font-semibold">Favorite Memories</h2>
             <p className="text-sm text-muted-foreground">
-              {favoriteBookmarks.length} bookmark
-              {favoriteBookmarks.length !== 1 ? "s" : ""} marked as favorite
+              {favoriteMemories.length} memor
+              {favoriteMemories.length !== 1 ? "ies" : "y"} marked as favorite
             </p>
           </div>
         </div>
 
-        {favoriteBookmarks.length === 0 ? (
+        {favoriteMemories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Star className="size-12 text-muted-foreground/20 mb-4" />
             <h3 className="text-lg font-medium mb-1">No favorites yet</h3>
@@ -50,16 +50,16 @@ export function FavoritesContent() {
           </div>
         ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {favoriteBookmarks.map((bookmark) => (
-              <BookmarkCard key={bookmark.id} bookmark={bookmark} />
+            {favoriteMemories.map((memory) => (
+              <MemoryCard key={memory.id} memory={memory} />
             ))}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {favoriteBookmarks.map((bookmark) => (
-              <BookmarkCard
-                key={bookmark.id}
-                bookmark={bookmark}
+            {favoriteMemories.map((memory) => (
+              <MemoryCard
+                key={memory.id}
+                memory={memory}
                 variant="list"
               />
             ))}

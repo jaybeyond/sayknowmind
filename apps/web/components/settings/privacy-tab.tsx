@@ -80,7 +80,7 @@ export function PrivacyTab() {
         <div>
           <h3 className="text-sm font-medium">Export data</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Download all your bookmarks and documents as JSON
+            Download all your memories and documents as JSON
           </p>
         </div>
         <Button variant="outline" onClick={handleExport} disabled={exporting}>

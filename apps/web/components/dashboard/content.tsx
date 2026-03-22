@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useBookmarksStore } from "@/store/bookmarks-store";
+import { useMemoryStore, type Memory } from "@/store/memory-store";
 import { useCategoriesStore } from "@/store/categories-store";
-import { BookmarkCard } from "./bookmark-card";
-import { AddBookmarkDialog } from "./add-bookmark-dialog";
+import { MemoryCard } from "./memory-card";
+import { MemoryDetailPanel } from "./memory-detail-panel";
+import { AddMemoryDialog } from "./add-memory-dialog";
 import { StatsCards } from "./stats-cards";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,10 +13,10 @@ import { X, FileUp, BookOpen, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-export function BookmarksContent() {
+export function MemoryContent() {
   const {
     selectedCollection,
-    getFilteredBookmarks,
+    getFilteredMemories,
     viewMode,
     selectedTags,
     toggleTag,
@@ -25,18 +26,19 @@ export function BookmarksContent() {
     getDerivedTags,
     isLoading,
     searchQuery,
-    fetchBookmarks,
-  } = useBookmarksStore();
+    fetchMemories,
+  } = useMemoryStore();
   const { categories } = useCategoriesStore();
   const [globalDragOver, setGlobalDragOver] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
 
-  const filteredBookmarks = getFilteredBookmarks();
+  const filteredMemories = getFilteredMemories();
   const derivedTags = getDerivedTags();
 
   const currentCollection =
     selectedCollection === "all"
-      ? { name: "All Bookmarks" }
+      ? { name: "All Memories" }
       : categories.find((c) => c.id === selectedCollection);
 
   const activeTagsData = derivedTags.filter((t) => selectedTags.includes(t.id));
@@ -45,7 +47,7 @@ export function BookmarksContent() {
 
   return (
     <>
-    <AddBookmarkDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+    <AddMemoryDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     <div
       className="flex-1 w-full overflow-auto relative"
       onDragOver={(e) => {
@@ -84,7 +86,7 @@ export function BookmarksContent() {
           });
           if (res.ok) {
             toast.success("File saved!", { id: "file-drop" });
-            fetchBookmarks();
+            fetchMemories();
           } else {
             toast.error("Failed to save file", { id: "file-drop" });
           }
@@ -111,11 +113,11 @@ export function BookmarksContent() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-semibold">
-                {currentCollection?.name || "All Bookmarks"}
+                {currentCollection?.name || "All Memories"}
               </h2>
               <p className="text-sm text-muted-foreground">
-                {filteredBookmarks.length} bookmark
-                {filteredBookmarks.length !== 1 ? "s" : ""}
+                {filteredMemories.length} memor
+                {filteredMemories.length !== 1 ? "ies" : "y"}
                 {hasActiveFilters && " (filtered)"}
               </p>
             </div>
@@ -174,23 +176,24 @@ export function BookmarksContent() {
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredBookmarks.map((bookmark) => (
-                <BookmarkCard key={bookmark.id} bookmark={bookmark} />
+              {filteredMemories.map((memory) => (
+                <MemoryCard key={memory.id} memory={memory} onSelect={setSelectedMemory} />
               ))}
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {filteredBookmarks.map((bookmark) => (
-                <BookmarkCard
-                  key={bookmark.id}
-                  bookmark={bookmark}
+              {filteredMemories.map((memory) => (
+                <MemoryCard
+                  key={memory.id}
+                  memory={memory}
                   variant="list"
+                  onSelect={setSelectedMemory}
                 />
               ))}
             </div>
           )}
 
-          {!isLoading && filteredBookmarks.length === 0 && (
+          {!isLoading && filteredMemories.length === 0 && (
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <div className="size-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
                 <BookOpen className="size-8 text-muted-foreground/50" />
@@ -226,6 +229,7 @@ export function BookmarksContent() {
         </div>
       </div>
     </div>
+    <MemoryDetailPanel memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
     </>
   );
 }

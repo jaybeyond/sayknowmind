@@ -1,6 +1,6 @@
 "use client";
 
-import { useBookmarksStore } from "@/store/bookmarks-store";
+import { useMemoryStore } from "@/store/memory-store";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,31 +18,31 @@ import {
   ExternalLink,
 } from "lucide-react";
 import Image from "next/image";
-import { type Bookmark } from "@/store/bookmarks-store";
+import { type Memory } from "@/store/memory-store";
 import { cn } from "@/lib/utils";
 
-function ArchivedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
-  const { restoreFromArchive, trashBookmark } = useBookmarksStore();
-  const bookmarkTags = bookmark.tags;
+function ArchivedMemoryCard({ memory }: { memory: Memory }) {
+  const { restoreFromArchive, trashMemory } = useMemoryStore();
+  const memoryTags = memory.tags;
 
   return (
     <div className="group flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
       <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0">
         <Image
-          src={bookmark.favicon}
-          alt={bookmark.title}
+          src={memory.favicon}
+          alt={memory.title}
           width={24}
           height={24}
-          className={cn("size-6", bookmark.hasDarkIcon && "dark:invert")}
+          className={cn("size-6", memory.hasDarkIcon && "dark:invert")}
         />
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h3 className="font-medium truncate">{bookmark.title}</h3>
-          {bookmarkTags.length > 0 && (
+          <h3 className="font-medium truncate">{memory.title}</h3>
+          {memoryTags.length > 0 && (
             <div className="hidden sm:flex items-center gap-1">
-              {bookmarkTags.slice(0, 2).map((tag) => (
+              {memoryTags.slice(0, 2).map((tag) => (
                 <span
                   key={tag}
                   className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
@@ -53,14 +53,14 @@ function ArchivedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
             </div>
           )}
         </div>
-        <p className="text-sm text-muted-foreground truncate">{bookmark.url}</p>
+        <p className="text-sm text-muted-foreground truncate">{memory.url}</p>
       </div>
 
       <div className="flex items-center gap-1">
         <Button
           variant="outline"
           size="sm"
-          onClick={() => restoreFromArchive(bookmark.id)}
+          onClick={() => restoreFromArchive(memory.id)}
         >
           <RotateCcw className="size-4 mr-1" />
           Restore
@@ -73,7 +73,7 @@ function ArchivedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
-              onClick={() => window.open(bookmark.url, "_blank")}
+              onClick={() => window.open(memory.url, "_blank")}
             >
               <ExternalLink className="size-4 mr-2" />
               Open URL
@@ -82,8 +82,8 @@ function ArchivedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
             <DropdownMenuItem
               className="text-destructive"
               onClick={() => {
-                restoreFromArchive(bookmark.id);
-                setTimeout(() => trashBookmark(bookmark.id), 0);
+                restoreFromArchive(memory.id);
+                setTimeout(() => trashMemory(memory.id), 0);
               }}
             >
               <Trash2 className="size-4 mr-2" />
@@ -97,8 +97,8 @@ function ArchivedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
 }
 
 export function ArchiveContent() {
-  const { getArchivedBookmarks, isLoading } = useBookmarksStore();
-  const archivedBookmarks = getArchivedBookmarks();
+  const { getArchivedMemories, isLoading } = useMemoryStore();
+  const archivedMemories = getArchivedMemories();
 
   if (isLoading) {
     return (
@@ -123,15 +123,15 @@ export function ArchiveContent() {
             <Archive className="size-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Archived Bookmarks</h2>
+            <h2 className="text-lg font-semibold">Archived Memories</h2>
             <p className="text-sm text-muted-foreground">
-              {archivedBookmarks.length} bookmark
-              {archivedBookmarks.length !== 1 ? "s" : ""} in archive
+              {archivedMemories.length} memor
+              {archivedMemories.length !== 1 ? "ies" : "y"} in archive
             </p>
           </div>
         </div>
 
-        {archivedBookmarks.length === 0 ? (
+        {archivedMemories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Archive className="size-12 text-muted-foreground/20 mb-4" />
             <h3 className="text-lg font-medium mb-1">Archive is empty</h3>
@@ -141,8 +141,8 @@ export function ArchiveContent() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {archivedBookmarks.map((bookmark) => (
-              <ArchivedBookmarkCard key={bookmark.id} bookmark={bookmark} />
+            {archivedMemories.map((memory) => (
+              <ArchivedMemoryCard key={memory.id} memory={memory} />
             ))}
           </div>
         )}

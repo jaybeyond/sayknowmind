@@ -22,6 +22,8 @@ services:
       - ./db/init/04-sayknowmind-init.sql:/docker-entrypoint-initdb.d/04-sayknowmind.sql
       - ./db/init/05-ingestion-jobs.sql:/docker-entrypoint-initdb.d/05-ingestion-jobs.sql
       - ./db/init/06-privacy-levels.sql:/docker-entrypoint-initdb.d/06-privacy-levels.sql
+      - ./db/init/08-relay-sync.sql:/docker-entrypoint-initdb.d/08-relay-sync.sql
+      - ./db/init/09-sync-ledger.sql:/docker-entrypoint-initdb.d/09-sync-ledger.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -204,6 +206,32 @@ services:
       AUTH_SECRET: ${BETTER_AUTH_SECRET}
     depends_on:
       - edgequake
+    restart: unless-stopped
+    networks:
+      - sayknowmind
+
+  # === CLOUD RELAY (Encrypted Offline Sync) ===
+  relay-server:
+    build:
+      context: ./packages/relay-server
+      dockerfile: Dockerfile
+    container_name: sayknowmind-relay
+    ports:
+      - "${RELAY_PORT:-3200}:3200"
+    environment:
+      NODE_ENV: production
+      PORT: 3200
+      RELAY_SHARED_SECRET: ${RELAY_SHARED_SECRET}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/sayknowmind
+      PURGE_INTERVAL_MS: 900000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
     networks:
       - sayknowmind

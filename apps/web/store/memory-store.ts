@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type Bookmark = {
+export type Memory = {
   id: string;
   title: string;
   url: string;
@@ -23,8 +23,8 @@ type ViewMode = "grid" | "list";
 type SortBy = "date-newest" | "date-oldest" | "alpha-az" | "alpha-za";
 type FilterType = "all" | "favorites" | "with-tags" | "without-tags";
 
-/** Map a DB document row to the Bookmark shape used by the UI */
-function documentToBookmark(row: Record<string, unknown>): Bookmark {
+/** Map a DB document row to the Memory shape used by the UI */
+function documentToMemory(row: Record<string, unknown>): Memory {
   const metadata = (row.metadata ?? {}) as Record<string, unknown>;
   const tags = (Array.isArray(metadata.tags) ? metadata.tags : []).filter(
     (t): t is string => typeof t === "string"
@@ -57,10 +57,10 @@ export interface DerivedTag {
   count: number;
 }
 
-interface BookmarksState {
-  bookmarks: Bookmark[];
-  archivedBookmarks: Bookmark[];
-  trashedBookmarks: Bookmark[];
+interface MemoryState {
+  memories: Memory[];
+  archivedMemories: Memory[];
+  trashedMemories: Memory[];
   selectedCollection: string;
   selectedTags: string[];
   searchQuery: string;
@@ -76,24 +76,24 @@ interface BookmarksState {
   setViewMode: (mode: ViewMode) => void;
   setSortBy: (sort: SortBy) => void;
   setFilterType: (filter: FilterType) => void;
-  toggleFavorite: (bookmarkId: string) => void;
-  archiveBookmark: (bookmarkId: string) => void;
-  restoreFromArchive: (bookmarkId: string) => void;
-  trashBookmark: (bookmarkId: string) => void;
-  restoreFromTrash: (bookmarkId: string) => void;
-  permanentlyDelete: (bookmarkId: string) => void;
-  fetchBookmarks: () => Promise<void>;
-  getFilteredBookmarks: () => Bookmark[];
-  getFavoriteBookmarks: () => Bookmark[];
-  getArchivedBookmarks: () => Bookmark[];
-  getTrashedBookmarks: () => Bookmark[];
+  toggleFavorite: (memoryId: string) => void;
+  archiveMemory: (memoryId: string) => void;
+  restoreFromArchive: (memoryId: string) => void;
+  trashMemory: (memoryId: string) => void;
+  restoreFromTrash: (memoryId: string) => void;
+  permanentlyDelete: (memoryId: string) => void;
+  fetchMemories: () => Promise<void>;
+  getFilteredMemories: () => Memory[];
+  getFavoriteMemories: () => Memory[];
+  getArchivedMemories: () => Memory[];
+  getTrashedMemories: () => Memory[];
   getDerivedTags: () => DerivedTag[];
 }
 
-export const useBookmarksStore = create<BookmarksState>((set, get) => ({
-  bookmarks: [],
-  archivedBookmarks: [],
-  trashedBookmarks: [],
+export const useMemoryStore = create<MemoryState>((set, get) => ({
+  memories: [],
+  archivedMemories: [],
+  trashedMemories: [],
   selectedCollection: "all",
   selectedTags: [],
   searchQuery: "",
@@ -122,133 +122,133 @@ export const useBookmarksStore = create<BookmarksState>((set, get) => ({
 
   setFilterType: (filter) => set({ filterType: filter }),
 
-  toggleFavorite: (bookmarkId) => {
+  toggleFavorite: (memoryId) => {
     const state = get();
-    const bookmark = state.bookmarks.find((b) => b.id === bookmarkId);
-    if (!bookmark) return;
+    const memory = state.memories.find((m) => m.id === memoryId);
+    if (!memory) return;
 
-    const newValue = !bookmark.isFavorite;
+    const newValue = !memory.isFavorite;
 
     // Optimistic update
     set({
-      bookmarks: state.bookmarks.map((b) =>
-        b.id === bookmarkId ? { ...b, isFavorite: newValue } : b
+      memories: state.memories.map((m) =>
+        m.id === memoryId ? { ...m, isFavorite: newValue } : m
       ),
     });
 
     // Persist to API (fire-and-forget)
-    fetch(`/api/documents/${bookmarkId}`, {
+    fetch(`/api/documents/${memoryId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ metadata: { isFavorite: newValue } }),
     }).catch(() => {
       // Revert on failure
       set((s) => ({
-        bookmarks: s.bookmarks.map((b) =>
-          b.id === bookmarkId ? { ...b, isFavorite: !newValue } : b
+        memories: s.memories.map((m) =>
+          m.id === memoryId ? { ...m, isFavorite: !newValue } : m
         ),
       }));
     });
   },
 
-  archiveBookmark: (bookmarkId) => {
+  archiveMemory: (memoryId) => {
     const state = get();
-    const bookmark = state.bookmarks.find((b) => b.id === bookmarkId);
-    if (!bookmark) return;
+    const memory = state.memories.find((m) => m.id === memoryId);
+    if (!memory) return;
 
     set({
-      bookmarks: state.bookmarks.filter((b) => b.id !== bookmarkId),
-      archivedBookmarks: [...state.archivedBookmarks, bookmark],
+      memories: state.memories.filter((m) => m.id !== memoryId),
+      archivedMemories: [...state.archivedMemories, memory],
     });
 
-    fetch(`/api/documents/${bookmarkId}`, {
+    fetch(`/api/documents/${memoryId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ metadata: { status: "archived" } }),
     }).catch(() => {
       set((s) => ({
-        bookmarks: [...s.bookmarks, bookmark],
-        archivedBookmarks: s.archivedBookmarks.filter((b) => b.id !== bookmarkId),
+        memories: [...s.memories, memory],
+        archivedMemories: s.archivedMemories.filter((m) => m.id !== memoryId),
       }));
     });
   },
 
-  restoreFromArchive: (bookmarkId) => {
+  restoreFromArchive: (memoryId) => {
     const state = get();
-    const bookmark = state.archivedBookmarks.find((b) => b.id === bookmarkId);
-    if (!bookmark) return;
+    const memory = state.archivedMemories.find((m) => m.id === memoryId);
+    if (!memory) return;
 
     set({
-      archivedBookmarks: state.archivedBookmarks.filter((b) => b.id !== bookmarkId),
-      bookmarks: [...state.bookmarks, bookmark],
+      archivedMemories: state.archivedMemories.filter((m) => m.id !== memoryId),
+      memories: [...state.memories, memory],
     });
 
-    fetch(`/api/documents/${bookmarkId}`, {
+    fetch(`/api/documents/${memoryId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ metadata: { status: "active" } }),
     }).catch(() => {
       set((s) => ({
-        bookmarks: s.bookmarks.filter((b) => b.id !== bookmarkId),
-        archivedBookmarks: [...s.archivedBookmarks, bookmark],
+        memories: s.memories.filter((m) => m.id !== memoryId),
+        archivedMemories: [...s.archivedMemories, memory],
       }));
     });
   },
 
-  trashBookmark: (bookmarkId) => {
+  trashMemory: (memoryId) => {
     const state = get();
-    const bookmark = state.bookmarks.find((b) => b.id === bookmarkId);
-    if (!bookmark) return;
+    const memory = state.memories.find((m) => m.id === memoryId);
+    if (!memory) return;
 
     set({
-      bookmarks: state.bookmarks.filter((b) => b.id !== bookmarkId),
-      trashedBookmarks: [...state.trashedBookmarks, bookmark],
+      memories: state.memories.filter((m) => m.id !== memoryId),
+      trashedMemories: [...state.trashedMemories, memory],
     });
 
-    fetch(`/api/documents/${bookmarkId}`, {
+    fetch(`/api/documents/${memoryId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ metadata: { status: "trashed" } }),
     }).catch(() => {
       set((s) => ({
-        bookmarks: [...s.bookmarks, bookmark],
-        trashedBookmarks: s.trashedBookmarks.filter((b) => b.id !== bookmarkId),
+        memories: [...s.memories, memory],
+        trashedMemories: s.trashedMemories.filter((m) => m.id !== memoryId),
       }));
     });
   },
 
-  restoreFromTrash: (bookmarkId) => {
+  restoreFromTrash: (memoryId) => {
     const state = get();
-    const bookmark = state.trashedBookmarks.find((b) => b.id === bookmarkId);
-    if (!bookmark) return;
+    const memory = state.trashedMemories.find((m) => m.id === memoryId);
+    if (!memory) return;
 
     set({
-      trashedBookmarks: state.trashedBookmarks.filter((b) => b.id !== bookmarkId),
-      bookmarks: [...state.bookmarks, bookmark],
+      trashedMemories: state.trashedMemories.filter((m) => m.id !== memoryId),
+      memories: [...state.memories, memory],
     });
 
-    fetch(`/api/documents/${bookmarkId}`, {
+    fetch(`/api/documents/${memoryId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ metadata: { status: "active" } }),
     }).catch(() => {
       set((s) => ({
-        bookmarks: s.bookmarks.filter((b) => b.id !== bookmarkId),
-        trashedBookmarks: [...s.trashedBookmarks, bookmark],
+        memories: s.memories.filter((m) => m.id !== memoryId),
+        trashedMemories: [...s.trashedMemories, memory],
       }));
     });
   },
 
-  permanentlyDelete: (bookmarkId) => {
+  permanentlyDelete: (memoryId) => {
     set((state) => ({
-      trashedBookmarks: state.trashedBookmarks.filter((b) => b.id !== bookmarkId),
+      trashedMemories: state.trashedMemories.filter((m) => m.id !== memoryId),
     }));
 
     // Hard-delete from DB
-    fetch(`/api/documents/${bookmarkId}`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/documents/${memoryId}`, { method: "DELETE" }).catch(() => {});
   },
 
-  fetchBookmarks: async () => {
+  fetchMemories: async () => {
     set({ isLoading: true, error: null });
     try {
       const [activeRes, archivedRes, trashedRes] = await Promise.all([
@@ -258,7 +258,7 @@ export const useBookmarksStore = create<BookmarksState>((set, get) => ({
       ]);
 
       if (!activeRes.ok) {
-        set({ isLoading: false, error: activeRes.status === 401 ? null : "Failed to load bookmarks" });
+        set({ isLoading: false, error: activeRes.status === 401 ? null : "Failed to load memories" });
         return;
       }
 
@@ -269,9 +269,9 @@ export const useBookmarksStore = create<BookmarksState>((set, get) => ({
       ]);
 
       set({
-        bookmarks: Array.isArray(activeData.documents) ? activeData.documents.map(documentToBookmark) : [],
-        archivedBookmarks: Array.isArray(archivedData.documents) ? archivedData.documents.map(documentToBookmark) : [],
-        trashedBookmarks: Array.isArray(trashedData.documents) ? trashedData.documents.map(documentToBookmark) : [],
+        memories: Array.isArray(activeData.documents) ? activeData.documents.map(documentToMemory) : [],
+        archivedMemories: Array.isArray(archivedData.documents) ? archivedData.documents.map(documentToMemory) : [],
+        trashedMemories: Array.isArray(trashedData.documents) ? trashedData.documents.map(documentToMemory) : [],
         isLoading: false,
       });
     } catch {
@@ -279,39 +279,39 @@ export const useBookmarksStore = create<BookmarksState>((set, get) => ({
     }
   },
 
-  getFilteredBookmarks: () => {
+  getFilteredMemories: () => {
     const state = get();
-    let filtered = [...state.bookmarks];
+    let filtered = [...state.memories];
 
     if (state.selectedCollection !== "all") {
-      filtered = filtered.filter((b) => b.collectionId === state.selectedCollection);
+      filtered = filtered.filter((m) => m.collectionId === state.selectedCollection);
     }
 
     if (state.selectedTags.length > 0) {
-      filtered = filtered.filter((b) =>
-        state.selectedTags.some((tag) => b.tags.includes(tag))
+      filtered = filtered.filter((m) =>
+        state.selectedTags.some((tag) => m.tags.includes(tag))
       );
     }
 
     if (state.searchQuery) {
       const query = state.searchQuery.toLowerCase();
       filtered = filtered.filter(
-        (b) =>
-          b.title.toLowerCase().includes(query) ||
-          b.description.toLowerCase().includes(query) ||
-          b.url.toLowerCase().includes(query)
+        (m) =>
+          m.title.toLowerCase().includes(query) ||
+          m.description.toLowerCase().includes(query) ||
+          m.url.toLowerCase().includes(query)
       );
     }
 
     switch (state.filterType) {
       case "favorites":
-        filtered = filtered.filter((b) => b.isFavorite);
+        filtered = filtered.filter((m) => m.isFavorite);
         break;
       case "with-tags":
-        filtered = filtered.filter((b) => b.tags.length > 0);
+        filtered = filtered.filter((m) => m.tags.length > 0);
         break;
       case "without-tags":
-        filtered = filtered.filter((b) => b.tags.length === 0);
+        filtered = filtered.filter((m) => m.tags.length === 0);
         break;
     }
 
@@ -333,17 +333,17 @@ export const useBookmarksStore = create<BookmarksState>((set, get) => ({
     return filtered;
   },
 
-  getFavoriteBookmarks: () => {
+  getFavoriteMemories: () => {
     const state = get();
-    let filtered = state.bookmarks.filter((b) => b.isFavorite);
+    let filtered = state.memories.filter((m) => m.isFavorite);
 
     if (state.searchQuery) {
       const query = state.searchQuery.toLowerCase();
       filtered = filtered.filter(
-        (b) =>
-          b.title.toLowerCase().includes(query) ||
-          b.description.toLowerCase().includes(query) ||
-          b.url.toLowerCase().includes(query)
+        (m) =>
+          m.title.toLowerCase().includes(query) ||
+          m.description.toLowerCase().includes(query) ||
+          m.url.toLowerCase().includes(query)
       );
     }
 
@@ -365,34 +365,34 @@ export const useBookmarksStore = create<BookmarksState>((set, get) => ({
     return filtered;
   },
 
-  getArchivedBookmarks: () => {
+  getArchivedMemories: () => {
     const state = get();
-    let filtered = [...state.archivedBookmarks];
+    let filtered = [...state.archivedMemories];
 
     if (state.searchQuery) {
       const query = state.searchQuery.toLowerCase();
       filtered = filtered.filter(
-        (b) =>
-          b.title.toLowerCase().includes(query) ||
-          b.description.toLowerCase().includes(query) ||
-          b.url.toLowerCase().includes(query)
+        (m) =>
+          m.title.toLowerCase().includes(query) ||
+          m.description.toLowerCase().includes(query) ||
+          m.url.toLowerCase().includes(query)
       );
     }
 
     return filtered;
   },
 
-  getTrashedBookmarks: () => {
+  getTrashedMemories: () => {
     const state = get();
-    let filtered = [...state.trashedBookmarks];
+    let filtered = [...state.trashedMemories];
 
     if (state.searchQuery) {
       const query = state.searchQuery.toLowerCase();
       filtered = filtered.filter(
-        (b) =>
-          b.title.toLowerCase().includes(query) ||
-          b.description.toLowerCase().includes(query) ||
-          b.url.toLowerCase().includes(query)
+        (m) =>
+          m.title.toLowerCase().includes(query) ||
+          m.description.toLowerCase().includes(query) ||
+          m.url.toLowerCase().includes(query)
       );
     }
 
@@ -400,10 +400,10 @@ export const useBookmarksStore = create<BookmarksState>((set, get) => ({
   },
 
   getDerivedTags: () => {
-    const { bookmarks } = get();
+    const { memories } = get();
     const counts = new Map<string, number>();
-    for (const b of bookmarks) {
-      for (const tag of b.tags) {
+    for (const m of memories) {
+      for (const tag of m.tags) {
         counts.set(tag, (counts.get(tag) ?? 0) + 1);
       }
     }

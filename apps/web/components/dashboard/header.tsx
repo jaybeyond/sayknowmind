@@ -4,7 +4,7 @@ import * as React from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { AddBookmarkDialog } from "@/components/dashboard/add-bookmark-dialog";
+import { AddMemoryDialog } from "@/components/dashboard/add-memory-dialog";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -24,16 +24,16 @@ import {
   ArrowUpDown,
   Check,
 } from "lucide-react";
-import { useBookmarksStore } from "@/store/bookmarks-store";
+import { useMemoryStore } from "@/store/memory-store";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
-interface BookmarksHeaderProps {
+interface MemoryHeaderProps {
   title?: string;
 }
 
-export function BookmarksHeader({ title }: BookmarksHeaderProps) {
+export function MemoryHeader({ title }: MemoryHeaderProps) {
   const [addOpen, setAddOpen] = React.useState(false);
   const {
     viewMode,
@@ -44,7 +44,7 @@ export function BookmarksHeader({ title }: BookmarksHeaderProps) {
     setSortBy,
     filterType,
     setFilterType,
-  } = useBookmarksStore();
+  } = useMemoryStore();
   const { t } = useTranslation();
 
   const sortOptions = [
@@ -66,13 +66,13 @@ export function BookmarksHeader({ title }: BookmarksHeaderProps) {
 
   return (
     <>
-    <AddBookmarkDialog open={addOpen} onOpenChange={setAddOpen} />
+    <AddMemoryDialog open={addOpen} onOpenChange={setAddOpen} />
     <header className="w-full border-b">
       <div className="flex items-center justify-between h-14 px-4">
         <div className="flex items-center gap-3">
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-5" />
-          <h1 className="text-base font-semibold hidden sm:block">{title ?? t("header.bookmarks")}</h1>
+          <h1 className="text-base font-semibold hidden sm:block">{title ?? t("header.memory")}</h1>
         </div>
 
         <div className="flex items-center gap-2">
@@ -175,7 +175,7 @@ export function BookmarksHeader({ title }: BookmarksHeaderProps) {
 
           <Button size="sm" className="hidden sm:flex" onClick={() => setAddOpen(true)}>
             <Plus className="size-4" />
-            {t("header.addBookmark")}
+            {t("header.addMemory")}
           </Button>
 
           <Separator orientation="vertical" className="h-5 hidden sm:block" />

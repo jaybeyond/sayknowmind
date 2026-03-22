@@ -13,6 +13,7 @@ const protectedPaths = [
   "/api/categories",
   "/api/knowledge",
   "/api/documents",
+  "/api/sync",
   "/knowledge",
   "/categories",
 ];
@@ -70,6 +71,7 @@ export const config = {
     "/api/categories/:path*",
     "/api/knowledge/:path*",
     "/api/documents/:path*",
+    "/api/sync/:path*",
     // Auth pages (redirect if logged in)
     "/login",
     "/signup",

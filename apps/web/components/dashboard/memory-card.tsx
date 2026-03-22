@@ -25,11 +25,12 @@ import {
   Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useBookmarksStore, type Bookmark } from "@/store/bookmarks-store";
+import { useMemoryStore, type Memory } from "@/store/memory-store";
 
-interface BookmarkCardProps {
-  bookmark: Bookmark;
+interface MemoryCardProps {
+  memory: Memory;
   variant?: "grid" | "list";
+  onSelect?: (memory: Memory) => void;
 }
 
 const DocTypeIcon = ({ type }: { type?: "url" | "file" | "text" }) => {
@@ -43,20 +44,25 @@ const DocTypeIcon = ({ type }: { type?: "url" | "file" | "text" }) => {
   }
 };
 
-export function BookmarkCard({
-  bookmark,
+export function MemoryCard({
+  memory,
   variant = "grid",
-}: BookmarkCardProps) {
-  const { toggleFavorite, archiveBookmark, trashBookmark } =
-    useBookmarksStore();
-  const bookmarkTags = bookmark.tags;
+  onSelect,
+}: MemoryCardProps) {
+  const { toggleFavorite, archiveMemory, trashMemory } =
+    useMemoryStore();
+  const memoryTags = memory.tags;
 
   const handleCopyUrl = () => {
-    navigator.clipboard.writeText(bookmark.url);
+    navigator.clipboard.writeText(memory.url);
   };
 
-  const handleOpenUrl = () => {
-    window.open(bookmark.url, "_blank");
+  const handleClick = () => {
+    if (onSelect) {
+      onSelect(memory);
+    } else {
+      window.open(memory.url, "_blank");
+    }
   };
 
   if (variant === "list") {
@@ -64,27 +70,27 @@ export function BookmarkCard({
       <div className="group flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
         <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0">
           <Image
-            src={bookmark.favicon}
-            alt={bookmark.title}
+            src={memory.favicon}
+            alt={memory.title}
             width={24}
             height={24}
-            className={cn("size-6", bookmark.hasDarkIcon && "dark:invert")}
+            className={cn("size-6", memory.hasDarkIcon && "dark:invert")}
           />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <DocTypeIcon type={bookmark.docType} />
-            <h3 className="font-medium truncate">{bookmark.title}</h3>
-            {bookmark.readingTimeMinutes && (
+            <DocTypeIcon type={memory.docType} />
+            <h3 className="font-medium truncate">{memory.title}</h3>
+            {memory.readingTimeMinutes && (
               <span className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
                 <Clock className="size-3" />
-                {bookmark.readingTimeMinutes} min
+                {memory.readingTimeMinutes} min
               </span>
             )}
-            {bookmarkTags.length > 0 && (
+            {memoryTags.length > 0 && (
               <div className="hidden sm:flex items-center gap-1">
-                {bookmarkTags.slice(0, 2).map((tag) => (
+                {memoryTags.slice(0, 2).map((tag) => (
                   <span
                     key={tag}
                     className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
@@ -92,20 +98,20 @@ export function BookmarkCard({
                     {tag}
                   </span>
                 ))}
-                {bookmarkTags.length > 2 && (
+                {memoryTags.length > 2 && (
                   <span className="text-[10px] text-muted-foreground">
-                    +{bookmarkTags.length - 2}
+                    +{memoryTags.length - 2}
                   </span>
                 )}
               </div>
             )}
           </div>
           <p className="text-sm text-muted-foreground truncate">
-            {bookmark.url}
+            {memory.url}
           </p>
-          {bookmark.whatItSolves && (
+          {memory.whatItSolves && (
             <p className="text-xs text-muted-foreground/80 truncate mt-0.5">
-              {bookmark.whatItSolves}
+              {memory.whatItSolves}
             </p>
           )}
         </div>
@@ -114,16 +120,16 @@ export function BookmarkCard({
           <Button
             variant="ghost"
             size="icon-xs"
-            onClick={() => toggleFavorite(bookmark.id)}
+            onClick={() => toggleFavorite(memory.id)}
           >
             <Heart
               className={cn(
                 "size-4",
-                bookmark.isFavorite && "fill-red-500 text-red-500"
+                memory.isFavorite && "fill-red-500 text-red-500"
               )}
             />
           </Button>
-          <Button variant="ghost" size="icon-xs" onClick={handleOpenUrl}>
+          <Button variant="ghost" size="icon-xs" onClick={handleClick}>
             <ExternalLink className="size-4" />
           </Button>
           <DropdownMenu>
@@ -146,13 +152,13 @@ export function BookmarkCard({
                 Add Tags
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => archiveBookmark(bookmark.id)}>
+              <DropdownMenuItem onClick={() => archiveMemory(memory.id)}>
                 <Archive className="size-4 mr-2" />
                 Archive
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive"
-                onClick={() => trashBookmark(bookmark.id)}
+                onClick={() => trashMemory(memory.id)}
               >
                 <Trash2 className="size-4 mr-2" />
                 Delete
@@ -171,12 +177,12 @@ export function BookmarkCard({
           variant="secondary"
           size="icon-xs"
           className="bg-background/80 backdrop-blur-sm"
-          onClick={() => toggleFavorite(bookmark.id)}
+          onClick={() => toggleFavorite(memory.id)}
         >
           <Heart
             className={cn(
               "size-4",
-              bookmark.isFavorite && "fill-red-500 text-red-500"
+              memory.isFavorite && "fill-red-500 text-red-500"
             )}
           />
         </Button>
@@ -195,7 +201,7 @@ export function BookmarkCard({
               <Copy className="size-4 mr-2" />
               Copy URL
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleOpenUrl}>
+            <DropdownMenuItem onClick={handleClick}>
               <ExternalLink className="size-4 mr-2" />
               Open in new tab
             </DropdownMenuItem>
@@ -208,13 +214,13 @@ export function BookmarkCard({
               Add Tags
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => archiveBookmark(bookmark.id)}>
+            <DropdownMenuItem onClick={() => archiveMemory(memory.id)}>
               <Archive className="size-4 mr-2" />
               Archive
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive"
-              onClick={() => trashBookmark(bookmark.id)}
+              onClick={() => trashMemory(memory.id)}
             >
               <Trash2 className="size-4 mr-2" />
               Delete
@@ -225,21 +231,21 @@ export function BookmarkCard({
 
       <button
         className="w-full text-left cursor-pointer"
-        onClick={handleOpenUrl}
+        onClick={handleClick}
       >
         <div className="h-32 bg-linear-to-br from-muted/50 to-muted flex items-center justify-center">
           <div className="size-12 rounded-xl bg-background shadow-sm flex items-center justify-center">
-            {bookmark.docType === "file" ? (
+            {memory.docType === "file" ? (
               <FileText className="size-8 text-muted-foreground" />
-            ) : bookmark.docType === "text" ? (
+            ) : memory.docType === "text" ? (
               <FileType className="size-8 text-muted-foreground" />
             ) : (
               <Image
-                src={bookmark.favicon}
-                alt={bookmark.title}
+                src={memory.favicon}
+                alt={memory.title}
                 width={32}
                 height={32}
-                className={cn("size-8", bookmark.hasDarkIcon && "dark:invert")}
+                className={cn("size-8", memory.hasDarkIcon && "dark:invert")}
               />
             )}
           </div>
@@ -248,23 +254,23 @@ export function BookmarkCard({
         <div className="p-4 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
-              <DocTypeIcon type={bookmark.docType} />
-              <h3 className="font-medium line-clamp-1">{bookmark.title}</h3>
+              <DocTypeIcon type={memory.docType} />
+              <h3 className="font-medium line-clamp-1">{memory.title}</h3>
             </div>
           </div>
           <p className="text-sm text-muted-foreground line-clamp-2">
-            {bookmark.description}
+            {memory.description}
           </p>
-          {(bookmark.summary || bookmark.keyPoints?.length) && (
+          {(memory.summary || memory.keyPoints?.length) && (
             <div className="border-t pt-2 mt-1 space-y-1.5">
-              {bookmark.summary && (
+              {memory.summary && (
                 <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                  {bookmark.summary}
+                  {memory.summary}
                 </p>
               )}
-              {bookmark.keyPoints && bookmark.keyPoints.length > 0 && (
+              {memory.keyPoints && memory.keyPoints.length > 0 && (
                 <ul className="space-y-0.5">
-                  {bookmark.keyPoints.slice(0, 2).map((point, i) => (
+                  {memory.keyPoints.slice(0, 2).map((point, i) => (
                     <li key={i} className="text-[11px] text-muted-foreground flex gap-1.5">
                       <span className="text-primary mt-0.5 shrink-0">•</span>
                       <span className="line-clamp-1">{point}</span>
@@ -272,16 +278,16 @@ export function BookmarkCard({
                   ))}
                 </ul>
               )}
-              {bookmark.readingTimeMinutes && (
+              {memory.readingTimeMinutes && (
                 <span className="text-[10px] text-muted-foreground/60">
-                  {bookmark.readingTimeMinutes} min read
+                  {memory.readingTimeMinutes} min read
                 </span>
               )}
             </div>
           )}
-          {bookmarkTags.length > 0 && (
+          {memoryTags.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-1">
-              {bookmarkTags.slice(0, 3).map((tag) => (
+              {memoryTags.slice(0, 3).map((tag) => (
                 <span
                   key={tag}
                   className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
@@ -289,9 +295,9 @@ export function BookmarkCard({
                   {tag}
                 </span>
               ))}
-              {bookmarkTags.length > 3 && (
+              {memoryTags.length > 3 && (
                 <span className="text-[10px] text-muted-foreground py-0.5">
-                  +{bookmarkTags.length - 3} more
+                  +{memoryTags.length - 3} more
                 </span>
               )}
             </div>

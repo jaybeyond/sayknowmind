@@ -1,6 +1,6 @@
 "use client";
 
-import { useBookmarksStore } from "@/store/bookmarks-store";
+import { useMemoryStore } from "@/store/memory-store";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,42 +18,42 @@ import {
   ExternalLink,
 } from "lucide-react";
 import Image from "next/image";
-import { type Bookmark } from "@/store/bookmarks-store";
+import { type Memory } from "@/store/memory-store";
 import { cn } from "@/lib/utils";
 
-function TrashedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
-  const { restoreFromTrash, permanentlyDelete } = useBookmarksStore();
+function TrashedMemoryCard({ memory }: { memory: Memory }) {
+  const { restoreFromTrash, permanentlyDelete } = useMemoryStore();
 
   const handlePermanentDelete = () => {
     if (!confirm("Permanently delete this?")) return;
-    permanentlyDelete(bookmark.id);
+    permanentlyDelete(memory.id);
   };
 
   return (
     <div className="group flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors opacity-75 hover:opacity-100">
       <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0">
         <Image
-          src={bookmark.favicon}
-          alt={bookmark.title}
+          src={memory.favicon}
+          alt={memory.title}
           width={24}
           height={24}
           className={cn(
             "size-6 grayscale",
-            bookmark.hasDarkIcon && "dark:invert",
+            memory.hasDarkIcon && "dark:invert",
           )}
         />
       </div>
 
       <div className="flex-1 min-w-0">
-        <h3 className="font-medium truncate">{bookmark.title}</h3>
-        <p className="text-sm text-muted-foreground truncate">{bookmark.url}</p>
+        <h3 className="font-medium truncate">{memory.title}</h3>
+        <p className="text-sm text-muted-foreground truncate">{memory.url}</p>
       </div>
 
       <div className="flex items-center gap-1">
         <Button
           variant="outline"
           size="sm"
-          onClick={() => restoreFromTrash(bookmark.id)}
+          onClick={() => restoreFromTrash(memory.id)}
         >
           <RotateCcw className="size-4 mr-1" />
           Restore
@@ -66,7 +66,7 @@ function TrashedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
-              onClick={() => window.open(bookmark.url, "_blank")}
+              onClick={() => window.open(memory.url, "_blank")}
             >
               <ExternalLink className="size-4 mr-2" />
               Open URL
@@ -87,9 +87,9 @@ function TrashedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
 }
 
 export function TrashContent() {
-  const { getTrashedBookmarks, trashedBookmarks, isLoading } =
-    useBookmarksStore();
-  const filteredTrash = getTrashedBookmarks();
+  const { getTrashedMemories, trashedMemories, isLoading } =
+    useMemoryStore();
+  const filteredTrash = getTrashedMemories();
 
   if (isLoading) {
     return (
@@ -117,19 +117,19 @@ export function TrashContent() {
             <div>
               <h2 className="text-lg font-semibold">Trash</h2>
               <p className="text-sm text-muted-foreground">
-                {trashedBookmarks.length} bookmark
-                {trashedBookmarks.length !== 1 ? "s" : ""} in trash
+                {trashedMemories.length} memor
+                {trashedMemories.length !== 1 ? "ies" : "y"} in trash
               </p>
             </div>
           </div>
-          {trashedBookmarks.length > 0 && (
+          {trashedMemories.length > 0 && (
             <p className="text-xs text-muted-foreground hidden sm:block">
               Items in trash will be permanently deleted after 30 days
             </p>
           )}
         </div>
 
-        {trashedBookmarks.length === 0 ? (
+        {trashedMemories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Trash2 className="size-12 text-muted-foreground/20 mb-4" />
             <h3 className="text-lg font-medium mb-1">Trash is empty</h3>
@@ -139,8 +139,8 @@ export function TrashContent() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {filteredTrash.map((bookmark) => (
-              <TrashedBookmarkCard key={bookmark.id} bookmark={bookmark} />
+            {filteredTrash.map((memory) => (
+              <TrashedMemoryCard key={memory.id} memory={memory} />
             ))}
           </div>
         )}

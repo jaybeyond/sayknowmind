@@ -1,13 +1,13 @@
 "use client";
 
-import { Bookmark, Star, Tag, FolderOpen } from "lucide-react";
-import { useBookmarksStore } from "@/store/bookmarks-store";
+import { Brain, Star, Tag, FolderOpen } from "lucide-react";
+import { useMemoryStore } from "@/store/memory-store";
 import { useCategoriesStore } from "@/store/categories-store";
 
 const stats = [
   {
-    label: "Total Bookmarks",
-    icon: Bookmark,
+    label: "Total Memories",
+    icon: Brain,
     color: "bg-blue-500/10 text-blue-500",
   },
   {
@@ -28,13 +28,13 @@ const stats = [
 ];
 
 export function StatsCards() {
-  const { bookmarks, getDerivedTags } = useBookmarksStore();
+  const { memories, getDerivedTags } = useMemoryStore();
   const { categories } = useCategoriesStore();
 
   const derivedTags = getDerivedTags();
   const values = [
-    bookmarks.length,
-    bookmarks.filter((b) => b.isFavorite).length,
+    memories.length,
+    memories.filter((m) => m.isFavorite).length,
     categories.length,
     derivedTags.length,
   ];
@@ -60,4 +60,3 @@ export function StatsCards() {
     </div>
   );
 }
-

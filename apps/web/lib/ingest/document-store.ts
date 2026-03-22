@@ -1,5 +1,6 @@
 import { pool } from "@/lib/db";
 import type { SourceType, EntityType } from "@/lib/types";
+import { recordSyncEvent } from "@/lib/relay/sync-service";
 
 export interface InsertDocumentParams {
   userId: string;
@@ -48,7 +49,12 @@ export async function insertDocument(params: InsertDocumentParams): Promise<stri
       JSON.stringify(params.metadata),
     ],
   );
-  return result.rows[0].id;
+  const documentId = result.rows[0].id;
+
+  // Relay sync hook — non-blocking, best-effort
+  recordSyncEvent(pool, params.userId, documentId, "create").catch(() => {});
+
+  return documentId;
 }
 
 export async function updateDocument(

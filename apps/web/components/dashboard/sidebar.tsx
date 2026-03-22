@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
-  Bookmark,
+  Brain,
   ChevronDown,
   ChevronRight,
   Search,
@@ -46,7 +46,7 @@ import {
   Network,
   LayoutGrid,
 } from "lucide-react";
-import { useBookmarksStore } from "@/store/bookmarks-store";
+import { useMemoryStore } from "@/store/memory-store";
 import { useCategoriesStore } from "@/store/categories-store";
 import { useSession, signOut } from "@/lib/auth-client";
 import { useTranslation } from "@/lib/i18n";
@@ -63,7 +63,7 @@ const toolNavItems = [
   { icon: LayoutGrid, key: "sidebar.categories", href: "/categories" },
 ];
 
-export function BookmarksSidebar({
+export function MemorySidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
@@ -77,22 +77,22 @@ export function BookmarksSidebar({
     toggleTag,
     clearTags,
     getDerivedTags,
-    fetchBookmarks,
-  } = useBookmarksStore();
+    fetchMemories,
+  } = useMemoryStore();
   const { categories, fetchCategories } = useCategoriesStore();
   const { data: session } = useSession();
   const { t } = useTranslation();
 
   React.useEffect(() => {
-    fetchBookmarks();
+    fetchMemories();
     fetchCategories();
-  }, [fetchBookmarks, fetchCategories]);
+  }, [fetchMemories, fetchCategories]);
 
   const derivedTags = getDerivedTags();
 
   // Build collection list: "All" virtual entry + real categories
   const collectionList = React.useMemo(() => [
-    { id: "all", name: t("sidebar.allBookmarks") || "All Bookmarks", count: null },
+    { id: "all", name: t("sidebar.allMemories") || "All Memories", count: null },
     ...categories.map((c) => ({ id: c.id, name: c.name, count: null })),
   ], [categories, t]);
 
@@ -195,7 +195,7 @@ export function BookmarksSidebar({
                 {collectionList.map((collection) => {
                   const isActive =
                     isHomePage && selectedCollection === collection.id;
-                  const IconComponent = collection.id === "all" ? Bookmark : Folder;
+                  const IconComponent = collection.id === "all" ? Brain : Folder;
                   return (
                     <SidebarMenuItem key={collection.id}>
                       <SidebarMenuButton

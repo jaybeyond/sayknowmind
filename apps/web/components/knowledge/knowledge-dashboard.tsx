@@ -1,8 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { GraphCanvas } from "./graph-canvas";
+import dynamic from "next/dynamic";
 import { NodeDetailPanel } from "./node-detail-panel";
+
+const GraphCanvas = dynamic(() => import("./graph-canvas").then((m) => m.GraphCanvas), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+      Loading graph...
+    </div>
+  ),
+});
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface GraphNode {
