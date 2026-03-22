@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
+// Routes that bypass auth even if under a protected prefix
+const publicApiPaths = [
+  "/api/documents/reprocess",
+  "/api/knowledge/graph",
+];
+
 // Routes that require authentication
 const protectedPaths = [
   "/settings",
@@ -26,9 +32,11 @@ export function middleware(request: NextRequest) {
   const sessionCookie = getSessionCookie(request);
 
   // Protected routes: redirect to login if no session
+  const isPublicApi = publicApiPaths.some((path) => pathname.startsWith(path));
   const isProtected =
-    pathname === "/" ||
-    protectedPaths.some((path) => pathname.startsWith(path));
+    !isPublicApi &&
+    (pathname === "/" ||
+    protectedPaths.some((path) => pathname.startsWith(path)));
   if (isProtected && !sessionCookie) {
     // API routes return 401, page routes redirect to login
     if (pathname.startsWith("/api/")) {

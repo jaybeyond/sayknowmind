@@ -9,7 +9,7 @@ import { AddMemoryDialog } from "./add-memory-dialog";
 import { StatsCards } from "./stats-cards";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { X, FileUp, BookOpen, Plus } from "lucide-react";
+import { X, FileUp, BookOpen, Plus, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -33,8 +33,31 @@ export function MemoryContent() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
 
+  const [reprocessing, setReprocessing] = useState(false);
+
   const filteredMemories = getFilteredMemories();
   const derivedTags = getDerivedTags();
+
+  const memoriesWithoutSummary = getFilteredMemories().filter((m) => !m.summary && m.jobStatus !== "processing" && m.jobStatus !== "pending");
+
+  const handleReprocess = async () => {
+    setReprocessing(true);
+    try {
+      const res = await fetch("/api/documents/reprocess", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(`${data.reprocessed} document(s) queued for reprocessing`);
+        // Refresh after a delay to let jobs start
+        setTimeout(() => fetchMemories(), 2000);
+      } else {
+        toast.error("Failed to start reprocessing");
+      }
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setReprocessing(false);
+    }
+  };
 
   const currentCollection =
     selectedCollection === "all"
@@ -108,6 +131,24 @@ export function MemoryContent() {
       )}
       <div className="p-4 md:p-6 space-y-6">
         <StatsCards />
+
+        {memoriesWithoutSummary.length > 0 && (
+          <div className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              {memoriesWithoutSummary.length} memories need AI processing (summary, categories, knowledge graph)
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleReprocess}
+              disabled={reprocessing}
+              className="shrink-0"
+            >
+              <RefreshCw className={cn("size-3.5 mr-1.5", reprocessing && "animate-spin")} />
+              {reprocessing ? "Processing..." : "Reprocess"}
+            </Button>
+          </div>
+        )}
 
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

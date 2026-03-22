@@ -56,6 +56,15 @@ export async function createCategory(params: {
     }
   }
 
+  // Check for duplicate name under same parent
+  const existing = await pool.query(
+    `SELECT * FROM categories WHERE user_id = $1 AND name = $2 AND COALESCE(parent_id, '00000000-0000-0000-0000-000000000000') = $3`,
+    [params.userId, params.name, params.parentId ?? "00000000-0000-0000-0000-000000000000"],
+  );
+  if (existing.rows.length > 0) {
+    return existing.rows[0]; // Return existing instead of creating duplicate
+  }
+
   const result = await pool.query(
     `INSERT INTO categories (user_id, parent_id, name, description, color, depth, path, privacy_level)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

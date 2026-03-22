@@ -6,11 +6,13 @@ import { ProfileTab } from "./profile-tab";
 import { AppearanceTab } from "./appearance-tab";
 import { AITab } from "./ai-tab";
 import { PrivacyTab } from "./privacy-tab";
+import { PromptEditor } from "./prompt-editor";
 
 const tabs = [
   { id: "profile", label: "Profile" },
   { id: "appearance", label: "Appearance" },
   { id: "ai", label: "AI" },
+  { id: "prompts", label: "Prompts" },
   { id: "privacy", label: "Privacy" },
 ] as const;
 
@@ -49,6 +51,17 @@ export function SettingsPage() {
         {activeTab === "profile" && <ProfileTab />}
         {activeTab === "appearance" && <AppearanceTab />}
         {activeTab === "ai" && <AITab />}
+        {activeTab === "prompts" && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-medium">Summary Prompts</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Customize how AI summarizes your saved content
+              </p>
+            </div>
+            <PromptEditor />
+          </div>
+        )}
         {activeTab === "privacy" && <PrivacyTab />}
       </div>
     </main>

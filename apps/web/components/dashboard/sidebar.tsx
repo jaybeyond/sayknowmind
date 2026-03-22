@@ -44,12 +44,17 @@ import {
   Trash2,
   MessageSquare,
   Network,
-  LayoutGrid,
+  MoreHorizontal,
+  Pencil,
+  X,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input as SidebarInput } from "@/components/ui/input";
 import { useMemoryStore } from "@/store/memory-store";
 import { useCategoriesStore } from "@/store/categories-store";
 import { useSession, signOut } from "@/lib/auth-client";
 import { useTranslation } from "@/lib/i18n";
+import { toast } from "sonner";
 
 const navItemKeys = [
   { icon: Star, key: "sidebar.favorites", href: "/favorites" },
@@ -60,7 +65,6 @@ const navItemKeys = [
 const toolNavItems = [
   { icon: MessageSquare, key: "sidebar.chat", href: "/chat" },
   { icon: Network, key: "sidebar.knowledge", href: "/knowledge" },
-  { icon: LayoutGrid, key: "sidebar.categories", href: "/categories" },
 ];
 
 export function MemorySidebar({
@@ -79,7 +83,11 @@ export function MemorySidebar({
     getDerivedTags,
     fetchMemories,
   } = useMemoryStore();
-  const { categories, fetchCategories } = useCategoriesStore();
+  const { categories, fetchCategories, addCategory, renameCategory, deleteCategory } = useCategoriesStore();
+  const [addingCategory, setAddingCategory] = React.useState(false);
+  const [newCategoryName, setNewCategoryName] = React.useState("");
+  const [renamingId, setRenamingId] = React.useState<string | null>(null);
+  const [renameValue, setRenameValue] = React.useState("");
   const { data: session } = useSession();
   const { t } = useTranslation();
 
@@ -188,6 +196,16 @@ export function MemorySidebar({
               />
               {t("sidebar.collections")}
             </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setAddingCategory(true);
+                setCollectionsOpen(true);
+              }}
+              className="ml-auto text-muted-foreground hover:text-foreground"
+            >
+              <Plus className="size-3.5" />
+            </button>
           </SidebarGroupLabel>
           {collectionsOpen && (
             <SidebarGroupContent>
@@ -196,8 +214,40 @@ export function MemorySidebar({
                   const isActive =
                     isHomePage && selectedCollection === collection.id;
                   const IconComponent = collection.id === "all" ? Brain : Folder;
+                  const isRenaming = renamingId === collection.id;
+
+                  if (isRenaming) {
+                    return (
+                      <SidebarMenuItem key={collection.id}>
+                        <form
+                          className="flex items-center gap-1 px-2 py-1"
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            const trimmed = renameValue.trim();
+                            if (trimmed && trimmed !== collection.name) {
+                              const ok = await renameCategory(collection.id, trimmed);
+                              if (ok) toast.success("Renamed");
+                              else toast.error("Failed to rename");
+                            }
+                            setRenamingId(null);
+                          }}
+                        >
+                          <Folder className="size-4 shrink-0 text-muted-foreground" />
+                          <SidebarInput
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            className="h-7 text-sm"
+                            autoFocus
+                            onBlur={() => setRenamingId(null)}
+                            onKeyDown={(e) => { if (e.key === "Escape") setRenamingId(null); }}
+                          />
+                        </form>
+                      </SidebarMenuItem>
+                    );
+                  }
+
                   return (
-                    <SidebarMenuItem key={collection.id}>
+                    <SidebarMenuItem key={collection.id} className="group/cat">
                       <SidebarMenuButton
                         asChild
                         isActive={isActive}
@@ -212,7 +262,48 @@ export function MemorySidebar({
                         >
                           <IconComponent className="size-5" />
                           <span className="flex-1">{collection.name}</span>
-                          {isActive && (
+                          {collection.id !== "all" && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                asChild
+                                onClick={(e) => e.preventDefault()}
+                              >
+                                <button className="opacity-0 group-hover/cat:opacity-100 p-0.5 rounded hover:bg-muted transition-opacity">
+                                  <MoreHorizontal className="size-3.5" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-36">
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.preventDefault();
+                                  setRenamingId(collection.id);
+                                  setRenameValue(collection.name);
+                                }}>
+                                  <Pencil className="size-3.5 mr-2" />
+                                  Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    const ok = await deleteCategory(collection.id);
+                                    if (ok) {
+                                      toast.success("Deleted");
+                                      if (selectedCollection === collection.id) {
+                                        setSelectedCollection("all");
+                                      }
+                                    } else {
+                                      toast.error("Failed to delete");
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="size-3.5 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                          {isActive && collection.id === "all" && (
                             <ChevronRight className="size-4 text-muted-foreground opacity-60" />
                           )}
                         </Link>
@@ -220,6 +311,35 @@ export function MemorySidebar({
                     </SidebarMenuItem>
                   );
                 })}
+                {addingCategory && (
+                  <SidebarMenuItem>
+                    <form
+                      className="flex items-center gap-1 px-2 py-1"
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const trimmed = newCategoryName.trim();
+                        if (trimmed) {
+                          const ok = await addCategory(trimmed);
+                          if (ok) toast.success("Category created");
+                          else toast.error("Failed to create");
+                        }
+                        setNewCategoryName("");
+                        setAddingCategory(false);
+                      }}
+                    >
+                      <Plus className="size-4 shrink-0 text-muted-foreground" />
+                      <SidebarInput
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="New category..."
+                        className="h-7 text-sm"
+                        autoFocus
+                        onBlur={() => { setAddingCategory(false); setNewCategoryName(""); }}
+                        onKeyDown={(e) => { if (e.key === "Escape") { setAddingCategory(false); setNewCategoryName(""); } }}
+                      />
+                    </form>
+                  </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           )}

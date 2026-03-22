@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "www.google.com",
       },
+      {
+        protocol: "https",
+        hostname: "**",
+      },
     ],
   },
   headers: async () => [
@@ -30,7 +34,7 @@ const nextConfig: NextConfig = {
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
             "style-src 'self' 'unsafe-inline' https://api.fontshare.com",
-            "img-src 'self' data: https://api.dicebear.com https://www.google.com",
+            "img-src 'self' data: https://api.dicebear.com https://www.google.com https:",
             "font-src 'self' https://cdn.fontshare.com",
             `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"} ${process.env.NEXT_PUBLIC_EDGEQUAKE_URL ?? ""} ${process.env.NEXT_PUBLIC_AI_SERVER_URL ?? ""}`.trim(),
             "frame-ancestors 'none'",

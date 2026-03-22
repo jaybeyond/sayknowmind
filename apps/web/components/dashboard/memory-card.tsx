@@ -23,6 +23,7 @@ import {
   Globe,
   AlignLeft,
   Clock,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
@@ -32,6 +33,23 @@ interface MemoryCardProps {
   variant?: "grid" | "list";
   onSelect?: (memory: Memory) => void;
 }
+
+const ProcessingBadge = ({ status }: { status?: Memory["jobStatus"] }) => {
+  if (!status || status === "completed") return null;
+  if (status === "failed") {
+    return (
+      <span className="absolute top-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-destructive/90 px-2 py-0.5 text-[10px] font-medium text-destructive-foreground backdrop-blur-sm">
+        Failed
+      </span>
+    );
+  }
+  return (
+    <span className="absolute top-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-primary/90 px-2 py-0.5 text-[10px] font-medium text-primary-foreground backdrop-blur-sm">
+      <Loader2 className="size-3 animate-spin" />
+      {status === "processing" ? "Summarizing..." : "Queued"}
+    </span>
+  );
+};
 
 const DocTypeIcon = ({ type }: { type?: "url" | "file" | "text" }) => {
   switch (type) {
@@ -51,7 +69,7 @@ export function MemoryCard({
 }: MemoryCardProps) {
   const { toggleFavorite, archiveMemory, trashMemory } =
     useMemoryStore();
-  const memoryTags = memory.tags;
+  const memoryTags = [...new Set(memory.tags)];
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(memory.url);
@@ -82,6 +100,18 @@ export function MemoryCard({
           <div className="flex items-center gap-2">
             <DocTypeIcon type={memory.docType} />
             <h3 className="font-medium truncate">{memory.title}</h3>
+            {memory.jobStatus && memory.jobStatus !== "completed" && (
+              <span className={cn(
+                "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0",
+                memory.jobStatus === "failed"
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-primary/10 text-primary"
+              )}>
+                {memory.jobStatus === "failed" ? "Failed" : (
+                  <><Loader2 className="size-3 animate-spin" />{memory.jobStatus === "processing" ? "Summarizing" : "Queued"}</>
+                )}
+              </span>
+            )}
             {memory.readingTimeMinutes && (
               <span className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
                 <Clock className="size-3" />
@@ -229,27 +259,42 @@ export function MemoryCard({
         </DropdownMenu>
       </div>
 
+      <ProcessingBadge status={memory.jobStatus} />
+
       <button
         className="w-full text-left cursor-pointer"
         onClick={handleClick}
       >
-        <div className="h-32 bg-linear-to-br from-muted/50 to-muted flex items-center justify-center">
-          <div className="size-12 rounded-xl bg-background shadow-sm flex items-center justify-center">
-            {memory.docType === "file" ? (
-              <FileText className="size-8 text-muted-foreground" />
-            ) : memory.docType === "text" ? (
-              <FileType className="size-8 text-muted-foreground" />
-            ) : (
-              <Image
-                src={memory.favicon}
-                alt={memory.title}
-                width={32}
-                height={32}
-                className={cn("size-8", memory.hasDarkIcon && "dark:invert")}
-              />
-            )}
+        {memory.ogImage ? (
+          <div className="h-36 relative overflow-hidden bg-muted">
+            <Image
+              src={memory.ogImage}
+              alt={memory.title}
+              fill
+              className="object-cover"
+              unoptimized
+              priority
+            />
           </div>
-        </div>
+        ) : (
+          <div className="h-32 bg-linear-to-br from-muted/50 to-muted flex items-center justify-center">
+            <div className="size-12 rounded-xl bg-background shadow-sm flex items-center justify-center">
+              {memory.docType === "file" ? (
+                <FileText className="size-8 text-muted-foreground" />
+              ) : memory.docType === "text" ? (
+                <FileType className="size-8 text-muted-foreground" />
+              ) : (
+                <Image
+                  src={memory.favicon}
+                  alt={memory.title}
+                  width={32}
+                  height={32}
+                  className={cn("size-8", memory.hasDarkIcon && "dark:invert")}
+                />
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="p-4 space-y-2">
           <div className="flex items-start justify-between gap-2">

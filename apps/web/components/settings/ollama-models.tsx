@@ -72,6 +72,31 @@ export function OllamaModels() {
     pct: number;
   } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [activeModel, setActiveModel] = useState<string>("");
+
+  const fetchActiveModel = useCallback(async () => {
+    try {
+      const res = await fetch("/api/models/active");
+      const data = await res.json();
+      setActiveModel(data.model ?? "");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleSetActive = async (name: string) => {
+    try {
+      await fetch("/api/models/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: name }),
+      });
+      setActiveModel(name);
+      toast.success(`Summarization model set to ${name}`);
+    } catch {
+      toast.error("Failed to set active model");
+    }
+  };
 
   const checkHealth = useCallback(async () => {
     try {
@@ -98,7 +123,8 @@ export function OllamaModels() {
 
   useEffect(() => {
     checkHealth().then(fetchModels);
-  }, [checkHealth, fetchModels]);
+    fetchActiveModel();
+  }, [checkHealth, fetchModels, fetchActiveModel]);
 
   const handlePull = async (name: string) => {
     if (pulling) return;
@@ -219,43 +245,64 @@ export function OllamaModels() {
       {models.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-xs font-medium text-muted-foreground">
-            Installed Models
+            Installed Models — click to set as summarization model
           </h4>
           <div className="space-y-1.5">
-            {models.map((model) => (
-              <div
-                key={model.digest}
-                className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <HardDrive className="size-3.5 text-muted-foreground shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {model.name}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {formatSize(model.size)}
-                      {model.details?.parameter_size &&
-                        ` · ${model.details.parameter_size}`}
-                      {` · ${formatDate(model.modified_at)}`}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 text-muted-foreground hover:text-destructive"
-                  onClick={() => handleDelete(model.name)}
-                  disabled={deleting === model.name}
-                >
-                  {deleting === model.name ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="size-3.5" />
+            {models.map((model) => {
+              const isActive = activeModel === model.name;
+              return (
+                <div
+                  key={model.digest}
+                  className={cn(
+                    "flex items-center justify-between rounded-lg border px-3 py-2 cursor-pointer transition-colors",
+                    isActive
+                      ? "border-primary/40 bg-primary/5"
+                      : "border-border hover:border-primary/30"
                   )}
-                </Button>
-              </div>
-            ))}
+                  onClick={() => handleSetActive(model.name)}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {isActive ? (
+                      <CheckCircle2 className="size-3.5 text-primary shrink-0" />
+                    ) : (
+                      <HardDrive className="size-3.5 text-muted-foreground shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {model.name}
+                        {isActive && (
+                          <span className="ml-2 text-[10px] text-primary font-normal">
+                            Active
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {formatSize(model.size)}
+                        {model.details?.parameter_size &&
+                          ` · ${model.details.parameter_size}`}
+                        {` · ${formatDate(model.modified_at)}`}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(model.name);
+                    }}
+                    disabled={deleting === model.name}
+                  >
+                    {deleting === model.name ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-3.5" />
+                    )}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

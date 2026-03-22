@@ -113,8 +113,13 @@ async function processJob(job: JobRow): Promise<void> {
       return;
     }
 
-    // Detect language
-    const language = detectLanguage(doc.content);
+    // Use user's preferred locale from metadata, fall back to content detection
+    const meta = (doc.metadata ?? {}) as Record<string, unknown>;
+    const validLangs = ["ko", "en", "ja", "zh"] as const;
+    const storedLang = typeof meta.language === "string" ? meta.language : "";
+    const language = validLangs.includes(storedLang as typeof validLangs[number])
+      ? (storedLang as typeof validLangs[number])
+      : detectLanguage(doc.content);
     await updateJobProgress(jobId, 20);
 
     // Step 1: Generate structured metadata via AI (20% → 50%)
@@ -171,7 +176,7 @@ async function processJob(job: JobRow): Promise<void> {
         name: r.name,
       }));
 
-      const suggestions = await suggestCategories(doc.content, userId, existingCategories);
+      const suggestions = await suggestCategories(doc.content, userId, existingCategories, language);
 
       // Auto-assign categories based on AI suggestions
       for (const suggestion of suggestions) {

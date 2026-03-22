@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { url, categoryId, tags } = body as { url?: string; categoryId?: string; tags?: string[] };
+    const { url, categoryId, tags, locale } = body as { url?: string; categoryId?: string; tags?: string[]; locale?: string };
 
     if (!url || typeof url !== "string") {
       return NextResponse.json(
@@ -48,8 +48,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Detect language
-    const language = detectLanguage(fetched.content);
+    // Use user locale if provided, otherwise detect from content
+    const validLocales = ["ko", "en", "ja", "zh"] as const;
+    const language = (locale && validLocales.includes(locale as typeof validLocales[number]))
+      ? (locale as typeof validLocales[number])
+      : detectLanguage(fetched.content);
 
     // Store document
     const title = fetched.title || new URL(url).hostname;

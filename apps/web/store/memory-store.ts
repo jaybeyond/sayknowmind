@@ -17,6 +17,8 @@ export type Memory = {
   keyPoints?: string[];
   readingTimeMinutes?: number;
   docType?: "url" | "file" | "text";
+  ogImage?: string;
+  jobStatus?: "pending" | "processing" | "completed" | "failed";
 };
 
 type ViewMode = "grid" | "list";
@@ -48,6 +50,8 @@ function documentToMemory(row: Record<string, unknown>): Memory {
     keyPoints: Array.isArray(metadata.key_points) ? (metadata.key_points as unknown[]).filter((k): k is string => typeof k === "string") : undefined,
     readingTimeMinutes: typeof metadata.reading_time_minutes === "number" ? metadata.reading_time_minutes : undefined,
     docType: (metadata.doc_type === "file" || metadata.doc_type === "text") ? metadata.doc_type as "file" | "text" : "url",
+    ogImage: typeof metadata.ogImage === "string" ? metadata.ogImage : undefined,
+    jobStatus: typeof row.job_status === "string" ? row.job_status as Memory["jobStatus"] : undefined,
   };
 }
 

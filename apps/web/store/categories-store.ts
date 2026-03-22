@@ -13,9 +13,12 @@ interface CategoriesState {
   categories: CategoryItem[];
   isLoading: boolean;
   fetchCategories: () => Promise<void>;
+  addCategory: (name: string, parentId?: string) => Promise<boolean>;
+  renameCategory: (id: string, name: string) => Promise<boolean>;
+  deleteCategory: (id: string) => Promise<boolean>;
 }
 
-export const useCategoriesStore = create<CategoriesState>((set) => ({
+export const useCategoriesStore = create<CategoriesState>((set, get) => ({
   categories: [],
   isLoading: false,
 
@@ -34,6 +37,53 @@ export const useCategoriesStore = create<CategoriesState>((set) => ({
       });
     } catch {
       set({ isLoading: false });
+    }
+  },
+
+  addCategory: async (name: string, parentId?: string) => {
+    try {
+      const res = await fetch("/api/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, parentId }),
+      });
+      if (res.ok) {
+        await get().fetchCategories();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  renameCategory: async (id: string, name: string) => {
+    try {
+      const res = await fetch(`/api/categories/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) {
+        await get().fetchCategories();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  deleteCategory: async (id: string) => {
+    try {
+      const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await get().fetchCategories();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
     }
   },
 }));

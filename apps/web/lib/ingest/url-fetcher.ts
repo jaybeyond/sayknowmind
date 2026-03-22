@@ -14,6 +14,7 @@ export interface FetchedContent {
     publishedAt?: string;
     language?: string;
     siteName?: string;
+    ogImage?: string;
   };
 }
 
@@ -78,6 +79,16 @@ function countWords(text: string): number {
   return (cjk?.length ?? 0) + (latin?.length ?? 0);
 }
 
+function extractOgImage(html: string): string | undefined {
+  const $ = cheerio.load(html);
+  return (
+    $('meta[property="og:image"]').attr("content") ||
+    $('meta[name="twitter:image"]').attr("content") ||
+    $('meta[property="og:image:url"]').attr("content") ||
+    undefined
+  );
+}
+
 function extractWithReadability(html: string, url: string): FetchedContent | null {
   const dom = new JSDOM(html, { url });
   const reader = new Readability(dom.window.document);
@@ -94,6 +105,7 @@ function extractWithReadability(html: string, url: string): FetchedContent | nul
     metadata: {
       author: article.byline || undefined,
       siteName: article.siteName || undefined,
+      ogImage: extractOgImage(html),
     },
   };
 }
@@ -136,12 +148,17 @@ function extractWithCheerio(html: string, url: string): FetchedContent {
   // Clean up whitespace
   content = content.replace(/\s+/g, " ").trim();
 
+  const ogImage =
+    $('meta[property="og:image"]').attr("content") ||
+    $('meta[name="twitter:image"]').attr("content") ||
+    undefined;
+
   return {
     title,
     content,
     url,
     wordCount: countWords(content),
-    metadata: { author, publishedAt },
+    metadata: { author, publishedAt, ogImage },
   };
 }
 

@@ -74,7 +74,10 @@ export async function GET(request: NextRequest) {
                  FROM document_categories dc
                  JOIN categories c ON c.id = dc.category_id
                  WHERE dc.document_id = d.id), '[]'
-              ) AS categories
+              ) AS categories,
+              (SELECT ij.status FROM ingestion_jobs ij
+               WHERE ij.document_id = d.id
+               ORDER BY ij.created_at DESC LIMIT 1) AS job_status
        FROM documents d
        WHERE ${where}
        ORDER BY d.created_at DESC

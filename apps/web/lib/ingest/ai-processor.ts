@@ -1,4 +1,6 @@
 import type { EntityType, Language, CategorySuggestion } from "@/lib/types";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 
 const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 const AI_API_KEY = process.env.AI_API_KEY ?? "";
@@ -6,8 +8,40 @@ const AI_TIMEOUT = 60_000;
 const MAX_CONTENT_CHARS = 8000;
 
 const LLM_PROVIDER = process.env.LLM_PROVIDER ?? "server";
-const LLM_MODEL = process.env.LLM_MODEL ?? "llama3.2";
 const OLLAMA_URL = `http://localhost:${process.env.OLLAMA_PORT ?? "11434"}`;
+
+function getActiveModel(): string {
+  try {
+    return readFileSync(join(process.cwd(), ".sayknowmind-active-model"), "utf-8").trim();
+  } catch {
+    return process.env.LLM_MODEL ?? "qwen3:1.7b";
+  }
+}
+
+interface CustomPrompts {
+  summary: string;
+  whatItSolves: string;
+  keyPoints: string;
+  tags: string;
+}
+
+const DEFAULT_PROMPTS: CustomPrompts = {
+  summary: "2-3 sentence summary",
+  whatItSolves: "1-2 sentences describing what problem/question this content addresses",
+  keyPoints: "array of 3-7 key bullet points",
+  tags: "array of 3-10 lowercase tags/keywords",
+};
+
+function getCustomPrompts(): CustomPrompts {
+  try {
+    const fp = join(process.cwd(), ".sayknowmind-prompts.json");
+    if (existsSync(fp)) {
+      const data = JSON.parse(readFileSync(fp, "utf-8"));
+      return { ...DEFAULT_PROMPTS, ...data };
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_PROMPTS;
+}
 
 interface AiChatRequest {
   system: string;
@@ -25,7 +59,7 @@ async function callOllama(req: AiChatRequest): Promise<string> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: LLM_MODEL,
+      model: getActiveModel(),
       messages: [
         { role: "system", content: req.system },
         { role: "user", content: req.message },
@@ -161,13 +195,17 @@ export async function generateStructuredMetadata(
     ko: "Korean", en: "English", ja: "Japanese", zh: "Chinese",
   };
 
+  const prompts = getCustomPrompts();
+
   const result = await callAi({
     system: `You are a knowledge extraction assistant. Analyze the provided content and return a JSON object with these fields:
-- "summary": 2-3 sentence summary in ${langMap[language]}
-- "what_it_solves": 1-2 sentences describing what problem/question this content addresses, in ${langMap[language]}
-- "key_points": array of 3-7 key bullet points (strings) in ${langMap[language]}
-- "tags": array of 3-10 lowercase tags/keywords (in English, even for non-English content)
+- "summary": ${prompts.summary} — MUST be written in ${langMap[language]}
+- "what_it_solves": ${prompts.whatItSolves} — MUST be written in ${langMap[language]}
+- "key_points": ${prompts.keyPoints} (strings) — MUST be written in ${langMap[language]}
+- "tags": ${prompts.tags} — MUST be written in ${langMap[language]}
 - "reading_time_minutes": estimated reading time as integer
+
+IMPORTANT: ALL text output MUST be in ${langMap[language]}. Even if the content is in another language, your output must be in ${langMap[language]}.
 
 Output ONLY the JSON object, no markdown fences or explanation.`,
     message: truncate(content),
@@ -209,22 +247,28 @@ export async function suggestCategories(
   content: string,
   userId: string,
   existingCategories: Array<{ id: string; name: string }>,
+  language: Language = "en",
 ): Promise<CategorySuggestion[]> {
+  const langMap: Record<Language, string> = {
+    ko: "Korean", en: "English", ja: "Japanese", zh: "Chinese",
+  };
+
   const categoryList = existingCategories.length > 0
     ? existingCategories.map((c) => `- ${c.name} (id: ${c.id})`).join("\n")
     : "(No existing categories)";
 
   const result = await callAi({
     system: `You are a categorization assistant. Given the content and the user's existing categories, suggest up to 3 categories this content should be assigned to.
+Category names should be in ${langMap[language]}.
 
 Existing categories:
 ${categoryList}
 
-If existing categories match, use their IDs. If a new category is needed, use "new" as the categoryId and suggest a name.
+If existing categories match, use their IDs. If a new category is needed, use "new" as the categoryId and suggest a name in ${langMap[language]}.
 
 Return a JSON array of objects with:
 - "categoryId": existing category ID or "new"
-- "categoryName": the category name
+- "categoryName": the category name (in ${langMap[language]})
 - "reason": brief explanation
 - "confidence": number 0.0 to 1.0
 

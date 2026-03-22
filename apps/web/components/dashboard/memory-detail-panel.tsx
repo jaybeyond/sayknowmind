@@ -141,7 +141,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
               Tags
             </h3>
             <div className="flex flex-wrap gap-1.5">
-              {memory.tags.map((tag) => (
+              {[...new Set(memory.tags)].map((tag) => (
                 <span
                   key={tag}
                   className="px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground"

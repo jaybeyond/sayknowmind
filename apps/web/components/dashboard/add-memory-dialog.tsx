@@ -95,10 +95,11 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
     setLoading(true);
     setError(null);
     try {
+      const locale = navigator.language?.split("-")[0] ?? "en";
       const res = await fetch("/api/ingest/url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmed }),
+        body: JSON.stringify({ url: trimmed, locale }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
