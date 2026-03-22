@@ -11,6 +11,12 @@ export type Bookmark = {
   createdAt: string;
   isFavorite: boolean;
   hasDarkIcon?: boolean;
+  // AI summary fields
+  summary?: string;
+  whatItSolves?: string;
+  keyPoints?: string[];
+  readingTimeMinutes?: number;
+  docType?: "url" | "file" | "text";
 };
 
 type ViewMode = "grid" | "list";
@@ -37,6 +43,11 @@ function documentToBookmark(row: Record<string, unknown>): Bookmark {
     tags,
     createdAt: String(row.created_at ?? new Date().toISOString()),
     isFavorite: metadata.isFavorite === true,
+    summary: typeof metadata.summary === "string" ? metadata.summary : undefined,
+    whatItSolves: typeof metadata.what_it_solves === "string" ? metadata.what_it_solves : undefined,
+    keyPoints: Array.isArray(metadata.key_points) ? (metadata.key_points as unknown[]).filter((k): k is string => typeof k === "string") : undefined,
+    readingTimeMinutes: typeof metadata.reading_time_minutes === "number" ? metadata.reading_time_minutes : undefined,
+    docType: (metadata.doc_type === "file" || metadata.doc_type === "text") ? metadata.doc_type as "file" | "text" : "url",
   };
 }
 

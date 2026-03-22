@@ -14,7 +14,7 @@ interface CategoryData {
   color: string | null;
 }
 
-interface CategoryNode {
+export interface CategoryNode {
   id: string;
   name: string;
   parentId: string | null;
@@ -122,15 +122,6 @@ export function CategoryManager() {
     setShowCreate(true);
   };
 
-  // Convert flat categories to graph nodes
-  const graphNodes = categories.map((c) => ({
-    id: c.id,
-    name: c.name,
-    depth: c.depth,
-    parentId: c.parent_id,
-    color: c.color ?? undefined,
-    documentCount: 0,
-  }));
 
   return (
     <div className="flex flex-col h-full">
@@ -226,9 +217,8 @@ export function CategoryManager() {
           </div>
         ) : (
           <CategoryGraph
-            nodes={graphNodes}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
+            tree={tree}
+            onNodeClick={setSelectedId}
           />
         )}
       </div>

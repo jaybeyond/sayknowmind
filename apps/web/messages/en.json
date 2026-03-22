@@ -17,7 +17,11 @@
     "accountSettings": "Account Settings",
     "workspaceSettings": "Workspace Settings",
     "logOut": "Log out",
-    "allBookmarks": "All Bookmarks"
+    "allBookmarks": "All Bookmarks",
+    "chat": "Chat",
+    "knowledge": "Knowledge Graph",
+    "categories": "Categories",
+    "settings": "Settings"
   },
   "header": {
     "bookmarks": "Bookmarks",
@@ -68,15 +72,55 @@
     "thinking": "Thinking...",
     "simpleMode": "Simple",
     "agenticMode": "Agentic",
-    "newConversation": "New Conversation"
+    "newConversation": "New Chat",
+    "sources": "Sources",
+    "copy": "Copy",
+    "regenerate": "Regenerate",
+    "noHistory": "No conversations yet",
+    "startChat": "Start a new conversation",
+    "agentSteps": "Agent steps",
+    "emptyTitle": "Ask anything",
+    "emptySubtitle": "Search and explore your saved knowledge"
   },
   "ingest": {
     "addUrl": "Add URL",
     "uploadFile": "Upload File",
     "pasteText": "Paste Text",
     "processing": "Processing...",
-    "urlPlaceholder": "Enter URL to save...",
-    "dragDrop": "Drag and drop files here"
+    "urlPlaceholder": "https://...",
+    "dragDrop": "Drop files here or click to browse",
+    "supportedFormats": "PDF, DOCX, TXT, MD, HTML — max 10MB",
+    "tabUrl": "URL",
+    "tabFile": "File",
+    "tabText": "Text",
+    "textPlaceholder": "Paste or type content here...",
+    "titlePlaceholder": "Title (optional)",
+    "saving": "Saving...",
+    "saved": "Saved!",
+    "addDocument": "Add Document",
+    "dialogDescription": "Save a URL, upload a file, or paste text to your knowledge base."
+  },
+  "document": {
+    "summary": "Summary",
+    "whatItSolves": "What it solves",
+    "keyPoints": "Key points",
+    "readingTime": "{{minutes}} min read",
+    "noSummary": "Processing...",
+    "source": "Source",
+    "openSource": "Open source",
+    "copyUrl": "Copy URL"
+  },
+  "emptyState": {
+    "allDocuments": "Nothing saved yet",
+    "allDocumentsCta": "Save your first document",
+    "favorites": "No favorites yet",
+    "favoritesCta": "Star a document to add it here",
+    "archive": "Archive is empty",
+    "archiveCta": "Archived documents will appear here",
+    "trash": "Trash is empty",
+    "trashCta": "Deleted documents will appear here",
+    "search": "No results found",
+    "searchCta": "Try different keywords"
   },
   "categories": {
     "title": "Categories",
@@ -90,6 +134,24 @@
     "title": "Settings",
     "language": "Language",
     "theme": "Theme",
-    "defaultQueryMode": "Default Query Mode"
+    "defaultQueryMode": "Default Query Mode",
+    "profile": "Profile",
+    "appearance": "Appearance",
+    "aiPreferences": "AI Preferences",
+    "privacy": "Privacy",
+    "dangerZone": "Danger Zone",
+    "name": "Name",
+    "email": "Email",
+    "saveChanges": "Save Changes",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "defaultMode": "Default chat mode",
+    "privateMode": "Private Mode",
+    "privateModeDesc": "Store all data locally, no external network calls",
+    "exportData": "Export Data",
+    "deleteAccount": "Delete Account",
+    "deleteAccountConfirm": "Are you sure? This cannot be undone.",
+    "saved": "Settings saved"
   }
 }

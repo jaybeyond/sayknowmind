@@ -9,13 +9,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trash2, MoreHorizontal, RotateCcw, XCircle, ExternalLink } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Trash2,
+  MoreHorizontal,
+  RotateCcw,
+  XCircle,
+  ExternalLink,
+} from "lucide-react";
 import Image from "next/image";
 import { type Bookmark } from "@/store/bookmarks-store";
 import { cn } from "@/lib/utils";
 
 function TrashedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
   const { restoreFromTrash, permanentlyDelete } = useBookmarksStore();
+
+  const handlePermanentDelete = () => {
+    if (!confirm("Permanently delete this?")) return;
+    permanentlyDelete(bookmark.id);
+  };
 
   return (
     <div className="group flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors opacity-75 hover:opacity-100">
@@ -25,7 +37,10 @@ function TrashedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
           alt={bookmark.title}
           width={24}
           height={24}
-          className={cn("size-6 grayscale", bookmark.hasDarkIcon && "dark:invert")}
+          className={cn(
+            "size-6 grayscale",
+            bookmark.hasDarkIcon && "dark:invert",
+          )}
         />
       </div>
 
@@ -59,10 +74,10 @@ function TrashedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive"
-              onClick={() => permanentlyDelete(bookmark.id)}
+              onClick={handlePermanentDelete}
             >
               <XCircle className="size-4 mr-2" />
-              Delete Permanently
+              Delete Forever
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -72,8 +87,24 @@ function TrashedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
 }
 
 export function TrashContent() {
-  const { getTrashedBookmarks, trashedBookmarks } = useBookmarksStore();
+  const { getTrashedBookmarks, trashedBookmarks, isLoading } =
+    useBookmarksStore();
   const filteredTrash = getTrashedBookmarks();
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 w-full overflow-auto">
+        <div className="p-4 md:p-6 space-y-6">
+          <Skeleton className="h-20 w-full rounded-xl" />
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-lg" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 w-full overflow-auto">
@@ -98,26 +129,22 @@ export function TrashContent() {
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          {filteredTrash.map((bookmark) => (
-            <TrashedBookmarkCard key={bookmark.id} bookmark={bookmark} />
-          ))}
-        </div>
-
-        {trashedBookmarks.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-4">
-              <Trash2 className="size-6 text-muted-foreground" />
-            </div>
+        {trashedBookmarks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Trash2 className="size-12 text-muted-foreground/20 mb-4" />
             <h3 className="text-lg font-medium mb-1">Trash is empty</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">
-              Deleted bookmarks will appear here. You can restore them or delete
-              them permanently.
+            <p className="text-sm text-muted-foreground">
+              Deleted documents will appear here
             </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {filteredTrash.map((bookmark) => (
+              <TrashedBookmarkCard key={bookmark.id} bookmark={bookmark} />
+            ))}
           </div>
         )}
       </div>
     </div>
   );
 }
-

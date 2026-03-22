@@ -1,11 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { useBookmarksStore } from "@/store/bookmarks-store";
 import { useCategoriesStore } from "@/store/categories-store";
 import { BookmarkCard } from "./bookmark-card";
+import { AddBookmarkDialog } from "./add-bookmark-dialog";
 import { StatsCards } from "./stats-cards";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { X, FileUp, BookOpen, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function BookmarksContent() {
   const {
@@ -18,8 +23,13 @@ export function BookmarksContent() {
     setFilterType,
     sortBy,
     getDerivedTags,
+    isLoading,
+    searchQuery,
+    fetchBookmarks,
   } = useBookmarksStore();
   const { categories } = useCategoriesStore();
+  const [globalDragOver, setGlobalDragOver] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const filteredBookmarks = getFilteredBookmarks();
   const derivedTags = getDerivedTags();
@@ -34,7 +44,66 @@ export function BookmarksContent() {
     selectedTags.length > 0 || filterType !== "all" || sortBy !== "date-newest";
 
   return (
-    <div className="flex-1 w-full overflow-auto">
+    <>
+    <AddBookmarkDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+    <div
+      className="flex-1 w-full overflow-auto relative"
+      onDragOver={(e) => {
+        e.preventDefault();
+        setGlobalDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node)) {
+          setGlobalDragOver(false);
+        }
+      }}
+      onDrop={async (e) => {
+        e.preventDefault();
+        setGlobalDragOver(false);
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+
+        const ext = file.name.split(".").pop()?.toLowerCase();
+        if (!ext || !["pdf", "docx", "txt", "md", "html"].includes(ext)) {
+          toast.error("Unsupported file type");
+          return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error("File exceeds 10MB limit");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        toast.loading("Saving file...", { id: "file-drop" });
+        try {
+          const res = await fetch("/api/ingest/file", {
+            method: "POST",
+            body: formData,
+          });
+          if (res.ok) {
+            toast.success("File saved!", { id: "file-drop" });
+            fetchBookmarks();
+          } else {
+            toast.error("Failed to save file", { id: "file-drop" });
+          }
+        } catch {
+          toast.error("Network error", { id: "file-drop" });
+        }
+      }}
+    >
+      {globalDragOver && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg">
+          <div className="text-center space-y-2">
+            <FileUp className="size-12 text-primary mx-auto" />
+            <p className="text-lg font-semibold text-primary">Drop to save</p>
+            <p className="text-sm text-muted-foreground">
+              PDF, DOCX, TXT, MD, HTML -- max 10MB
+            </p>
+          </div>
+        </div>
+      )}
       <div className="p-4 md:p-6 space-y-6">
         <StatsCards />
 
@@ -84,7 +153,26 @@ export function BookmarksContent() {
             )}
           </div>
 
-          {viewMode === "grid" ? (
+          {isLoading ? (
+            <div className={cn(
+              "grid gap-4",
+              viewMode === "grid"
+                ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                : "grid-cols-1"
+            )}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="rounded-lg border bg-card p-4 space-y-3">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-2/3" />
+                  <div className="flex gap-2 pt-2">
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                    <Skeleton className="h-5 w-12 rounded-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredBookmarks.map((bookmark) => (
                 <BookmarkCard key={bookmark.id} bookmark={bookmark} />
@@ -102,27 +190,18 @@ export function BookmarksContent() {
             </div>
           )}
 
-          {filteredBookmarks.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-4">
-                <svg
-                  className="size-6 text-muted-foreground"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                  />
-                </svg>
+          {!isLoading && filteredBookmarks.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <div className="size-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+                <BookOpen className="size-8 text-muted-foreground/50" />
               </div>
-              <h3 className="text-lg font-medium mb-1">No bookmarks found</h3>
-              <p className="text-sm text-muted-foreground max-w-sm mb-4">
-                Try adjusting your search or filter to find what you&apos;re
-                looking for, or add a new bookmark.
+              <h3 className="text-lg font-semibold mb-2">
+                {searchQuery ? "검색 결과 없음" : "저장된 항목이 없습니다"}
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+                {searchQuery
+                  ? "다른 키워드를 시도해 보세요"
+                  : "URL, 파일, 텍스트를 저장하여 지식 베이스를 구축하세요"}
               </p>
               {hasActiveFilters && (
                 <Button
@@ -131,8 +210,15 @@ export function BookmarksContent() {
                   onClick={() => {
                     setFilterType("all");
                   }}
+                  className="mb-3"
                 >
                   Clear filters
+                </Button>
+              )}
+              {!searchQuery && (
+                <Button onClick={() => setDialogOpen(true)} size="sm">
+                  <Plus className="size-4 mr-2" />
+                  첫 문서 추가
                 </Button>
               )}
             </div>
@@ -140,5 +226,6 @@ export function BookmarksContent() {
         </div>
       </div>
     </div>
+    </>
   );
 }

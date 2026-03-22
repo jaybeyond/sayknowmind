@@ -42,6 +42,9 @@ import {
   Tag,
   Archive,
   Trash2,
+  MessageSquare,
+  Network,
+  LayoutGrid,
 } from "lucide-react";
 import { useBookmarksStore } from "@/store/bookmarks-store";
 import { useCategoriesStore } from "@/store/categories-store";
@@ -52,6 +55,12 @@ const navItemKeys = [
   { icon: Star, key: "sidebar.favorites", href: "/favorites" },
   { icon: Archive, key: "sidebar.archive", href: "/archive" },
   { icon: Trash2, key: "sidebar.trash", href: "/trash" },
+];
+
+const toolNavItems = [
+  { icon: MessageSquare, key: "sidebar.chat", href: "/chat" },
+  { icon: Network, key: "sidebar.knowledge", href: "/knowledge" },
+  { icon: LayoutGrid, key: "sidebar.categories", href: "/categories" },
 ];
 
 export function BookmarksSidebar({
@@ -286,6 +295,49 @@ export function BookmarksSidebar({
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup className="p-0">
+          <SidebarGroupLabel className="px-0 text-[10px] font-semibold tracking-wider text-muted-foreground">
+            TOOLS
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="mt-1">
+              {toolNavItems.map((item) => (
+                <SidebarMenuItem key={item.key}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.href}
+                    className="h-[38px]"
+                  >
+                    <Link href={item.href}>
+                      <item.icon className="size-5" />
+                      <span>{t(item.key)}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup className="p-0">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/settings"}
+                  className="h-[38px]"
+                >
+                  <Link href="/settings">
+                    <Settings className="size-5" />
+                    <span>{t("sidebar.settings")}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

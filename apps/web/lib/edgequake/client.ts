@@ -129,6 +129,46 @@ export async function streamQuery(
   return response.body;
 }
 
+// ── Index Types ──────────────────────────────────────────────
+
+export interface EQIndexRequest {
+  content: string;
+  title?: string;
+  document_id?: string;
+  metadata?: Record<string, unknown>;
+  async_processing?: boolean;
+}
+
+export interface EQIndexResponse {
+  document_id: string;
+  status: string;
+  task_id?: string;
+  chunk_count?: number;
+  entity_count?: number;
+}
+
+// ── Index Function ───────────────────────────────────────────
+
+export async function indexDocument(request: EQIndexRequest): Promise<EQIndexResponse> {
+  const response = await fetch(`${EDGEQUAKE_URL}/api/v1/documents`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      content: request.content,
+      title: request.title,
+      metadata: { ...request.metadata, sayknowmind_document_id: request.document_id },
+      async_processing: request.async_processing ?? true,
+    }),
+    signal: AbortSignal.timeout(EDGEQUAKE_TIMEOUT),
+  });
+
+  if (!response.ok) {
+    throw new Error(`EdgeQuake indexing failed: ${response.status} - ${await response.text()}`);
+  }
+
+  return response.json();
+}
+
 export async function healthCheck(): Promise<boolean> {
   try {
     const response = await fetch(`${EDGEQUAKE_URL}/health`, {

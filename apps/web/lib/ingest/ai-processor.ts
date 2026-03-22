@@ -5,6 +5,10 @@ const AI_API_KEY = process.env.AI_API_KEY ?? "";
 const AI_TIMEOUT = 60_000;
 const MAX_CONTENT_CHARS = 8000;
 
+const LLM_PROVIDER = process.env.LLM_PROVIDER ?? "server";
+const LLM_MODEL = process.env.LLM_MODEL ?? "llama3.2";
+const OLLAMA_URL = `http://localhost:${process.env.OLLAMA_PORT ?? "11434"}`;
+
 interface AiChatRequest {
   system: string;
   message: string;
@@ -16,21 +20,37 @@ interface ExtractedEntity {
   confidence: number;
 }
 
-async function callAi(req: AiChatRequest): Promise<string> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (AI_API_KEY) {
-    headers["Authorization"] = `Bearer ${AI_API_KEY}`;
+async function callOllama(req: AiChatRequest): Promise<string> {
+  const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: LLM_MODEL,
+      messages: [
+        { role: "system", content: req.system },
+        { role: "user", content: req.message },
+      ],
+      stream: false,
+    }),
+    signal: AbortSignal.timeout(AI_TIMEOUT),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ollama returned ${response.status}`);
   }
+
+  const data = await response.json();
+  return data.message?.content ?? "";
+}
+
+async function callAiServer(req: AiChatRequest): Promise<string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (AI_API_KEY) headers["Authorization"] = `Bearer ${AI_API_KEY}`;
 
   const response = await fetch(`${AI_SERVER_URL}/ai/chat`, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      system: req.system,
-      message: req.message,
-    }),
+    body: JSON.stringify({ system: req.system, message: req.message }),
     signal: AbortSignal.timeout(AI_TIMEOUT),
   });
 
@@ -40,6 +60,18 @@ async function callAi(req: AiChatRequest): Promise<string> {
 
   const data = await response.json();
   return data.response ?? data.message ?? data.content ?? "";
+}
+
+async function callAi(req: AiChatRequest): Promise<string> {
+  if (LLM_PROVIDER === "ollama") {
+    try {
+      return await callOllama(req);
+    } catch (err) {
+      console.warn("[ai-processor] Ollama unavailable, falling back to AI server:", err);
+      return await callAiServer(req);
+    }
+  }
+  return await callAiServer(req);
 }
 
 function truncate(text: string): string {
@@ -109,6 +141,67 @@ Extract up to 20 most relevant entities. Output ONLY the JSON array, no markdown
   } catch {
     console.error("[ai-processor] Failed to parse entity extraction response:", result);
     return [];
+  }
+}
+
+export interface StructuredMetadata {
+  summary: string;
+  what_it_solves: string;
+  key_points: string[];
+  tags: string[];
+  reading_time_minutes: number;
+}
+
+export async function generateStructuredMetadata(
+  content: string,
+  language: Language,
+  wordCount: number,
+): Promise<StructuredMetadata> {
+  const langMap: Record<Language, string> = {
+    ko: "Korean", en: "English", ja: "Japanese", zh: "Chinese",
+  };
+
+  const result = await callAi({
+    system: `You are a knowledge extraction assistant. Analyze the provided content and return a JSON object with these fields:
+- "summary": 2-3 sentence summary in ${langMap[language]}
+- "what_it_solves": 1-2 sentences describing what problem/question this content addresses, in ${langMap[language]}
+- "key_points": array of 3-7 key bullet points (strings) in ${langMap[language]}
+- "tags": array of 3-10 lowercase tags/keywords (in English, even for non-English content)
+- "reading_time_minutes": estimated reading time as integer
+
+Output ONLY the JSON object, no markdown fences or explanation.`,
+    message: truncate(content),
+  });
+
+  try {
+    const cleaned = result.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+
+    // Calculate reading time fallback (200 WPM average)
+    const fallbackTime = Math.max(1, Math.round(wordCount / 200));
+
+    return {
+      summary: typeof parsed.summary === "string" ? parsed.summary : "",
+      what_it_solves: typeof parsed.what_it_solves === "string" ? parsed.what_it_solves : "",
+      key_points: Array.isArray(parsed.key_points)
+        ? parsed.key_points.filter((k: unknown): k is string => typeof k === "string").slice(0, 7)
+        : [],
+      tags: Array.isArray(parsed.tags)
+        ? parsed.tags.filter((t: unknown): t is string => typeof t === "string").slice(0, 10)
+        : [],
+      reading_time_minutes: typeof parsed.reading_time_minutes === "number"
+        ? Math.max(1, Math.round(parsed.reading_time_minutes))
+        : fallbackTime,
+    };
+  } catch {
+    console.error("[ai-processor] Failed to parse structured metadata:", result);
+    return {
+      summary: "",
+      what_it_solves: "",
+      key_points: [],
+      tags: [],
+      reading_time_minutes: Math.max(1, Math.round(wordCount / 200)),
+    };
   }
 }
 

@@ -9,7 +9,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Archive, MoreHorizontal, RotateCcw, Trash2, ExternalLink } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Archive,
+  MoreHorizontal,
+  RotateCcw,
+  Trash2,
+  ExternalLink,
+} from "lucide-react";
 import Image from "next/image";
 import { type Bookmark } from "@/store/bookmarks-store";
 import { cn } from "@/lib/utils";
@@ -90,8 +97,23 @@ function ArchivedBookmarkCard({ bookmark }: { bookmark: Bookmark }) {
 }
 
 export function ArchiveContent() {
-  const { getArchivedBookmarks } = useBookmarksStore();
+  const { getArchivedBookmarks, isLoading } = useBookmarksStore();
   const archivedBookmarks = getArchivedBookmarks();
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 w-full overflow-auto">
+        <div className="p-4 md:p-6 space-y-6">
+          <Skeleton className="h-20 w-full rounded-xl" />
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-lg" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 w-full overflow-auto">
@@ -109,26 +131,22 @@ export function ArchiveContent() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          {archivedBookmarks.map((bookmark) => (
-            <ArchivedBookmarkCard key={bookmark.id} bookmark={bookmark} />
-          ))}
-        </div>
-
-        {archivedBookmarks.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-4">
-              <Archive className="size-6 text-muted-foreground" />
-            </div>
+        {archivedBookmarks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Archive className="size-12 text-muted-foreground/20 mb-4" />
             <h3 className="text-lg font-medium mb-1">Archive is empty</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">
-              Archived bookmarks will appear here. Archive bookmarks you want to
-              keep but don&apos;t need right now.
+            <p className="text-sm text-muted-foreground">
+              Archived documents will appear here
             </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {archivedBookmarks.map((bookmark) => (
+              <ArchivedBookmarkCard key={bookmark.id} bookmark={bookmark} />
+            ))}
           </div>
         )}
       </div>
     </div>
   );
 }
-

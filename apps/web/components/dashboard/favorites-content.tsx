@@ -2,11 +2,27 @@
 
 import { useBookmarksStore } from "@/store/bookmarks-store";
 import { BookmarkCard } from "./bookmark-card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Star } from "lucide-react";
 
 export function FavoritesContent() {
-  const { getFavoriteBookmarks, viewMode } = useBookmarksStore();
+  const { getFavoriteBookmarks, viewMode, isLoading } = useBookmarksStore();
   const favoriteBookmarks = getFavoriteBookmarks();
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 w-full overflow-auto">
+        <div className="p-4 md:p-6 space-y-6">
+          <Skeleton className="h-20 w-full rounded-xl" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-48 rounded-xl" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 w-full overflow-auto">
@@ -24,7 +40,15 @@ export function FavoritesContent() {
           </div>
         </div>
 
-        {viewMode === "grid" ? (
+        {favoriteBookmarks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Star className="size-12 text-muted-foreground/20 mb-4" />
+            <h3 className="text-lg font-medium mb-1">No favorites yet</h3>
+            <p className="text-sm text-muted-foreground">
+              Star a document to add it here
+            </p>
+          </div>
+        ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {favoriteBookmarks.map((bookmark) => (
               <BookmarkCard key={bookmark.id} bookmark={bookmark} />
@@ -41,21 +65,7 @@ export function FavoritesContent() {
             ))}
           </div>
         )}
-
-        {favoriteBookmarks.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-4">
-              <Star className="size-6 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-medium mb-1">No favorites yet</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">
-              Mark bookmarks as favorites by clicking the heart icon to see them
-              here.
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
 }
-

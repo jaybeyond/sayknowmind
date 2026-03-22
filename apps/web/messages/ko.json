@@ -17,7 +17,11 @@
     "accountSettings": "계정 설정",
     "workspaceSettings": "워크스페이스 설정",
     "logOut": "로그아웃",
-    "allBookmarks": "전체 북마크"
+    "allBookmarks": "전체 북마크",
+    "chat": "채팅",
+    "knowledge": "지식 그래프",
+    "categories": "카테고리",
+    "settings": "설정"
   },
   "header": {
     "bookmarks": "북마크",
@@ -68,15 +72,55 @@
     "thinking": "생각 중...",
     "simpleMode": "심플",
     "agenticMode": "에이전틱",
-    "newConversation": "새 대화"
+    "newConversation": "새 대화",
+    "sources": "출처",
+    "copy": "복사",
+    "regenerate": "다시 생성",
+    "noHistory": "대화 기록 없음",
+    "startChat": "새 대화 시작",
+    "agentSteps": "에이전트 단계",
+    "emptyTitle": "무엇이든 물어보세요",
+    "emptySubtitle": "저장된 지식을 검색하고 탐색하세요"
   },
   "ingest": {
     "addUrl": "URL 추가",
     "uploadFile": "파일 업로드",
     "pasteText": "텍스트 붙여넣기",
     "processing": "처리 중...",
-    "urlPlaceholder": "저장할 URL을 입력하세요...",
-    "dragDrop": "파일을 여기에 드래그 앤 드롭하세요"
+    "urlPlaceholder": "https://...",
+    "dragDrop": "파일을 여기에 드래그하거나 클릭하세요",
+    "supportedFormats": "PDF, DOCX, TXT, MD, HTML — 최대 10MB",
+    "tabUrl": "URL",
+    "tabFile": "파일",
+    "tabText": "텍스트",
+    "textPlaceholder": "내용을 붙여넣거나 직접 입력하세요...",
+    "titlePlaceholder": "제목 (선택사항)",
+    "saving": "저장 중...",
+    "saved": "저장됨!",
+    "addDocument": "문서 추가",
+    "dialogDescription": "URL, 파일 또는 텍스트를 지식 베이스에 저장하세요."
+  },
+  "document": {
+    "summary": "요약",
+    "whatItSolves": "해결하는 문제",
+    "keyPoints": "핵심 포인트",
+    "readingTime": "{{minutes}}분 읽기",
+    "noSummary": "처리 중...",
+    "source": "출처",
+    "openSource": "원본 열기",
+    "copyUrl": "URL 복사"
+  },
+  "emptyState": {
+    "allDocuments": "저장된 항목이 없습니다",
+    "allDocumentsCta": "첫 번째 문서를 저장하세요",
+    "favorites": "즐겨찾기가 없습니다",
+    "favoritesCta": "문서에 별표를 눌러 추가하세요",
+    "archive": "보관함이 비어 있습니다",
+    "archiveCta": "보관된 문서가 여기에 표시됩니다",
+    "trash": "휴지통이 비어 있습니다",
+    "trashCta": "삭제된 문서가 여기에 표시됩니다",
+    "search": "검색 결과 없음",
+    "searchCta": "다른 키워드를 시도해 보세요"
   },
   "categories": {
     "title": "카테고리",
@@ -90,6 +134,24 @@
     "title": "설정",
     "language": "언어",
     "theme": "테마",
-    "defaultQueryMode": "기본 검색 모드"
+    "defaultQueryMode": "기본 검색 모드",
+    "profile": "프로필",
+    "appearance": "외관",
+    "aiPreferences": "AI 설정",
+    "privacy": "개인정보",
+    "dangerZone": "위험 구역",
+    "name": "이름",
+    "email": "이메일",
+    "saveChanges": "변경사항 저장",
+    "themeLight": "라이트",
+    "themeDark": "다크",
+    "themeSystem": "시스템",
+    "defaultMode": "기본 채팅 모드",
+    "privateMode": "프라이빗 모드",
+    "privateModeDesc": "모든 데이터를 로컬에 저장하고 외부 네트워크 차단",
+    "exportData": "데이터 내보내기",
+    "deleteAccount": "계정 삭제",
+    "deleteAccountConfirm": "정말로 삭제하시겠습니까? 취소할 수 없습니다.",
+    "saved": "설정 저장됨"
   }
 }

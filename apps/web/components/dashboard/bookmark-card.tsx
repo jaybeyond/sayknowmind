@@ -18,6 +18,11 @@ import {
   Trash2,
   Tag,
   Archive,
+  FileText,
+  FileType,
+  Globe,
+  AlignLeft,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBookmarksStore, type Bookmark } from "@/store/bookmarks-store";
@@ -26,6 +31,17 @@ interface BookmarkCardProps {
   bookmark: Bookmark;
   variant?: "grid" | "list";
 }
+
+const DocTypeIcon = ({ type }: { type?: "url" | "file" | "text" }) => {
+  switch (type) {
+    case "file":
+      return <FileText className="size-3.5 text-muted-foreground" />;
+    case "text":
+      return <AlignLeft className="size-3.5 text-muted-foreground" />;
+    default:
+      return <Globe className="size-3.5 text-muted-foreground" />;
+  }
+};
 
 export function BookmarkCard({
   bookmark,
@@ -58,7 +74,14 @@ export function BookmarkCard({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
+            <DocTypeIcon type={bookmark.docType} />
             <h3 className="font-medium truncate">{bookmark.title}</h3>
+            {bookmark.readingTimeMinutes && (
+              <span className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                <Clock className="size-3" />
+                {bookmark.readingTimeMinutes} min
+              </span>
+            )}
             {bookmarkTags.length > 0 && (
               <div className="hidden sm:flex items-center gap-1">
                 {bookmarkTags.slice(0, 2).map((tag) => (
@@ -80,6 +103,11 @@ export function BookmarkCard({
           <p className="text-sm text-muted-foreground truncate">
             {bookmark.url}
           </p>
+          {bookmark.whatItSolves && (
+            <p className="text-xs text-muted-foreground/80 truncate mt-0.5">
+              {bookmark.whatItSolves}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-1">
@@ -201,23 +229,56 @@ export function BookmarkCard({
       >
         <div className="h-32 bg-linear-to-br from-muted/50 to-muted flex items-center justify-center">
           <div className="size-12 rounded-xl bg-background shadow-sm flex items-center justify-center">
-            <Image
-              src={bookmark.favicon}
-              alt={bookmark.title}
-              width={32}
-              height={32}
-              className={cn("size-8", bookmark.hasDarkIcon && "dark:invert")}
-            />
+            {bookmark.docType === "file" ? (
+              <FileText className="size-8 text-muted-foreground" />
+            ) : bookmark.docType === "text" ? (
+              <FileType className="size-8 text-muted-foreground" />
+            ) : (
+              <Image
+                src={bookmark.favicon}
+                alt={bookmark.title}
+                width={32}
+                height={32}
+                className={cn("size-8", bookmark.hasDarkIcon && "dark:invert")}
+              />
+            )}
           </div>
         </div>
 
         <div className="p-4 space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-medium line-clamp-1">{bookmark.title}</h3>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <DocTypeIcon type={bookmark.docType} />
+              <h3 className="font-medium line-clamp-1">{bookmark.title}</h3>
+            </div>
           </div>
           <p className="text-sm text-muted-foreground line-clamp-2">
             {bookmark.description}
           </p>
+          {(bookmark.summary || bookmark.keyPoints?.length) && (
+            <div className="border-t pt-2 mt-1 space-y-1.5">
+              {bookmark.summary && (
+                <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                  {bookmark.summary}
+                </p>
+              )}
+              {bookmark.keyPoints && bookmark.keyPoints.length > 0 && (
+                <ul className="space-y-0.5">
+                  {bookmark.keyPoints.slice(0, 2).map((point, i) => (
+                    <li key={i} className="text-[11px] text-muted-foreground flex gap-1.5">
+                      <span className="text-primary mt-0.5 shrink-0">•</span>
+                      <span className="line-clamp-1">{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {bookmark.readingTimeMinutes && (
+                <span className="text-[10px] text-muted-foreground/60">
+                  {bookmark.readingTimeMinutes} min read
+                </span>
+              )}
+            </div>
+          )}
           {bookmarkTags.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-1">
               {bookmarkTags.slice(0, 3).map((tag) => (

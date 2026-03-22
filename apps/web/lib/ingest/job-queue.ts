@@ -1,7 +1,8 @@
 import { pool } from "@/lib/db";
 import type { IngestStatus, IngestStatusResponse } from "@/lib/types";
 import { getDocument, updateDocument, insertEntities } from "./document-store";
-import { generateSummary, extractEntities, suggestCategories } from "./ai-processor";
+import { generateSummary, extractEntities, suggestCategories, generateStructuredMetadata, type StructuredMetadata } from "./ai-processor";
+import { indexDocument } from "@/lib/edgequake/client";
 import { detectLanguage } from "./language-detect";
 
 interface JobRow {
@@ -116,16 +117,29 @@ async function processJob(job: JobRow): Promise<void> {
     const language = detectLanguage(doc.content);
     await updateJobProgress(jobId, 20);
 
-    // Step 1: Generate summary (20% → 40%)
-    let summary = "";
+    // Step 1: Generate structured metadata via AI (20% → 50%)
+    let structuredMeta: StructuredMetadata = {
+      summary: "", what_it_solves: "", key_points: [], tags: [], reading_time_minutes: 1,
+    };
     try {
-      summary = await generateSummary(doc.content, language);
-      await updateDocument(documentId, { summary });
+      const wordCount = doc.content ? doc.content.split(/\s+/).length : 0;
+      structuredMeta = await generateStructuredMetadata(doc.content ?? "", language, wordCount);
+
+      await updateDocument(documentId, {
+        summary: structuredMeta.summary || undefined,
+        metadata: {
+          summary: structuredMeta.summary,
+          what_it_solves: structuredMeta.what_it_solves,
+          key_points: structuredMeta.key_points,
+          tags: structuredMeta.tags,
+          reading_time_minutes: structuredMeta.reading_time_minutes,
+          language,
+        },
+      });
     } catch (err) {
-      console.error(`[job-queue] Summary generation failed for job ${jobId}:`, err);
-      // Non-fatal: continue without summary
+      console.error(`[job-queue] Structured metadata generation failed for job ${jobId}:`, err);
     }
-    await updateJobProgress(jobId, 40);
+    await updateJobProgress(jobId, 50);
 
     // Step 2: Extract entities (40% → 70%)
     try {
@@ -169,6 +183,26 @@ async function processJob(job: JobRow): Promise<void> {
       console.error(`[job-queue] Category suggestion failed for job ${jobId}:`, err);
     }
     await updateJobProgress(jobId, 90);
+
+    // Step 4: Index in EdgeQuake for RAG search (90% → 100%)
+    try {
+      if (doc.content) {
+        await indexDocument({
+          content: doc.content,
+          title: doc.title ?? undefined,
+          document_id: documentId,
+          metadata: { language, user_id: userId },
+        });
+        // Mark document as indexed in PostgreSQL
+        await pool.query(
+          `UPDATE documents SET indexed_at = NOW() WHERE id = $1`,
+          [documentId],
+        );
+      }
+    } catch (err) {
+      console.error(`[job-queue] EdgeQuake indexing failed for job ${jobId}:`, err);
+      // Non-fatal: RAG won't work but document is still saved
+    }
 
     // Done
     await completeJob(jobId);

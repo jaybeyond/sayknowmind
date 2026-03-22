@@ -3,22 +3,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { GraphCanvas } from "./graph-canvas";
 import { NodeDetailPanel } from "./node-detail-panel";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface GraphNode {
   id: string;
   label: string;
-  type: "document" | "entity" | "category" | "concept";
-  x: number;
-  y: number;
-  size: number;
-  color: string;
+  type: string;
+  properties?: Record<string, unknown>;
 }
 
 interface GraphEdge {
   source: string;
   target: string;
+  type: string;
   label?: string;
-  weight?: number;
 }
 
 interface NodeDetail {
@@ -34,7 +32,6 @@ export function KnowledgeDashboard() {
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null);
   const [search, setSearch] = useState("");
-  const [searchHighlight, setSearchHighlight] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
 
@@ -51,21 +48,8 @@ export function KnowledgeDashboard() {
       const data = await res.json();
       setNodes(data.nodes ?? []);
       setEdges(data.edges ?? []);
-
-      // Highlight search matches
-      if (search) {
-        const matching = (data.nodes ?? [])
-          .filter((n: GraphNode) =>
-            n.label.toLowerCase().includes(search.toLowerCase()),
-          )
-          .map((n: GraphNode) => n.id);
-        setSearchHighlight(matching);
-      } else {
-        setSearchHighlight([]);
-      }
     } catch (err) {
       console.error("Failed to load graph:", err);
-      // Show empty state
       setNodes([]);
       setEdges([]);
     } finally {
@@ -77,12 +61,9 @@ export function KnowledgeDashboard() {
     fetchGraph();
   }, [fetchGraph]);
 
-  const handleNodeClick = async (nodeId: string) => {
-    const node = nodes.find((n) => n.id === nodeId);
-    if (!node) return;
-
+  const handleNodeClick = async (node: GraphNode) => {
     try {
-      const res = await fetch(`/api/knowledge/node/${nodeId}`);
+      const res = await fetch(`/api/knowledge/node/${node.id}`);
       if (res.ok) {
         const detail = await res.json();
         setSelectedNode(detail);
@@ -137,7 +118,6 @@ export function KnowledgeDashboard() {
           <option value="document">Documents</option>
           <option value="entity">Entities</option>
           <option value="category">Categories</option>
-          <option value="concept">Concepts</option>
         </select>
 
         <div className="text-xs text-muted-foreground">
@@ -148,20 +128,14 @@ export function KnowledgeDashboard() {
       {/* Graph Area */}
       <div className="flex-1 relative overflow-hidden bg-background">
         {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-muted-foreground text-sm">Loading knowledge graph...</div>
-          </div>
-        ) : nodes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-muted-foreground/50">
-              <circle cx="12" cy="12" r="3" />
-              <circle cx="4" cy="6" r="2" />
-              <circle cx="20" cy="6" r="2" />
-              <circle cx="4" cy="18" r="2" />
-              <circle cx="20" cy="18" r="2" />
-              <path d="M6 7l4 4M14 11l4-4M6 17l4-4M14 13l4 4" />
-            </svg>
-            <p className="text-muted-foreground text-sm">No data yet. Ingest some documents to see the knowledge graph.</p>
+          <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-64 w-full max-w-lg rounded-xl" />
+            <div className="flex gap-3">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-20" />
+            </div>
           </div>
         ) : (
           <GraphCanvas
@@ -169,7 +143,6 @@ export function KnowledgeDashboard() {
             edges={edges}
             onNodeClick={handleNodeClick}
             selectedNodeId={selectedNode?.id}
-            searchHighlight={searchHighlight}
           />
         )}
 
@@ -178,22 +151,6 @@ export function KnowledgeDashboard() {
           node={selectedNode}
           onClose={() => setSelectedNode(null)}
         />
-
-        {/* Legend */}
-        <div className="absolute bottom-3 left-3 flex gap-3 bg-background/80 backdrop-blur-sm rounded-md p-2 border border-border text-xs">
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#00E5FF]" /> Document
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#FF2E63]" /> Entity
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#7C3AED]" /> Category
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" /> Concept
-          </div>
-        </div>
       </div>
     </div>
   );
