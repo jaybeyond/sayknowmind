@@ -10,6 +10,8 @@ import type { ChatMode } from "@/lib/types";
 const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 const AI_API_KEY = process.env.AI_API_KEY ?? "";
 const AI_TIMEOUT = 60_000;
+const OLLAMA_URL = process.env.OLLAMA_URL ?? `http://localhost:${process.env.OLLAMA_PORT ?? "11434"}`;
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "qwen3:4b";
 
 export async function POST(request: NextRequest) {
   // Auth check
@@ -170,32 +172,35 @@ export async function POST(request: NextRequest) {
       return streamResponse(systemParts.join("\n"), history, convId!, userId);
     }
 
-    // Non-streaming response via AI server
-    const aiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-    if (AI_API_KEY) aiHeaders["Authorization"] = `Bearer ${AI_API_KEY}`;
+    // Non-streaming response — try AI server, fallback to Ollama
+    let answer = "";
+    try {
+      const aiHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (AI_API_KEY) aiHeaders["Authorization"] = `Bearer ${AI_API_KEY}`;
 
-    const aiResponse = await fetch(`${AI_SERVER_URL}/ai/chat`, {
-      method: "POST",
-      headers: aiHeaders,
-      body: JSON.stringify({
-        system: systemParts.join("\n"),
-        message,
-        messages: history.map((m: { role: string; content: string }) => ({
-          role: m.role,
-          content: m.content,
-        })),
-        userId,
-        sessionId: convId,
-      }),
-      signal: AbortSignal.timeout(AI_TIMEOUT),
-    });
+      const aiResponse = await fetch(`${AI_SERVER_URL}/ai/chat`, {
+        method: "POST",
+        headers: aiHeaders,
+        body: JSON.stringify({
+          system: systemParts.join("\n"),
+          message,
+          messages: history.map((m: { role: string; content: string }) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          userId,
+          sessionId: convId,
+        }),
+        signal: AbortSignal.timeout(AI_TIMEOUT),
+      });
 
-    if (!aiResponse.ok) {
-      throw new Error(`AI server returned ${aiResponse.status}`);
+      if (!aiResponse.ok) throw new Error(`AI server returned ${aiResponse.status}`);
+      const aiData = await aiResponse.json();
+      answer = aiData.response ?? aiData.message ?? aiData.content ?? "";
+    } catch {
+      // Fallback to Ollama
+      answer = await ollamaChat(systemParts.join("\n"), history);
     }
-
-    const aiData = await aiResponse.json();
-    const answer = aiData.response ?? aiData.message ?? aiData.content ?? "";
 
     // Store assistant message
     await pool.query(
@@ -226,81 +231,108 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Stream response via SSE */
+/** Stream response via SSE — tries AI server, falls back to Ollama */
 function streamResponse(
   systemPrompt: string,
   history: { role: string; content: string }[],
   conversationId: string,
-  userId: string,
+  _userId: string,
 ): NextResponse {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const aiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-        if (AI_API_KEY) aiHeaders["Authorization"] = `Bearer ${AI_API_KEY}`;
+        let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+        let isOllama = false;
 
-        const aiResponse = await fetch(`${AI_SERVER_URL}/ai/chat`, {
-          method: "POST",
-          headers: aiHeaders,
-          body: JSON.stringify({
-            system: systemPrompt,
-            messages: history.map((m) => ({ role: m.role, content: m.content })),
-            userId,
-            sessionId: conversationId,
-            stream: true,
-          }),
-          signal: AbortSignal.timeout(AI_TIMEOUT),
-        });
+        // Try AI server first
+        try {
+          const aiHeaders: Record<string, string> = { "Content-Type": "application/json" };
+          if (AI_API_KEY) aiHeaders["Authorization"] = `Bearer ${AI_API_KEY}`;
 
-        if (!aiResponse.ok || !aiResponse.body) {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ error: "AI server error" })}\n\n`),
-          );
-          controller.close();
-          return;
+          const aiResponse = await fetch(`${AI_SERVER_URL}/ai/chat`, {
+            method: "POST",
+            headers: aiHeaders,
+            body: JSON.stringify({
+              system: systemPrompt,
+              messages: history.map((m) => ({ role: m.role, content: m.content })),
+              sessionId: conversationId,
+              stream: true,
+            }),
+            signal: AbortSignal.timeout(AI_TIMEOUT),
+          });
+
+          if (!aiResponse.ok || !aiResponse.body) throw new Error("AI server unavailable");
+          reader = aiResponse.body.getReader();
+        } catch {
+          // Fallback to Ollama streaming
+          isOllama = true;
+          const ollamaMessages = [
+            { role: "system", content: systemPrompt },
+            ...history.map((m) => ({ role: m.role, content: m.content })),
+          ];
+          const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: OLLAMA_MODEL, messages: ollamaMessages, stream: true }),
+            signal: AbortSignal.timeout(AI_TIMEOUT),
+          });
+          if (!ollamaRes.ok || !ollamaRes.body) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "No AI backend available" })}\n\n`));
+            controller.close();
+            return;
+          }
+          reader = ollamaRes.body.getReader();
         }
 
-        const reader = aiResponse.body.getReader();
         const decoder = new TextDecoder();
         let fullAnswer = "";
+        let buffer = "";
 
         while (true) {
-          const { done, value } = await reader.read();
+          const { done, value } = await reader!.read();
           if (done) break;
 
-          const chunk = decoder.decode(value, { stream: true });
-          fullAnswer += chunk;
+          const text = decoder.decode(value, { stream: true });
 
-          // Forward as SSE
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ chunk, conversationId })}\n\n`),
-          );
+          if (isOllama) {
+            // Ollama returns NDJSON lines
+            buffer += text;
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const obj = JSON.parse(line);
+                const chunk = obj.message?.content ?? "";
+                if (chunk) {
+                  fullAnswer += chunk;
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ chunk, conversationId })}\n\n`));
+                }
+              } catch { /* skip */ }
+            }
+          } else {
+            // AI server raw stream
+            fullAnswer += text;
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ chunk: text, conversationId })}\n\n`));
+          }
         }
 
         // Send done event
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ done: true, conversationId })}\n\n`),
-        );
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, conversationId })}\n\n`));
 
         // Store assistant message
         if (fullAnswer) {
           await pool.query(
-            `INSERT INTO messages (conversation_id, role, content)
-             VALUES ($1, 'assistant', $2)`,
+            `INSERT INTO messages (conversation_id, role, content) VALUES ($1, 'assistant', $2)`,
             [conversationId, fullAnswer],
           );
-          await pool.query(
-            `UPDATE conversations SET updated_at = NOW() WHERE id = $1`,
-            [conversationId],
-          );
+          await pool.query(`UPDATE conversations SET updated_at = NOW() WHERE id = $1`, [conversationId]);
         }
       } catch (err) {
         console.error("[chat/stream] Error:", err);
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`),
-        );
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`));
       } finally {
         controller.close();
       }
@@ -314,4 +346,24 @@ function streamResponse(
       Connection: "keep-alive",
     },
   });
+}
+
+/** Ollama non-streaming chat fallback */
+async function ollamaChat(
+  systemPrompt: string,
+  history: { role: string; content: string }[],
+): Promise<string> {
+  const messages = [
+    { role: "system", content: systemPrompt },
+    ...history.map((m) => ({ role: m.role, content: m.content })),
+  ];
+  const res = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: OLLAMA_MODEL, messages, stream: false }),
+    signal: AbortSignal.timeout(AI_TIMEOUT),
+  });
+  if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
+  const data = await res.json();
+  return data.message?.content ?? "";
 }

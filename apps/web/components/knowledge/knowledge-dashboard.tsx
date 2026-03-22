@@ -93,7 +93,7 @@ export function KnowledgeDashboard() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center gap-3 p-3 border-b border-border">
         <div className="relative flex-1 max-w-sm">
@@ -135,7 +135,7 @@ export function KnowledgeDashboard() {
       </div>
 
       {/* Graph Area */}
-      <div className="flex-1 relative overflow-hidden bg-background">
+      <div className="flex-1 relative overflow-hidden bg-background min-h-0 flex flex-col">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
             <Skeleton className="h-8 w-48" />

@@ -5,7 +5,10 @@ import { getGraph } from "@/lib/edgequake/client";
 import { ErrorCode } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
-  let userId = await getUserIdFromRequest();
+  let userId: string | null = null;
+  try {
+    userId = await getUserIdFromRequest();
+  } catch { /* auth check failed */ }
 
   // Dev fallback: if not authenticated, use first user
   if (!userId) {

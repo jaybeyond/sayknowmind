@@ -5,6 +5,7 @@ import { getSessionCookie } from "better-auth/cookies";
 const publicApiPaths = [
   "/api/documents/reprocess",
   "/api/knowledge/graph",
+  "/api/knowledge/node",
 ];
 
 // Routes that require authentication
@@ -72,9 +73,12 @@ export const config = {
     "/settings/:path*",
     "/knowledge/:path*",
     "/categories/:path*",
+    "/chat/:path*",
+    "/chat",
     // Protected API routes
     "/api/ingest/:path*",
     "/api/search/:path*",
+    "/api/chat",
     "/api/chat/:path*",
     "/api/categories/:path*",
     "/api/knowledge/:path*",

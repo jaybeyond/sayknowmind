@@ -11,7 +11,9 @@ export default function KnowledgePage() {
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <h1 className="font-heading font-semibold text-lg">Knowledge Graph</h1>
           </div>
-          <KnowledgeDashboard />
+          <div className="flex-1 min-h-0">
+            <KnowledgeDashboard />
+          </div>
         </div>
       </div>
     </SidebarProvider>

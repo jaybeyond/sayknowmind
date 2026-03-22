@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { checkAntiBot } from "@/lib/antibot";
 import { listCategories, createCategory } from "@/lib/categories/store";
+import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 
 /** GET /api/categories - List all categories for user */
@@ -17,10 +18,23 @@ export async function GET(request: NextRequest) {
   try {
     const categories = await listCategories(userId);
 
+    // Get document counts per category
+    const countResult = await pool.query(
+      `SELECT dc.category_id, COUNT(*)::int as count
+       FROM document_categories dc
+       JOIN categories c ON c.id = dc.category_id
+       WHERE c.user_id = $1
+       GROUP BY dc.category_id`,
+      [userId],
+    );
+    const docCounts = new Map<string, number>(
+      countResult.rows.map((r: { category_id: string; count: number }) => [r.category_id, r.count]),
+    );
+
     // Build tree structure
-    const tree = buildTree(categories);
+    const tree = buildTree(categories, docCounts);
     // Build graph structure
-    const graph = buildGraph(categories);
+    const graph = buildGraph(categories, docCounts);
 
     return NextResponse.json({ categories, tree, graph });
   } catch (err) {
@@ -102,7 +116,10 @@ interface CategoryNode {
   documentCount: number;
 }
 
-function buildTree(categories: Array<{ id: string; name: string; parent_id: string | null; depth: number; path: string }>): CategoryNode | null {
+function buildTree(
+  categories: Array<{ id: string; name: string; parent_id: string | null; depth: number; path: string }>,
+  docCounts: Map<string, number> = new Map(),
+): CategoryNode | null {
   if (categories.length === 0) return null;
 
   const nodeMap = new Map<string, CategoryNode>();
@@ -112,7 +129,7 @@ function buildTree(categories: Array<{ id: string; name: string; parent_id: stri
     const node: CategoryNode = {
       category: { id: cat.id, name: cat.name, depth: cat.depth, path: cat.path, parentId: cat.parent_id },
       children: [],
-      documentCount: 0,
+      documentCount: docCounts.get(cat.id) ?? 0,
     };
     nodeMap.set(cat.id, node);
   }
@@ -134,12 +151,15 @@ function buildTree(categories: Array<{ id: string; name: string; parent_id: stri
   };
 }
 
-function buildGraph(categories: Array<{ id: string; name: string; parent_id: string | null; depth: number }>) {
+function buildGraph(
+  categories: Array<{ id: string; name: string; parent_id: string | null; depth: number }>,
+  docCounts: Map<string, number> = new Map(),
+) {
   const nodes = categories.map((c) => ({
     id: c.id,
     name: c.name,
     depth: c.depth,
-    documentCount: 0,
+    documentCount: docCounts.get(c.id) ?? 0,
   }));
 
   const edges: Array<{ source: string; target: string; type: "parent_child" | "related" }> = [];

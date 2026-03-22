@@ -9,17 +9,17 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
-    return NextResponse.json(
-      { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
-      { status: 401 },
-    );
-  }
-
-  const { id } = await params;
-
   try {
+    const userId = await getUserIdFromRequest();
+    if (!userId) {
+      return NextResponse.json(
+        { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
+        { status: 401 },
+      );
+    }
+
+    const { id } = await params;
+
     const category = await getCategory(id, userId);
     if (!category) {
       return NextResponse.json(
@@ -43,20 +43,20 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
-    return NextResponse.json(
-      { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
-      { status: 401 },
-    );
-  }
-
-  const blocked = checkAntiBot(request, userId);
-  if (blocked) return blocked;
-
-  const { id } = await params;
-
   try {
+    const userId = await getUserIdFromRequest();
+    if (!userId) {
+      return NextResponse.json(
+        { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
+        { status: 401 },
+      );
+    }
+
+    const blocked = checkAntiBot(request, userId);
+    if (blocked) return blocked;
+
+    const { id } = await params;
+
     const body = await request.json();
     const { name, parentId, description, color } = body as {
       name?: string;
@@ -81,11 +81,17 @@ export async function PUT(
 
     return NextResponse.json(updated);
   } catch (err) {
-    const error = err as Error & { code?: number };
+    const error = err as Error & { code?: number | string };
     if (error.code === 4003) {
       return NextResponse.json(
         { code: ErrorCode.CATEGORY_CIRCULAR_REFERENCE, message: "Circular reference detected", timestamp: new Date().toISOString() },
         { status: 400 },
+      );
+    }
+    if (error.code === "23505") {
+      return NextResponse.json(
+        { code: ErrorCode.CATEGORY_DUPLICATE_NAME, message: "Category name already exists", timestamp: new Date().toISOString() },
+        { status: 409 },
       );
     }
     console.error("[categories/[id]] PUT error:", err);
@@ -101,17 +107,17 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
-    return NextResponse.json(
-      { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
-      { status: 401 },
-    );
-  }
-
-  const { id } = await params;
-
   try {
+    const userId = await getUserIdFromRequest();
+    if (!userId) {
+      return NextResponse.json(
+        { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
+        { status: 401 },
+      );
+    }
+
+    const { id } = await params;
+
     const result = await deleteCategory(id, userId);
     return NextResponse.json(result);
   } catch (err) {
