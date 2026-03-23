@@ -10,7 +10,7 @@ import {
 import { Languages, Check } from "lucide-react";
 import { useTranslation, localeNames, type Locale } from "@/lib/i18n";
 
-const locales: Locale[] = ["en", "ko"];
+const locales: Locale[] = ["en", "ko", "zh", "ja"];
 
 export function LanguageSwitcher() {
   const { locale, setLocale } = useTranslation();
