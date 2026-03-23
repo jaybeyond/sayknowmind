@@ -20,12 +20,14 @@ import {
 import Image from "next/image";
 import { type Memory } from "@/store/memory-store";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 function TrashedMemoryCard({ memory }: { memory: Memory }) {
   const { restoreFromTrash, permanentlyDelete } = useMemoryStore();
+  const { t } = useTranslation();
 
   const handlePermanentDelete = () => {
-    if (!confirm("Permanently delete this?")) return;
+    if (!confirm(t("trash.confirmDelete"))) return;
     permanentlyDelete(memory.id);
   };
 
@@ -56,7 +58,7 @@ function TrashedMemoryCard({ memory }: { memory: Memory }) {
           onClick={() => restoreFromTrash(memory.id)}
         >
           <RotateCcw className="size-4 mr-1" />
-          Restore
+          {t("common.restore")}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -69,7 +71,7 @@ function TrashedMemoryCard({ memory }: { memory: Memory }) {
               onClick={() => window.open(memory.url, "_blank")}
             >
               <ExternalLink className="size-4 mr-2" />
-              Open URL
+              {t("common.openUrl")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -77,7 +79,7 @@ function TrashedMemoryCard({ memory }: { memory: Memory }) {
               onClick={handlePermanentDelete}
             >
               <XCircle className="size-4 mr-2" />
-              Delete Forever
+              {t("trash.deleteForever")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -89,6 +91,7 @@ function TrashedMemoryCard({ memory }: { memory: Memory }) {
 export function TrashContent() {
   const { getTrashedMemories, trashedMemories, isLoading } =
     useMemoryStore();
+  const { t } = useTranslation();
   const filteredTrash = getTrashedMemories();
 
   if (isLoading) {
@@ -115,16 +118,17 @@ export function TrashContent() {
               <Trash2 className="size-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Trash</h2>
+              <h2 className="text-lg font-semibold">{t("trash.title")}</h2>
               <p className="text-sm text-muted-foreground">
-                {trashedMemories.length} memor
-                {trashedMemories.length !== 1 ? "ies" : "y"} in trash
+                {trashedMemories.length !== 1
+                  ? t("trash.countMany").replace("{{count}}", String(trashedMemories.length))
+                  : t("trash.countOne").replace("{{count}}", String(trashedMemories.length))}
               </p>
             </div>
           </div>
           {trashedMemories.length > 0 && (
             <p className="text-xs text-muted-foreground hidden sm:block">
-              Items in trash will be permanently deleted after 30 days
+              {t("trash.retention")}
             </p>
           )}
         </div>
@@ -132,9 +136,9 @@ export function TrashContent() {
         {trashedMemories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Trash2 className="size-12 text-muted-foreground/20 mb-4" />
-            <h3 className="text-lg font-medium mb-1">Trash is empty</h3>
+            <h3 className="text-lg font-medium mb-1">{t("emptyState.trash")}</h3>
             <p className="text-sm text-muted-foreground">
-              Deleted documents will appear here
+              {t("emptyState.trashCta")}
             </p>
           </div>
         ) : (

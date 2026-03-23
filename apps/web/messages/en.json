@@ -51,7 +51,14 @@
     "delete": "Delete",
     "edit": "Edit",
     "confirm": "Confirm",
-    "noResults": "No results found"
+    "noResults": "No results found",
+    "docs": "Docs",
+    "new": "New",
+    "create": "Create",
+    "restore": "Restore",
+    "openUrl": "Open URL",
+    "tree": "Tree",
+    "graph": "Graph"
   },
   "auth": {
     "login": "Log in",
@@ -80,7 +87,9 @@
     "startChat": "Start a new conversation",
     "agentSteps": "Agent steps",
     "emptyTitle": "Ask anything",
-    "emptySubtitle": "Search and explore your saved knowledge"
+    "emptySubtitle": "Search and explore your saved knowledge",
+    "simpleModeDesc": "Direct answers",
+    "agenticModeDesc": "Multi-step reasoning"
   },
   "ingest": {
     "addUrl": "Add URL",
@@ -103,12 +112,15 @@
   "document": {
     "summary": "Summary",
     "whatItSolves": "What it solves",
-    "keyPoints": "Key points",
+    "keyPoints": "Key Points",
     "readingTime": "{{minutes}} min read",
     "noSummary": "Processing...",
     "source": "Source",
     "openSource": "Open source",
-    "copyUrl": "Copy URL"
+    "copyUrl": "Copy URL",
+    "description": "Description",
+    "openOriginal": "Open original",
+    "minRead": "min read"
   },
   "emptyState": {
     "allDocuments": "Nothing saved yet",
@@ -128,10 +140,16 @@
     "edit": "Edit Category",
     "delete": "Delete Category",
     "merge": "Merge Categories",
-    "uncategorized": "Uncategorized"
+    "uncategorized": "Uncategorized",
+    "namePlaceholder": "Category name",
+    "creatingUnder": "Creating under: {{parent}}",
+    "noDocuments": "No documents in this category",
+    "loadingCategories": "Loading categories...",
+    "removeDocument": "Remove from category"
   },
   "settings": {
     "title": "Settings",
+    "description": "Manage your account and preferences",
     "language": "Language",
     "theme": "Theme",
     "defaultQueryMode": "Default Query Mode",
@@ -146,12 +164,156 @@
     "themeLight": "Light",
     "themeDark": "Dark",
     "themeSystem": "System",
+    "themeDesc": "Choose how SayKnowMind looks",
     "defaultMode": "Default chat mode",
+    "defaultModeDesc": "Choose how the AI assistant responds by default",
     "privateMode": "Private Mode",
     "privateModeDesc": "Store all data locally, no external network calls",
     "exportData": "Export Data",
     "deleteAccount": "Delete Account",
     "deleteAccountConfirm": "Are you sure? This cannot be undone.",
-    "saved": "Settings saved"
+    "saved": "Settings saved",
+    "languageDesc": "Select your preferred language",
+    "languageUpdated": "Language updated. Reloading...",
+    "tabProfile": "Profile",
+    "tabAppearance": "Appearance",
+    "tabAi": "AI",
+    "tabPrompts": "Prompts",
+    "tabPrivacy": "Privacy",
+    "summaryPrompts": "Summary Prompts",
+    "summaryPromptsDesc": "Customize how AI summarizes your saved content"
+  },
+  "profile": {
+    "displayName": "Display name",
+    "namePlaceholder": "Your name",
+    "emailNote": "Email cannot be changed",
+    "noName": "No name set",
+    "updated": "Profile updated",
+    "saveFailed": "Failed to save"
+  },
+  "ai": {
+    "cloudProviders": "Cloud Providers",
+    "configuredCount": "{{count}} of {{total}} configured — keys are stored locally",
+    "localModels": "Local Models — Ollama",
+    "localModelsDesc": "Run models on your own hardware — complete privacy, no API costs",
+    "serverConfig": "Server Configuration",
+    "serverConfigDesc": "For self-hosted deployments, configure providers via environment variables in the AI server. Server-level keys are shared across all users.",
+    "saveSettings": "Save settings",
+    "chatModeSet": "Chat mode set to {{mode}}"
+  },
+  "archive": {
+    "title": "Archived Memories",
+    "countOne": "{{count}} memory in archive",
+    "countMany": "{{count}} memories in archive",
+    "moveToTrash": "Move to Trash"
+  },
+  "favorites": {
+    "title": "Favorite Memories",
+    "countOne": "{{count}} memory marked as favorite",
+    "countMany": "{{count}} memories marked as favorite"
+  },
+  "trash": {
+    "title": "Trash",
+    "countOne": "{{count}} memory in trash",
+    "countMany": "{{count}} memories in trash",
+    "deleteForever": "Delete Forever",
+    "confirmDelete": "Permanently delete this?",
+    "retention": "Items in trash will be permanently deleted after 30 days"
+  },
+  "memory": {
+    "copyUrl": "Copy URL",
+    "openInNewTab": "Open in new tab",
+    "addTags": "Add Tags",
+    "moreTags": "+{{count}} more"
+  },
+  "status": {
+    "summarizing": "Summarizing...",
+    "queued": "Queued",
+    "failed": "Failed"
+  },
+  "knowledge": {
+    "title": "Knowledge Graph",
+    "emptyTitle": "No knowledge graph yet",
+    "emptySubtitle": "Save documents to build your graph",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fitToScreen": "Fit to screen",
+    "nodeSize": "Size",
+    "stats": "{{nodes}} nodes · {{edges}} edges",
+    "searchPlaceholder": "Search knowledge graph...",
+    "filterAll": "All Types",
+    "filterDocuments": "Documents",
+    "filterEntities": "Entities",
+    "filterCategories": "Categories",
+    "loadingGraph": "Loading graph...",
+    "statsSlash": "{{nodes}} nodes / {{edges}} edges",
+    "properties": "Properties",
+    "connectedDocuments": "Connected Documents ({{count}})"
+  },
+  "offline": {
+    "banner": "Offline — showing local data only. Will sync automatically when reconnected."
+  },
+  "error": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. Please try again.",
+    "idPrefix": "Error ID: ",
+    "retry": "Try again"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page you are looking for does not exist or has been moved.",
+    "goHome": "Go home"
+  },
+  "privacy": {
+    "privateModeDesc": "OS-level network isolation for sensitive data",
+    "comingSoon": "Coming soon in a future release. Private mode will enable full network isolation for sensitive browsing sessions.",
+    "exportTitle": "Export data",
+    "exportDesc": "Download all your memories and documents as JSON",
+    "exportBtn": "Export data",
+    "exported": "Data exported",
+    "exportFailed": "Export failed",
+    "dangerZoneDesc": "Permanently delete your account and all associated data",
+    "deleteAccountBtn": "Delete account",
+    "deleteAccountIrreversible": "This action is irreversible",
+    "deleteConfirm": "Are you sure you want to delete your account? This action cannot be undone.",
+    "deleteFailed": "Failed to delete account"
+  },
+  "prompts": {
+    "loading": "Loading prompt settings...",
+    "description": "Customize how the AI summarizes your saved content. These instructions are inserted into the AI prompt. The output language follows your browser locale automatically.",
+    "save": "Save prompts",
+    "saving": "Saving...",
+    "saved": "Prompts saved",
+    "saveFailed": "Failed to save",
+    "networkError": "Network error",
+    "reset": "Reset to defaults",
+    "resetNotice": "Reset to defaults — click Save to apply",
+    "fieldSummaryLabel": "Summary",
+    "fieldSummaryHint": "How should the AI summarize? e.g. '2-3 sentence summary'",
+    "fieldWhatItSolvesLabel": "What it solves",
+    "fieldWhatItSolvesHint": "e.g. '1-2 sentences describing what problem this content addresses'",
+    "fieldKeyPointsLabel": "Key points",
+    "fieldKeyPointsHint": "e.g. 'array of 3-7 key bullet points'",
+    "fieldTagsLabel": "Tags",
+    "fieldTagsHint": "e.g. 'array of 3-10 lowercase tags/keywords'"
+  },
+  "ollama": {
+    "checking": "Checking Ollama...",
+    "runningOne": "Ollama running — 1 model installed",
+    "runningMany": "Ollama running — {{count}} models installed",
+    "offline": "Ollama offline — start it to manage models",
+    "installedModels": "Installed Models — click to set as summarization model",
+    "active": "Active",
+    "downloading": "Downloading {{name}}...",
+    "downloadModels": "Download Models",
+    "customModelPlaceholder": "Custom model name (e.g. codellama:13b)",
+    "pull": "Pull",
+    "downloaded": "{{name}} downloaded",
+    "deleted": "{{name}} deleted",
+    "deleteFailed": "Failed to delete model",
+    "setActiveFailed": "Failed to set active model",
+    "activeSet": "Summarization model set to {{name}}",
+    "deleteConfirm": "Delete {{name}}?",
+    "installHelp": "Install Ollama from ollama.com and run ollama serve to get started."
   }
 }

@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 export function ProfileTab() {
   const { data: session, isPending, refetch } = useSession();
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -28,13 +30,13 @@ export function ProfileTab() {
         body: JSON.stringify({ name }),
       });
       if (res.ok) {
-        toast.success("Profile updated");
+        toast.success(t("profile.updated"));
         refetch?.();
       } else {
-        toast.error("Failed to save");
+        toast.error(t("profile.saveFailed"));
       }
     } catch {
-      toast.error("Failed to save");
+      toast.error(t("profile.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -66,7 +68,7 @@ export function ProfileTab() {
           {initials}
         </div>
         <div>
-          <p className="font-medium">{user?.name || "No name set"}</p>
+          <p className="font-medium">{user?.name || t("profile.noName")}</p>
           <p className="text-sm text-muted-foreground">{user?.email}</p>
         </div>
       </div>
@@ -74,19 +76,19 @@ export function ProfileTab() {
       <div className="space-y-4">
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="settings-name">
-            Display name
+            {t("profile.displayName")}
           </label>
           <Input
             id="settings-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
+            placeholder={t("profile.namePlaceholder")}
           />
         </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="settings-email">
-            Email
+            {t("settings.email")}
           </label>
           <Input
             id="settings-email"
@@ -95,14 +97,14 @@ export function ProfileTab() {
             className="opacity-60"
           />
           <p className="text-xs text-muted-foreground">
-            Email cannot be changed
+            {t("profile.emailNote")}
           </p>
         </div>
       </div>
 
       <Button onClick={handleSave} disabled={saving || name === (user?.name ?? "")}>
         {saving && <Loader2 className="size-4 animate-spin" />}
-        Save changes
+        {t("settings.saveChanges")}
       </Button>
     </div>
   );

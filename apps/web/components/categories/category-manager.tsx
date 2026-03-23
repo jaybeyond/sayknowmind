@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { CategoryTree } from "./category-tree";
 import { CategoryGraph } from "./category-graph";
 import { FileText, ExternalLink, X, FolderOpen } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface CategoryData {
   id: string;
@@ -36,6 +37,7 @@ interface CategoryDocument {
 }
 
 export function CategoryManager() {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState<CategoryData[]>([]);
   const [tree, setTree] = useState<CategoryNode | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -192,7 +194,7 @@ export function CategoryManager() {
     <div className="flex flex-col h-full">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h1 className="font-heading font-semibold text-lg">Categories</h1>
+        <h1 className="font-heading font-semibold text-lg">{t("categories.title")}</h1>
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border border-border overflow-hidden">
             <button
@@ -201,7 +203,7 @@ export function CategoryManager() {
                 viewMode === "tree" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Tree
+              {t("common.tree")}
             </button>
             <button
               onClick={() => setViewMode("graph")}
@@ -209,7 +211,7 @@ export function CategoryManager() {
                 viewMode === "graph" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Graph
+              {t("common.graph")}
             </button>
           </div>
 
@@ -220,7 +222,7 @@ export function CategoryManager() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            New
+            {t("common.new")}
           </button>
         </div>
       </div>
@@ -231,7 +233,7 @@ export function CategoryManager() {
           <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Category name"
+              placeholder={t("categories.namePlaceholder")}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreate()}
@@ -242,7 +244,7 @@ export function CategoryManager() {
               onClick={handleCreate}
               className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              Create
+              {t("common.create")}
             </button>
             <button
               onClick={() => {
@@ -251,12 +253,15 @@ export function CategoryManager() {
               }}
               className="px-3 py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
           {createParentId && (
             <p className="text-xs text-muted-foreground mt-1">
-              Creating under: {categories.find((c) => c.id === createParentId)?.name}
+              {t("categories.creatingUnder").replace(
+                "{{parent}}",
+                categories.find((c) => c.id === createParentId)?.name ?? ""
+              )}
             </p>
           )}
         </div>
@@ -268,7 +273,7 @@ export function CategoryManager() {
         <div className={`${selectedId ? "w-1/2 border-r border-border" : "w-full"} overflow-hidden transition-all`}>
           {loading ? (
             <div className="flex items-center justify-center h-full">
-              <p className="text-sm text-muted-foreground">Loading categories...</p>
+              <p className="text-sm text-muted-foreground">{t("categories.loadingCategories")}</p>
             </div>
           ) : viewMode === "tree" ? (
             <div className="h-full overflow-y-auto">
@@ -312,12 +317,12 @@ export function CategoryManager() {
             <div className="flex-1 overflow-y-auto">
               {docsLoading ? (
                 <div className="flex items-center justify-center h-32">
-                  <p className="text-sm text-muted-foreground">Loading...</p>
+                  <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
                 </div>
               ) : documents.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 text-center px-4">
                   <FileText className="size-8 text-muted-foreground/30 mb-2" />
-                  <p className="text-sm text-muted-foreground">No documents in this category</p>
+                  <p className="text-sm text-muted-foreground">{t("categories.noDocuments")}</p>
                 </div>
               ) : (
                 <div className="divide-y divide-border">
@@ -340,7 +345,7 @@ export function CategoryManager() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-1 rounded hover:bg-muted"
-                            title="Open URL"
+                            title={t("common.openUrl")}
                           >
                             <ExternalLink className="size-3.5 text-muted-foreground" />
                           </a>
@@ -348,7 +353,7 @@ export function CategoryManager() {
                         <button
                           onClick={() => handleRemoveDocument(doc.id)}
                           className="p-1 rounded hover:bg-destructive/10"
-                          title="Remove from category"
+                          title={t("categories.removeDocument")}
                         >
                           <X className="size-3.5 text-muted-foreground hover:text-destructive" />
                         </button>

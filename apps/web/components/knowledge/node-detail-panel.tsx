@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslation } from "@/lib/i18n";
+
 interface NodeDetail {
   id: string;
   label: string;
@@ -18,6 +20,8 @@ interface NodeDetailPanelProps {
 }
 
 export function NodeDetailPanel({ node, onClose }: NodeDetailPanelProps) {
+  const { t } = useTranslation();
+
   if (!node) return null;
 
   const typeColors: Record<string, string> = {
@@ -48,7 +52,9 @@ export function NodeDetailPanel({ node, onClose }: NodeDetailPanelProps) {
 
       {node.properties && Object.keys(node.properties).length > 0 && (
         <div className="mt-4">
-          <h4 className="text-sm font-medium text-muted-foreground mb-2">Properties</h4>
+          <h4 className="text-sm font-medium text-muted-foreground mb-2">
+            {t("knowledge.properties")}
+          </h4>
           <dl className="space-y-1">
             {Object.entries(node.properties).map(([key, value]) => (
               <div key={key} className="flex gap-2 text-sm">
@@ -63,7 +69,7 @@ export function NodeDetailPanel({ node, onClose }: NodeDetailPanelProps) {
       {node.connectedDocuments && node.connectedDocuments.length > 0 && (
         <div className="mt-4">
           <h4 className="text-sm font-medium text-muted-foreground mb-2">
-            Connected Documents ({node.connectedDocuments.length})
+            {t("knowledge.connectedDocuments").replace("{{count}}", String(node.connectedDocuments.length))}
           </h4>
           <ul className="space-y-2">
             {node.connectedDocuments.map((doc) => (

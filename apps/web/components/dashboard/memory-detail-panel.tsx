@@ -12,6 +12,7 @@ import {
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 interface MemoryDetailPanelProps {
   memory: Memory | null;
@@ -19,6 +20,7 @@ interface MemoryDetailPanelProps {
 }
 
 export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
+  const { t } = useTranslation();
   if (!memory) return null;
 
   return (
@@ -78,7 +80,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
           {memory.readingTimeMinutes && (
             <span className="flex items-center gap-1">
               <FileText className="size-3" />
-              {memory.readingTimeMinutes}min read
+              {memory.readingTimeMinutes}{t("document.minRead")}
             </span>
           )}
           {memory.collectionId !== "all" && (
@@ -93,7 +95,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
         {memory.summary && (
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Summary
+              {t("document.summary")}
             </h3>
             <p className="text-sm leading-relaxed">{memory.summary}</p>
           </section>
@@ -104,7 +106,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <Lightbulb className="size-3" />
-              What it solves
+              {t("document.whatItSolves")}
             </h3>
             <p className="text-sm leading-relaxed">{memory.whatItSolves}</p>
           </section>
@@ -115,7 +117,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <ListChecks className="size-3" />
-              Key Points
+              {t("document.keyPoints")}
             </h3>
             <ul className="space-y-1.5">
               {memory.keyPoints.map((point, i) => (
@@ -138,7 +140,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <Tag className="size-3" />
-              Tags
+              {t("sidebar.tags")}
             </h3>
             <div className="flex flex-wrap gap-1.5">
               {[...new Set(memory.tags)].map((tag) => (
@@ -157,7 +159,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
         {memory.description && memory.description !== memory.summary && (
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Description
+              {t("document.description")}
             </h3>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {memory.description}
@@ -174,7 +176,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
           >
             <ExternalLink className="size-3.5" />
-            Open original
+            {t("document.openOriginal")}
           </a>
         )}
       </div>

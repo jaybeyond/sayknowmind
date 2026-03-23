@@ -1,60 +1,51 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { Sun, Moon, Monitor } from "lucide-react";
+import { useTranslation, localeNames, type Locale } from "@/lib/i18n";
 import { toast } from "sonner";
 
-const themes = [
-  { id: "light", label: "Light", icon: Sun },
-  { id: "dark", label: "Dark", icon: Moon },
-  { id: "system", label: "System", icon: Monitor },
-] as const;
-
-const languages = [
-  { id: "en", label: "English" },
-  { id: "ko", label: "\uD55C\uAD6D\uC5B4" },
-] as const;
+const themeIcons = { light: Sun, dark: Moon, system: Monitor } as const;
 
 export function AppearanceTab() {
   const { theme, setTheme } = useTheme();
-  const [lang, setLang] = useState("en");
+  const { t, locale, setLocale } = useTranslation();
 
-  useEffect(() => {
-    setLang(localStorage.getItem("sayknowmind-lang") ?? "en");
-  }, []);
+  const themes = [
+    { id: "light" as const, label: t("settings.themeLight"), icon: themeIcons.light },
+    { id: "dark" as const, label: t("settings.themeDark"), icon: themeIcons.dark },
+    { id: "system" as const, label: t("settings.themeSystem"), icon: themeIcons.system },
+  ];
 
-  const handleLangChange = (id: string) => {
-    localStorage.setItem("sayknowmind-lang", id);
-    setLang(id);
-    toast.success("Language updated. Reloading...");
-    setTimeout(() => window.location.reload(), 500);
+  const handleLangChange = (id: Locale) => {
+    setLocale(id);
+    toast.success(t("settings.languageUpdated"));
   };
 
   return (
     <div className="space-y-8">
       <div className="space-y-3">
         <div>
-          <h3 className="text-sm font-medium">Theme</h3>
+          <h3 className="text-sm font-medium">{t("settings.theme")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Choose how SayKnowMind looks
+            {t("settings.themeDesc")}
           </p>
         </div>
         <div className="flex gap-3">
-          {themes.map((t) => (
+          {themes.map((themeOption) => (
             <button
-              key={t.id}
-              onClick={() => setTheme(t.id)}
+              key={themeOption.id}
+              onClick={() => setTheme(themeOption.id)}
               className={cn(
                 "flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-colors",
-                theme === t.id
+                theme === themeOption.id
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-muted-foreground/50"
               )}
             >
-              <t.icon className="size-5" />
-              <span className="text-sm font-medium capitalize">{t.label}</span>
+              <themeOption.icon className="size-5" />
+              <span className="text-sm font-medium capitalize">{themeOption.label}</span>
             </button>
           ))}
         </div>
@@ -62,24 +53,24 @@ export function AppearanceTab() {
 
       <div className="space-y-3">
         <div>
-          <h3 className="text-sm font-medium">Language</h3>
+          <h3 className="text-sm font-medium">{t("settings.language")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Select your preferred language
+            {t("settings.languageDesc")}
           </p>
         </div>
-        <div className="flex gap-3">
-          {languages.map((l) => (
+        <div className="flex gap-3 flex-wrap">
+          {(Object.entries(localeNames) as [Locale, string][]).map(([id, label]) => (
             <button
-              key={l.id}
-              onClick={() => handleLangChange(l.id)}
+              key={id}
+              onClick={() => handleLangChange(id)}
               className={cn(
-                "flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-colors",
-                lang === l.id
+                "flex-1 min-w-[80px] flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-colors",
+                locale === id
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-muted-foreground/50"
               )}
             >
-              <span className="text-sm font-medium">{l.label}</span>
+              <span className="text-sm font-medium">{label}</span>
             </button>
           ))}
         </div>

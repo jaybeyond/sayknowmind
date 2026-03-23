@@ -17,13 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { OllamaModels } from "./ollama-models";
-
-// ─── Chat mode ───────────────────────────────────────────────
-
-const chatModes = [
-  { id: "simple", label: "Simple", description: "Direct answers", icon: Bot },
-  { id: "agentic", label: "Agentic", description: "Multi-step reasoning", icon: Sparkles },
-] as const;
+import { useTranslation } from "@/lib/i18n";
 
 // ─── Provider definitions ────────────────────────────────────
 
@@ -209,10 +203,12 @@ function ProviderCard({
   provider,
   values,
   onValuesChange,
+  docsLabel,
 }: {
   provider: ProviderDef;
   values: Record<string, string>;
   onValuesChange: (id: string, value: string) => void;
+  docsLabel: string;
 }) {
   const mainValue = values[provider.keyStorageId] ?? "";
   const isConfigured = mainValue.length > 0;
@@ -243,7 +239,7 @@ function ProviderCard({
           rel="noopener noreferrer"
           className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
         >
-          Docs
+          {docsLabel}
           <ExternalLink className="size-3" />
         </a>
       </div>
@@ -274,8 +270,14 @@ function ProviderCard({
 // ─── Main component ──────────────────────────────────────────
 
 export function AITab() {
+  const { t } = useTranslation();
   const [chatMode, setChatMode] = useState("simple");
   const [keyValues, setKeyValues] = useState<Record<string, string>>({});
+
+  const chatModes = [
+    { id: "simple", label: t("chat.simpleMode"), description: t("chat.simpleModeDesc"), icon: Bot },
+    { id: "agentic", label: t("chat.agenticMode"), description: t("chat.agenticModeDesc"), icon: Sparkles },
+  ];
 
   useEffect(() => {
     setChatMode(localStorage.getItem("sayknowmind-chat-mode") ?? "simple");
@@ -296,7 +298,7 @@ export function AITab() {
   const handleModeChange = (id: string) => {
     localStorage.setItem("sayknowmind-chat-mode", id);
     setChatMode(id);
-    toast.success(`Chat mode set to ${id}`);
+    toast.success(t("ai.chatModeSet").replace("{{mode}}", id));
   };
 
   const handleValueChange = (storageId: string, value: string) => {
@@ -311,7 +313,7 @@ export function AITab() {
         localStorage.removeItem(key);
       }
     }
-    toast.success("Settings saved");
+    toast.success(t("settings.saved"));
   };
 
   const cloudProviders = providers.filter((p) => p.category === "cloud");
@@ -324,9 +326,9 @@ export function AITab() {
       {/* Chat Mode */}
       <div className="space-y-3">
         <div>
-          <h3 className="text-sm font-medium">Default chat mode</h3>
+          <h3 className="text-sm font-medium">{t("settings.defaultMode")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Choose how the AI assistant responds by default
+            {t("settings.defaultModeDesc")}
           </p>
         </div>
         <div className="flex gap-3">
@@ -356,9 +358,11 @@ export function AITab() {
         <div className="flex items-center gap-2">
           <Cloud className="size-4 text-muted-foreground" />
           <div>
-            <h3 className="text-sm font-medium">Cloud Providers</h3>
+            <h3 className="text-sm font-medium">{t("ai.cloudProviders")}</h3>
             <p className="text-xs text-muted-foreground">
-              {configuredCount} of {providers.length} configured — keys are stored locally
+              {t("ai.configuredCount")
+                .replace("{{count}}", String(configuredCount))
+                .replace("{{total}}", String(providers.length))}
             </p>
           </div>
         </div>
@@ -370,6 +374,7 @@ export function AITab() {
               provider={provider}
               values={keyValues}
               onValuesChange={handleValueChange}
+              docsLabel={t("common.docs")}
             />
           ))}
         </div>
@@ -380,9 +385,9 @@ export function AITab() {
         <div className="flex items-center gap-2">
           <Cpu className="size-4 text-muted-foreground" />
           <div>
-            <h3 className="text-sm font-medium">Local Models — Ollama</h3>
+            <h3 className="text-sm font-medium">{t("ai.localModels")}</h3>
             <p className="text-xs text-muted-foreground">
-              Run models on your own hardware — complete privacy, no API costs
+              {t("ai.localModelsDesc")}
             </p>
           </div>
         </div>
@@ -396,17 +401,17 @@ export function AITab() {
       <div className="rounded-xl border border-dashed border-muted-foreground/30 p-4 space-y-2">
         <div className="flex items-center gap-2">
           <Server className="size-4 text-muted-foreground" />
-          <h4 className="text-sm font-medium text-muted-foreground">Server Configuration</h4>
+          <h4 className="text-sm font-medium text-muted-foreground">
+            {t("ai.serverConfig")}
+          </h4>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          For self-hosted deployments, you can also configure providers via environment variables in
-          the AI server (<code className="text-[11px] bg-muted px-1 py-0.5 rounded">apps/ai-server/.env</code>).
-          Server-level keys are shared across all users and take priority over per-user keys above.
+          {t("ai.serverConfigDesc")}
         </p>
       </div>
 
       <Button onClick={handleSave} className="w-full sm:w-auto">
-        Save settings
+        {t("ai.saveSettings")}
       </Button>
     </div>
   );

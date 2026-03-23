@@ -14,6 +14,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "@/lib/i18n";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ function formatDate(iso: string): string {
 // ─── Component ──────────────────────────────────────────────
 
 export function OllamaModels() {
+  const { t } = useTranslation();
   const [online, setOnline] = useState<boolean | null>(null);
   const [models, setModels] = useState<InstalledModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,9 +94,9 @@ export function OllamaModels() {
         body: JSON.stringify({ model: name }),
       });
       setActiveModel(name);
-      toast.success(`Summarization model set to ${name}`);
+      toast.success(t("ollama.activeSet").replace("{{name}}", name));
     } catch {
-      toast.error("Failed to set active model");
+      toast.error(t("ollama.setActiveFailed"));
     }
   };
 
@@ -178,7 +180,7 @@ export function OllamaModels() {
         }
       }
 
-      toast.success(`${name} downloaded`);
+      toast.success(t("ollama.downloaded").replace("{{name}}", name));
       await fetchModels();
     } catch (err) {
       toast.error(
@@ -191,7 +193,7 @@ export function OllamaModels() {
   };
 
   const handleDelete = async (name: string) => {
-    if (!confirm(`Delete ${name}?`)) return;
+    if (!confirm(t("ollama.deleteConfirm").replace("{{name}}", name))) return;
     setDeleting(name);
     try {
       const res = await fetch(
@@ -199,10 +201,10 @@ export function OllamaModels() {
         { method: "DELETE" }
       );
       if (!res.ok) throw new Error("Delete failed");
-      toast.success(`${name} deleted`);
+      toast.success(t("ollama.deleted").replace("{{name}}", name));
       setModels((prev) => prev.filter((m) => m.name !== name));
     } catch {
-      toast.error("Failed to delete model");
+      toast.error(t("ollama.deleteFailed"));
     } finally {
       setDeleting(null);
     }
@@ -210,6 +212,14 @@ export function OllamaModels() {
 
   const isInstalled = (name: string) =>
     models.some((m) => m.name === name || m.name.startsWith(`${name}:`));
+
+  const statusText = online === null
+    ? t("ollama.checking")
+    : online
+      ? models.length === 1
+        ? t("ollama.runningOne")
+        : t("ollama.runningMany").replace("{{count}}", String(models.length))
+      : t("ollama.offline");
 
   return (
     <div className="space-y-4">
@@ -223,13 +233,7 @@ export function OllamaModels() {
           ) : (
             <XCircle className="size-3.5 text-destructive" />
           )}
-          <span className="text-xs text-muted-foreground">
-            {online === null
-              ? "Checking Ollama..."
-              : online
-                ? `Ollama running — ${models.length} model${models.length !== 1 ? "s" : ""} installed`
-                : "Ollama offline — start it to manage models"}
-          </span>
+          <span className="text-xs text-muted-foreground">{statusText}</span>
         </div>
         <button
           onClick={() => {
@@ -245,7 +249,7 @@ export function OllamaModels() {
       {models.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-xs font-medium text-muted-foreground">
-            Installed Models — click to set as summarization model
+            {t("ollama.installedModels")}
           </h4>
           <div className="space-y-1.5">
             {models.map((model) => {
@@ -272,7 +276,7 @@ export function OllamaModels() {
                         {model.name}
                         {isActive && (
                           <span className="ml-2 text-[10px] text-primary font-normal">
-                            Active
+                            {t("ollama.active")}
                           </span>
                         )}
                       </p>
@@ -313,7 +317,7 @@ export function OllamaModels() {
           <div className="flex items-center gap-2">
             <Loader2 className="size-3.5 animate-spin text-primary" />
             <span className="text-sm font-medium">
-              Downloading {pulling}...
+              {t("ollama.downloading").replace("{{name}}", pulling)}
             </span>
           </div>
           <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
@@ -333,7 +337,7 @@ export function OllamaModels() {
       {online && (
         <div className="space-y-2">
           <h4 className="text-xs font-medium text-muted-foreground">
-            Download Models
+            {t("ollama.downloadModels")}
           </h4>
           <div className="grid grid-cols-2 gap-1.5">
             {popularModels.map((pm) => {
@@ -378,7 +382,7 @@ export function OllamaModels() {
       {online && (
         <div className="flex gap-2">
           <Input
-            placeholder="Custom model name (e.g. codellama:13b)"
+            placeholder={t("ollama.customModelPlaceholder")}
             value={customModel}
             onChange={(e) => setCustomModel(e.target.value)}
             className="text-sm h-9"
@@ -402,7 +406,7 @@ export function OllamaModels() {
             }}
           >
             <Download className="size-3.5 mr-1" />
-            Pull
+            {t("ollama.pull")}
           </Button>
         </div>
       )}
@@ -411,20 +415,7 @@ export function OllamaModels() {
       {online === false && (
         <div className="rounded-lg border border-dashed border-muted-foreground/30 p-3">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Install Ollama from{" "}
-            <a
-              href="https://ollama.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-foreground"
-            >
-              ollama.com
-            </a>{" "}
-            and run{" "}
-            <code className="text-[11px] bg-muted px-1 py-0.5 rounded">
-              ollama serve
-            </code>{" "}
-            to get started.
+            {t("ollama.installHelp")}
           </p>
         </div>
       )}

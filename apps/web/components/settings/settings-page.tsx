@@ -7,27 +7,29 @@ import { AppearanceTab } from "./appearance-tab";
 import { AITab } from "./ai-tab";
 import { PrivacyTab } from "./privacy-tab";
 import { PromptEditor } from "./prompt-editor";
+import { useTranslation } from "@/lib/i18n";
 
-const tabs = [
-  { id: "profile", label: "Profile" },
-  { id: "appearance", label: "Appearance" },
-  { id: "ai", label: "AI" },
-  { id: "prompts", label: "Prompts" },
-  { id: "privacy", label: "Privacy" },
-] as const;
-
-type TabId = (typeof tabs)[number]["id"];
+type TabId = "profile" | "appearance" | "ai" | "prompts" | "privacy";
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>("profile");
+
+  const tabs = [
+    { id: "profile" as TabId, label: t("settings.tabProfile") },
+    { id: "appearance" as TabId, label: t("settings.tabAppearance") },
+    { id: "ai" as TabId, label: t("settings.tabAi") },
+    { id: "prompts" as TabId, label: t("settings.tabPrompts") },
+    { id: "privacy" as TabId, label: t("settings.tabPrivacy") },
+  ];
 
   return (
     <main className="flex-1 overflow-auto">
       <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Settings</h1>
+          <h1 className="text-2xl font-bold">{t("settings.title")}</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Manage your account and preferences
+            {t("settings.description")}
           </p>
         </div>
 
@@ -54,9 +56,9 @@ export function SettingsPage() {
         {activeTab === "prompts" && (
           <div className="space-y-4">
             <div>
-              <h3 className="text-sm font-medium">Summary Prompts</h3>
+              <h3 className="text-sm font-medium">{t("settings.summaryPrompts")}</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Customize how AI summarizes your saved content
+                {t("settings.summaryPromptsDesc")}
               </p>
             </div>
             <PromptEditor />

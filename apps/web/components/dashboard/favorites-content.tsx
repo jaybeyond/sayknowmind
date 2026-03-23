@@ -4,9 +4,11 @@ import { useMemoryStore } from "@/store/memory-store";
 import { MemoryCard } from "./memory-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 export function FavoritesContent() {
   const { getFavoriteMemories, viewMode, isLoading } = useMemoryStore();
+  const { t } = useTranslation();
   const favoriteMemories = getFavoriteMemories();
 
   if (isLoading) {
@@ -32,10 +34,11 @@ export function FavoritesContent() {
             <Star className="size-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Favorite Memories</h2>
+            <h2 className="text-lg font-semibold">{t("favorites.title")}</h2>
             <p className="text-sm text-muted-foreground">
-              {favoriteMemories.length} memor
-              {favoriteMemories.length !== 1 ? "ies" : "y"} marked as favorite
+              {favoriteMemories.length !== 1
+                ? t("favorites.countMany").replace("{{count}}", String(favoriteMemories.length))
+                : t("favorites.countOne").replace("{{count}}", String(favoriteMemories.length))}
             </p>
           </div>
         </div>
@@ -43,9 +46,9 @@ export function FavoritesContent() {
         {favoriteMemories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Star className="size-12 text-muted-foreground/20 mb-4" />
-            <h3 className="text-lg font-medium mb-1">No favorites yet</h3>
+            <h3 className="text-lg font-medium mb-1">{t("emptyState.favorites")}</h3>
             <p className="text-sm text-muted-foreground">
-              Star a document to add it here
+              {t("emptyState.favoritesCta")}
             </p>
           </div>
         ) : viewMode === "grid" ? (

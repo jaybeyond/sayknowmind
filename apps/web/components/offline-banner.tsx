@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { WifiOff } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 /**
  * Offline banner — shows when network connectivity is lost.
@@ -12,6 +13,7 @@ import { WifiOff } from "lucide-react";
  */
 export function OfflineBanner() {
   const [offline, setOffline] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     // Set initial state (SSR-safe)
@@ -34,7 +36,7 @@ export function OfflineBanner() {
   return (
     <div className="fixed top-0 inset-x-0 z-50 flex items-center justify-center gap-2 bg-yellow-500/90 px-4 py-2 text-sm font-medium text-black backdrop-blur-sm">
       <WifiOff className="h-4 w-4 shrink-0" />
-      <span>오프라인 — 로컬 데이터만 표시됩니다. 연결 복구 시 자동 동기화됩니다.</span>
+      <span>{t("offline.banner")}</span>
     </div>
   );
 }

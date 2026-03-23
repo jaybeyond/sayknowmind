@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { Download, Trash2, Shield, Loader2 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 export function PrivacyTab() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -26,18 +28,16 @@ export function PrivacyTab() {
       a.download = `sayknowmind-export-${new Date().toISOString().split("T")[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("Data exported");
+      toast.success(t("privacy.exported"));
     } catch {
-      toast.error("Export failed");
+      toast.error(t("privacy.exportFailed"));
     } finally {
       setExporting(false);
     }
   };
 
   const handleDelete = async () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete your account? This action cannot be undone."
-    );
+    const confirmed = window.confirm(t("privacy.deleteConfirm"));
     if (!confirmed) return;
 
     setDeleting(true);
@@ -47,10 +47,10 @@ export function PrivacyTab() {
         await signOut();
         router.push("/login");
       } else {
-        toast.error("Failed to delete account");
+        toast.error(t("privacy.deleteFailed"));
       }
     } catch {
-      toast.error("Failed to delete account");
+      toast.error(t("privacy.deleteFailed"));
     } finally {
       setDeleting(false);
     }
@@ -62,25 +62,24 @@ export function PrivacyTab() {
         <div>
           <h3 className="text-sm font-medium flex items-center gap-2">
             <Shield className="size-4" />
-            Private Mode
+            {t("settings.privateMode")}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            OS-level network isolation for sensitive data
+            {t("privacy.privateModeDesc")}
           </p>
         </div>
         <div className="rounded-xl border border-border p-4 bg-muted/30">
           <p className="text-sm text-muted-foreground">
-            Coming soon in a future release. Private mode will enable full
-            network isolation for sensitive browsing sessions.
+            {t("privacy.comingSoon")}
           </p>
         </div>
       </div>
 
       <div className="space-y-3">
         <div>
-          <h3 className="text-sm font-medium">Export data</h3>
+          <h3 className="text-sm font-medium">{t("privacy.exportTitle")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Download all your memories and documents as JSON
+            {t("privacy.exportDesc")}
           </p>
         </div>
         <Button variant="outline" onClick={handleExport} disabled={exporting}>
@@ -89,23 +88,23 @@ export function PrivacyTab() {
           ) : (
             <Download className="size-4" />
           )}
-          Export data
+          {t("privacy.exportBtn")}
         </Button>
       </div>
 
       <div className="space-y-3">
         <div>
-          <h3 className="text-sm font-medium text-destructive">Danger zone</h3>
+          <h3 className="text-sm font-medium text-destructive">{t("settings.dangerZone")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Permanently delete your account and all associated data
+            {t("privacy.dangerZoneDesc")}
           </p>
         </div>
         <div className="rounded-xl border border-destructive/30 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Delete account</p>
+              <p className="text-sm font-medium">{t("privacy.deleteAccountBtn")}</p>
               <p className="text-xs text-muted-foreground">
-                This action is irreversible
+                {t("privacy.deleteAccountIrreversible")}
               </p>
             </div>
             <Button
@@ -118,7 +117,7 @@ export function PrivacyTab() {
               ) : (
                 <Trash2 className="size-4" />
               )}
-              Delete account
+              {t("privacy.deleteAccountBtn")}
             </Button>
           </div>
         </div>

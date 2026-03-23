@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
+import { useTranslation } from "@/lib/i18n";
 
 interface MemoryCardProps {
   memory: Memory;
@@ -35,18 +36,19 @@ interface MemoryCardProps {
 }
 
 const ProcessingBadge = ({ status }: { status?: Memory["jobStatus"] }) => {
+  const { t } = useTranslation();
   if (!status || status === "completed") return null;
   if (status === "failed") {
     return (
       <span className="absolute top-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-destructive/90 px-2 py-0.5 text-[10px] font-medium text-destructive-foreground backdrop-blur-sm">
-        Failed
+        {t("status.failed")}
       </span>
     );
   }
   return (
     <span className="absolute top-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-primary/90 px-2 py-0.5 text-[10px] font-medium text-primary-foreground backdrop-blur-sm">
       <Loader2 className="size-3 animate-spin" />
-      {status === "processing" ? "Summarizing..." : "Queued"}
+      {status === "processing" ? t("status.summarizing") : t("status.queued")}
     </span>
   );
 };
@@ -69,6 +71,7 @@ export function MemoryCard({
 }: MemoryCardProps) {
   const { toggleFavorite, archiveMemory, trashMemory } =
     useMemoryStore();
+  const { t } = useTranslation();
   const memoryTags = [...new Set(memory.tags)];
 
   const handleCopyUrl = () => {
@@ -107,15 +110,15 @@ export function MemoryCard({
                   ? "bg-destructive/10 text-destructive"
                   : "bg-primary/10 text-primary"
               )}>
-                {memory.jobStatus === "failed" ? "Failed" : (
-                  <><Loader2 className="size-3 animate-spin" />{memory.jobStatus === "processing" ? "Summarizing" : "Queued"}</>
+                {memory.jobStatus === "failed" ? t("status.failed") : (
+                  <><Loader2 className="size-3 animate-spin" />{memory.jobStatus === "processing" ? t("status.summarizing") : t("status.queued")}</>
                 )}
               </span>
             )}
             {memory.readingTimeMinutes && (
               <span className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
                 <Clock className="size-3" />
-                {memory.readingTimeMinutes} min
+                {memory.readingTimeMinutes} {t("document.minRead")}
               </span>
             )}
             {memoryTags.length > 0 && (
@@ -130,7 +133,7 @@ export function MemoryCard({
                 ))}
                 {memoryTags.length > 2 && (
                   <span className="text-[10px] text-muted-foreground">
-                    +{memoryTags.length - 2}
+                    {t("memory.moreTags").replace("{{count}}", String(memoryTags.length - 2))}
                   </span>
                 )}
               </div>
@@ -171,27 +174,27 @@ export function MemoryCard({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleCopyUrl}>
                 <Copy className="size-4 mr-2" />
-                Copy URL
+                {t("memory.copyUrl")}
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Pencil className="size-4 mr-2" />
-                Edit
+                {t("common.edit")}
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Tag className="size-4 mr-2" />
-                Add Tags
+                {t("memory.addTags")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => archiveMemory(memory.id)}>
                 <Archive className="size-4 mr-2" />
-                Archive
+                {t("sidebar.archive")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={() => trashMemory(memory.id)}
               >
                 <Trash2 className="size-4 mr-2" />
-                Delete
+                {t("common.delete")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -229,31 +232,31 @@ export function MemoryCard({
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={handleCopyUrl}>
               <Copy className="size-4 mr-2" />
-              Copy URL
+              {t("memory.copyUrl")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleClick}>
               <ExternalLink className="size-4 mr-2" />
-              Open in new tab
+              {t("memory.openInNewTab")}
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Pencil className="size-4 mr-2" />
-              Edit
+              {t("common.edit")}
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Tag className="size-4 mr-2" />
-              Add Tags
+              {t("memory.addTags")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => archiveMemory(memory.id)}>
               <Archive className="size-4 mr-2" />
-              Archive
+              {t("sidebar.archive")}
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive"
               onClick={() => trashMemory(memory.id)}
             >
               <Trash2 className="size-4 mr-2" />
-              Delete
+              {t("common.delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -325,7 +328,7 @@ export function MemoryCard({
               )}
               {memory.readingTimeMinutes && (
                 <span className="text-[10px] text-muted-foreground/60">
-                  {memory.readingTimeMinutes} min read
+                  {memory.readingTimeMinutes} {t("document.minRead")}
                 </span>
               )}
             </div>
@@ -342,7 +345,7 @@ export function MemoryCard({
               ))}
               {memoryTags.length > 3 && (
                 <span className="text-[10px] text-muted-foreground py-0.5">
-                  +{memoryTags.length - 3} more
+                  {t("memory.moreTags").replace("{{count}}", String(memoryTags.length - 3))}
                 </span>
               )}
             </div>

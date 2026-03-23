@@ -3,6 +3,7 @@
 import { useRef, useCallback, useEffect, useState } from "react";
 import ForceGraph2D, { type ForceGraphMethods } from "react-force-graph-2d";
 import { Network, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface GraphNode {
   id: string;
@@ -62,6 +63,7 @@ export function GraphCanvas({
   onNodeClick,
   selectedNodeId,
 }: GraphCanvasProps) {
+  const { t } = useTranslation();
   const fgRef = useRef<ForceGraphMethods<FGNode, FGLink> | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -145,10 +147,10 @@ export function GraphCanvas({
         <div className="text-center space-y-3">
           <Network className="size-12 text-muted-foreground/20 mx-auto" />
           <p className="text-muted-foreground text-sm font-medium">
-            No knowledge graph yet
+            {t("knowledge.emptyTitle")}
           </p>
           <p className="text-xs text-muted-foreground/50">
-            Save documents to build your graph
+            {t("knowledge.emptySubtitle")}
           </p>
         </div>
       </div>
@@ -223,20 +225,32 @@ export function GraphCanvas({
 
       {/* Controls */}
       <div className="absolute top-4 left-4 flex flex-col gap-1.5">
-        <button onClick={handleZoomIn} className="p-1.5 rounded-md bg-background/70 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors" title="Zoom in">
+        <button
+          onClick={handleZoomIn}
+          className="p-1.5 rounded-md bg-background/70 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors"
+          title={t("knowledge.zoomIn")}
+        >
           <ZoomIn className="size-3.5 text-muted-foreground" />
         </button>
-        <button onClick={handleZoomOut} className="p-1.5 rounded-md bg-background/70 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors" title="Zoom out">
+        <button
+          onClick={handleZoomOut}
+          className="p-1.5 rounded-md bg-background/70 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors"
+          title={t("knowledge.zoomOut")}
+        >
           <ZoomOut className="size-3.5 text-muted-foreground" />
         </button>
-        <button onClick={handleFit} className="p-1.5 rounded-md bg-background/70 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors" title="Fit to screen">
+        <button
+          onClick={handleFit}
+          className="p-1.5 rounded-md bg-background/70 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors"
+          title={t("knowledge.fitToScreen")}
+        >
           <Maximize2 className="size-3.5 text-muted-foreground" />
         </button>
       </div>
 
       {/* Node size slider */}
       <div className="absolute top-4 right-4 flex items-center gap-2 bg-background/70 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-border/50">
-        <span className="text-[10px] text-muted-foreground">Size</span>
+        <span className="text-[10px] text-muted-foreground">{t("knowledge.nodeSize")}</span>
         <input
           type="range"
           min={0.5}
@@ -266,7 +280,9 @@ export function GraphCanvas({
 
       {/* Stats */}
       <div className="absolute bottom-4 right-4 text-[10px] text-muted-foreground/50">
-        {nodes.length} nodes · {edges.length} edges
+        {t("knowledge.stats")
+          .replace("{{nodes}}", String(nodes.length))
+          .replace("{{edges}}", String(edges.length))}
       </div>
     </div>
   );

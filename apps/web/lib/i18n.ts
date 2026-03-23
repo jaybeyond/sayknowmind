@@ -2,12 +2,14 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import en from "@/messages/en.json";
 import ko from "@/messages/ko.json";
+import zh from "@/messages/zh.json";
+import ja from "@/messages/ja.json";
 
-export type Locale = "en" | "ko";
+export type Locale = "en" | "ko" | "zh" | "ja";
 
 type Messages = typeof en;
 
-const messages: Record<Locale, Messages> = { en, ko };
+const messages: Record<Locale, Messages> = { en, ko, zh: zh as unknown as Messages, ja: ja as unknown as Messages };
 
 interface I18nState {
   locale: Locale;
@@ -56,4 +58,6 @@ export function useTranslation() {
 export const localeNames: Record<Locale, string> = {
   en: "English",
   ko: "한국어",
+  zh: "中文",
+  ja: "日本語",
 };

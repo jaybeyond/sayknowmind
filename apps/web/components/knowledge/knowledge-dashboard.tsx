@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { NodeDetailPanel } from "./node-detail-panel";
+import { useTranslation } from "@/lib/i18n";
 
 const GraphCanvas = dynamic(() => import("./graph-canvas").then((m) => m.GraphCanvas), {
   ssr: false,
@@ -37,6 +38,7 @@ interface NodeDetail {
 }
 
 export function KnowledgeDashboard() {
+  const { t } = useTranslation();
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null);
@@ -111,7 +113,7 @@ export function KnowledgeDashboard() {
           </svg>
           <input
             type="text"
-            placeholder="Search knowledge graph..."
+            placeholder={t("knowledge.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md bg-muted/50 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
@@ -123,14 +125,16 @@ export function KnowledgeDashboard() {
           onChange={(e) => setFilter(e.target.value)}
           className="text-sm rounded-md bg-muted/50 border border-border px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="all">All Types</option>
-          <option value="document">Documents</option>
-          <option value="entity">Entities</option>
-          <option value="category">Categories</option>
+          <option value="all">{t("knowledge.filterAll")}</option>
+          <option value="document">{t("knowledge.filterDocuments")}</option>
+          <option value="entity">{t("knowledge.filterEntities")}</option>
+          <option value="category">{t("knowledge.filterCategories")}</option>
         </select>
 
         <div className="text-xs text-muted-foreground">
-          {nodes.length} nodes / {edges.length} edges
+          {t("knowledge.statsSlash")
+            .replace("{{nodes}}", String(nodes.length))
+            .replace("{{edges}}", String(edges.length))}
         </div>
       </div>
 

@@ -20,9 +20,11 @@ import {
 import Image from "next/image";
 import { type Memory } from "@/store/memory-store";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 function ArchivedMemoryCard({ memory }: { memory: Memory }) {
   const { restoreFromArchive, trashMemory } = useMemoryStore();
+  const { t } = useTranslation();
   const memoryTags = memory.tags;
 
   return (
@@ -63,7 +65,7 @@ function ArchivedMemoryCard({ memory }: { memory: Memory }) {
           onClick={() => restoreFromArchive(memory.id)}
         >
           <RotateCcw className="size-4 mr-1" />
-          Restore
+          {t("common.restore")}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -76,7 +78,7 @@ function ArchivedMemoryCard({ memory }: { memory: Memory }) {
               onClick={() => window.open(memory.url, "_blank")}
             >
               <ExternalLink className="size-4 mr-2" />
-              Open URL
+              {t("common.openUrl")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -87,7 +89,7 @@ function ArchivedMemoryCard({ memory }: { memory: Memory }) {
               }}
             >
               <Trash2 className="size-4 mr-2" />
-              Move to Trash
+              {t("archive.moveToTrash")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -98,6 +100,7 @@ function ArchivedMemoryCard({ memory }: { memory: Memory }) {
 
 export function ArchiveContent() {
   const { getArchivedMemories, isLoading } = useMemoryStore();
+  const { t } = useTranslation();
   const archivedMemories = getArchivedMemories();
 
   if (isLoading) {
@@ -123,10 +126,11 @@ export function ArchiveContent() {
             <Archive className="size-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Archived Memories</h2>
+            <h2 className="text-lg font-semibold">{t("archive.title")}</h2>
             <p className="text-sm text-muted-foreground">
-              {archivedMemories.length} memor
-              {archivedMemories.length !== 1 ? "ies" : "y"} in archive
+              {archivedMemories.length !== 1
+                ? t("archive.countMany").replace("{{count}}", String(archivedMemories.length))
+                : t("archive.countOne").replace("{{count}}", String(archivedMemories.length))}
             </p>
           </div>
         </div>
@@ -134,9 +138,9 @@ export function ArchiveContent() {
         {archivedMemories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Archive className="size-12 text-muted-foreground/20 mb-4" />
-            <h3 className="text-lg font-medium mb-1">Archive is empty</h3>
+            <h3 className="text-lg font-medium mb-1">{t("emptyState.archive")}</h3>
             <p className="text-sm text-muted-foreground">
-              Archived documents will appear here
+              {t("emptyState.archiveCta")}
             </p>
           </div>
         ) : (
