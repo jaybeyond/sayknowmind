@@ -98,13 +98,11 @@ export function MemorySidebar({
 
   const derivedTags = getDerivedTags();
 
-  // Build collection list: "All" virtual entry + real categories
   const collectionList = React.useMemo(() => [
     { id: "all", name: t("sidebar.allMemories") || "All Memories", count: null },
     ...categories.map((c) => ({ id: c.id, name: c.name, count: null })),
   ], [categories, t]);
 
-  // User display info from session
   const userName = session?.user?.name ?? session?.user?.email ?? "";
   const userInitials = userName.slice(0, 2).toUpperCase() || "??";
 
@@ -226,8 +224,8 @@ export function MemorySidebar({
                             const trimmed = renameValue.trim();
                             if (trimmed && trimmed !== collection.name) {
                               const ok = await renameCategory(collection.id, trimmed);
-                              if (ok) toast.success("Renamed");
-                              else toast.error("Failed to rename");
+                              if (ok) toast.success(t("sidebar.renamed"));
+                              else toast.error(t("sidebar.renameFailed"));
                             }
                             setRenamingId(null);
                           }}
@@ -279,7 +277,7 @@ export function MemorySidebar({
                                   setRenameValue(collection.name);
                                 }}>
                                   <Pencil className="size-3.5 mr-2" />
-                                  Rename
+                                  {t("sidebar.rename")}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -288,17 +286,17 @@ export function MemorySidebar({
                                     e.preventDefault();
                                     const ok = await deleteCategory(collection.id);
                                     if (ok) {
-                                      toast.success("Deleted");
+                                      toast.success(t("sidebar.deleted"));
                                       if (selectedCollection === collection.id) {
                                         setSelectedCollection("all");
                                       }
                                     } else {
-                                      toast.error("Failed to delete");
+                                      toast.error(t("sidebar.deleteFailed"));
                                     }
                                   }}
                                 >
                                   <Trash2 className="size-3.5 mr-2" />
-                                  Delete
+                                  {t("common.delete")}
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -320,8 +318,8 @@ export function MemorySidebar({
                         const trimmed = newCategoryName.trim();
                         if (trimmed) {
                           const ok = await addCategory(trimmed);
-                          if (ok) toast.success("Category created");
-                          else toast.error("Failed to create");
+                          if (ok) toast.success(t("sidebar.categoryCreated"));
+                          else toast.error(t("sidebar.createFailed"));
                         }
                         setNewCategoryName("");
                         setAddingCategory(false);
@@ -331,7 +329,7 @@ export function MemorySidebar({
                       <SidebarInput
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
-                        placeholder="New category..."
+                        placeholder={t("sidebar.newCategoryPlaceholder")}
                         className="h-7 text-sm"
                         autoFocus
                         onBlur={() => { setAddingCategory(false); setNewCategoryName(""); }}
@@ -375,7 +373,7 @@ export function MemorySidebar({
             <SidebarGroupContent>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {derivedTags.length === 0 ? (
-                  <p className="text-xs text-muted-foreground px-1">No tags yet</p>
+                  <p className="text-xs text-muted-foreground px-1">{t("sidebar.noTags")}</p>
                 ) : (
                   derivedTags.map((tag) => (
                     <button
@@ -421,7 +419,7 @@ export function MemorySidebar({
 
         <SidebarGroup className="p-0">
           <SidebarGroupLabel className="px-0 text-[10px] font-semibold tracking-wider text-muted-foreground">
-            TOOLS
+            {t("sidebar.tools")}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="mt-1">

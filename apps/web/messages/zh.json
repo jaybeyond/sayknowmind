@@ -21,7 +21,17 @@
     "chat": "对话",
     "knowledge": "知识图谱",
     "categories": "分类",
-    "settings": "设置"
+    "settings": "设置",
+    "renamed": "已重命名",
+    "renameFailed": "重命名失败",
+    "deleted": "已删除",
+    "deleteFailed": "删除失败",
+    "categoryCreated": "分类已创建",
+    "createFailed": "创建失败",
+    "rename": "重命名",
+    "newCategoryPlaceholder": "新分类...",
+    "noTags": "暂无标签",
+    "tools": "工具"
   },
   "header": {
     "memory": "记忆",
@@ -87,9 +97,14 @@
     "startChat": "开始新对话",
     "agentSteps": "智能体步骤",
     "emptyTitle": "随便问点什么",
-    "emptySubtitle": "搜索和探索你保存的知识",
+    "emptySubtitle": "搜索并探索你保存的知识。提问、获取摘要或发现联系。",
     "simpleModeDesc": "直接回答",
-    "agenticModeDesc": "多步推理"
+    "agenticModeDesc": "多步推理",
+    "conversations": "对话列表",
+    "today": "今天",
+    "yesterday": "昨天",
+    "daysAgo": "{{days}}天前",
+    "errorFallback": "抱歉，出现了错误。请重试。"
   },
   "ingest": {
     "addUrl": "添加网址",
@@ -107,7 +122,11 @@
     "saving": "保存中...",
     "saved": "已保存！",
     "addDocument": "添加文档",
-    "dialogDescription": "保存网址、上传文件或粘贴文本到知识库。"
+    "dialogDescription": "保存网址、上传文件或粘贴文本到知识库。",
+    "invalidUrl": "请输入有效的 URL (https://...)",
+    "networkError": "网络错误 — 请重试",
+    "fileTooLarge": "文件超过 10MB 限制",
+    "unsupportedType": "不支持的文件类型。支持: .pdf .docx .txt .md .html"
   },
   "document": {
     "summary": "摘要",
@@ -121,6 +140,29 @@
     "description": "描述",
     "openOriginal": "打开原文",
     "minRead": "分钟阅读"
+  },
+  "content": {
+    "unsupportedType": "不支持的文件类型",
+    "fileTooLarge": "文件超过 10MB 限制",
+    "savingFile": "保存文件中...",
+    "fileSaved": "文件已保存！",
+    "saveFailed": "保存文件失败",
+    "networkError": "网络错误",
+    "dropToSave": "拖放保存",
+    "dropFormats": "PDF, DOCX, TXT, MD, HTML — 最大 10MB",
+    "needsProcessing": "{{count}} 条记忆需要 AI 处理",
+    "reprocess": "重新处理",
+    "reprocessing": "处理中...",
+    "reprocessFailed": "无法启动重新处理",
+    "reprocessQueued": "{{count}} 个文档已加入重新处理队列",
+    "clearFilters": "清除过滤",
+    "addFirst": "添加第一个文档",
+    "memoryCountOne": "{{count}} 条",
+    "memoryCountMany": "{{count}} 条",
+    "filtered": "（已过滤）",
+    "favoritesOnly": "仅收藏",
+    "withTags": "有标签",
+    "withoutTags": "无标签"
   },
   "emptyState": {
     "allDocuments": "暂无保存内容",
@@ -145,7 +187,10 @@
     "creatingUnder": "创建于：{{parent}}",
     "noDocuments": "此分类中没有文档",
     "loadingCategories": "加载分类中...",
-    "removeDocument": "从分类中移除"
+    "removeDocument": "从分类中移除",
+    "noCategories": "暂无分类。",
+    "createFirst": "创建第一个分类",
+    "newCategory": "新建分类"
   },
   "settings": {
     "title": "设置",

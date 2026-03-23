@@ -7,6 +7,7 @@ import { Plus, MessageSquare } from "lucide-react";
 import { ChatMessageBubble, type ChatMessage, type Citation } from "./chat-message";
 import { ChatInput } from "./chat-input";
 import type { AgentStep } from "./agent-steps";
+import { useTranslation } from "@/lib/i18n";
 
 type ConversationMeta = {
   id: string;
@@ -14,19 +15,23 @@ type ConversationMeta = {
   updatedAt: string;
 };
 
-function formatDate(dateStr: string): string {
+function formatDate(
+  dateStr: string,
+  t: (key: string) => string
+): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays === 0) return t("chat.today");
+  if (diffDays === 1) return t("chat.yesterday");
+  if (diffDays < 7) return t("chat.daysAgo").replace("{{days}}", String(diffDays));
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export function ChatPage() {
+  const { t } = useTranslation();
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState("");
   const [isStreaming, setIsStreaming] = React.useState(false);
@@ -36,12 +41,9 @@ export function ChatPage() {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const abortRef = React.useRef<AbortController | null>(null);
 
-  // Auto-scroll on new messages
   React.useEffect(() => {
     const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   const startNewConversation = () => {
@@ -55,19 +57,13 @@ export function ChatPage() {
     if (abortRef.current) abortRef.current.abort();
     setIsStreaming(false);
     setConversationId(convId);
-    // TODO: Load messages from API when endpoint exists
     setMessages([]);
   };
 
   const handleSend = async (message: string) => {
     if (!message.trim() || isStreaming) return;
 
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: message,
-    };
-
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: message };
     const assistantMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: "assistant",
@@ -94,11 +90,7 @@ export function ChatPage() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsg.id
-            ? {
-                ...m,
-                content: m.content || "Sorry, something went wrong. Please try again.",
-                isStreaming: false,
-              }
+            ? { ...m, content: m.content || t("chat.errorFallback"), isStreaming: false }
             : m
         )
       );
@@ -115,17 +107,12 @@ export function ChatPage() {
   ) => {
     const response = await fetch("/api/chat", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-      },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
       body: JSON.stringify({ message, conversationId, mode }),
       signal,
     });
 
-    if (!response.ok) {
-      throw new Error(`Chat request failed: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Chat request failed: ${response.status}`);
 
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
@@ -143,22 +130,17 @@ export function ChatPage() {
         try {
           const event = JSON.parse(line.slice(6));
 
-          // Handle both spec format and actual server format
           if (event.type === "chunk" || event.chunk) {
             const chunkText = event.content ?? event.chunk ?? "";
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, content: m.content + chunkText }
-                  : m
+                m.id === assistantId ? { ...m, content: m.content + chunkText } : m
               )
             );
           } else if (event.type === "citation") {
             const citations: Citation[] = event.citations ?? [];
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId ? { ...m, citations } : m
-              )
+              prev.map((m) => (m.id === assistantId ? { ...m, citations } : m))
             );
           } else if (event.type === "agent_step") {
             const step: AgentStep = event.step;
@@ -176,12 +158,10 @@ export function ChatPage() {
               updateConversationsList(newConvId, messages);
             }
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId ? { ...m, isStreaming: false } : m
-              )
+              prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
             );
           } else if (event.type === "error" || event.error) {
-            const errorMsg = event.message ?? event.error ?? "An error occurred";
+            const errorMsg = event.message ?? event.error ?? t("common.error");
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
@@ -196,11 +176,8 @@ export function ChatPage() {
       }
     }
 
-    // Finalize streaming
     setMessages((prev) =>
-      prev.map((m) =>
-        m.id === assistantId ? { ...m, isStreaming: false } : m
-      )
+      prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
     );
   };
 
@@ -216,9 +193,7 @@ export function ChatPage() {
       signal,
     });
 
-    if (!response.ok) {
-      throw new Error(`Chat request failed: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Chat request failed: ${response.status}`);
 
     const data = await response.json();
 
@@ -242,10 +217,7 @@ export function ChatPage() {
     }
   };
 
-  const updateConversationsList = (
-    convId: string,
-    currentMessages: ChatMessage[]
-  ) => {
+  const updateConversationsList = (convId: string, currentMessages: ChatMessage[]) => {
     setConversations((prev) => {
       const existing = prev.find((c) => c.id === convId);
       if (existing) {
@@ -253,12 +225,11 @@ export function ChatPage() {
           c.id === convId ? { ...c, updatedAt: new Date().toISOString() } : c
         );
       }
-      // Derive title from first user message
       const firstUserMsg = currentMessages.find((m) => m.role === "user");
       return [
         {
           id: convId,
-          title: firstUserMsg?.content.slice(0, 60) ?? "New conversation",
+          title: firstUserMsg?.content.slice(0, 60) ?? t("chat.newConversation"),
           updatedAt: new Date().toISOString(),
         },
         ...prev,
@@ -271,12 +242,8 @@ export function ChatPage() {
       {/* Conversation sidebar */}
       <aside className="w-64 border-r flex-col hidden md:flex bg-background">
         <div className="p-4 border-b flex items-center justify-between">
-          <h2 className="font-semibold text-sm">Conversations</h2>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={startNewConversation}
-          >
+          <h2 className="font-semibold text-sm">{t("chat.conversations")}</h2>
+          <Button size="icon-xs" variant="ghost" onClick={startNewConversation}>
             <Plus className="size-4" />
           </Button>
         </div>
@@ -290,34 +257,25 @@ export function ChatPage() {
                 conversationId === c.id && "bg-accent"
               )}
             >
-              <p className="truncate font-medium">{c.title || "New conversation"}</p>
-              <p className="text-xs text-muted-foreground">
-                {formatDate(c.updatedAt)}
-              </p>
+              <p className="truncate font-medium">{c.title || t("chat.newConversation")}</p>
+              <p className="text-xs text-muted-foreground">{formatDate(c.updatedAt, t)}</p>
             </button>
           ))}
           {conversations.length === 0 && (
-            <p className="text-xs text-muted-foreground px-3 py-2">
-              No conversations yet
-            </p>
+            <p className="text-xs text-muted-foreground px-3 py-2">{t("chat.noHistory")}</p>
           )}
         </div>
       </aside>
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Messages */}
-        <div
-          className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4"
-          ref={scrollRef}
-        >
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4" ref={scrollRef}>
           {messages.length === 0 && <EmptyChat />}
           {messages.map((m) => (
             <ChatMessageBubble key={m.id} message={m} />
           ))}
         </div>
 
-        {/* Input */}
         <div className="border-t p-4">
           <div className="max-w-3xl mx-auto">
             <ChatInput
@@ -334,15 +292,14 @@ export function ChatPage() {
 }
 
 function EmptyChat() {
+  const { t } = useTranslation();
   return (
     <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
       <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
         <MessageSquare className="size-8 text-primary" />
       </div>
-      <h2 className="text-xl font-semibold mb-2">Ask anything</h2>
-      <p className="text-sm text-muted-foreground max-w-sm">
-        Search and explore your saved knowledge. Ask questions, get summaries, or discover connections.
-      </p>
+      <h2 className="text-xl font-semibold mb-2">{t("chat.emptyTitle")}</h2>
+      <p className="text-sm text-muted-foreground max-w-sm">{t("chat.emptySubtitle")}</p>
     </div>
   );
 }

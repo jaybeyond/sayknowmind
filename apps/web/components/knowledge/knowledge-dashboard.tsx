@@ -5,13 +5,18 @@ import dynamic from "next/dynamic";
 import { NodeDetailPanel } from "./node-detail-panel";
 import { useTranslation } from "@/lib/i18n";
 
+function GraphCanvasLoading() {
+  const { t } = useTranslation();
+  return (
+    <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+      {t("knowledge.loadingGraph")}
+    </div>
+  );
+}
+
 const GraphCanvas = dynamic(() => import("./graph-canvas").then((m) => m.GraphCanvas), {
   ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-      Loading graph...
-    </div>
-  ),
+  loading: () => <GraphCanvasLoading />,
 });
 import { Skeleton } from "@/components/ui/skeleton";
 

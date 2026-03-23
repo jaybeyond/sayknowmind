@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useTranslation } from "@/lib/i18n";
 
 interface CategoryNode {
   id: string;
@@ -86,7 +87,6 @@ function TreeNode({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* Expand/collapse toggle */}
         <button
           className={`w-4 h-4 flex items-center justify-center text-muted-foreground ${!hasChildren ? "invisible" : ""}`}
           onClick={(e) => {
@@ -105,7 +105,6 @@ function TreeNode({
           </svg>
         </button>
 
-        {/* Color dot */}
         {node.color && (
           <span
             className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -113,15 +112,12 @@ function TreeNode({
           />
         )}
 
-        {/* Name */}
         <span className="truncate flex-1">{node.name}</span>
 
-        {/* Document count */}
         {node.documentCount > 0 && (
           <span className="text-xs text-muted-foreground">{node.documentCount}</span>
         )}
 
-        {/* Delete button */}
         {onDelete && (
           <button
             className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-0.5"
@@ -137,7 +133,6 @@ function TreeNode({
         )}
       </div>
 
-      {/* Children */}
       {expanded && hasChildren && (
         <div>
           {node.children.map((child) => (
@@ -168,12 +163,12 @@ export function CategoryTree({
   onDelete,
   onCreate,
 }: CategoryTreeProps) {
+  const { t } = useTranslation();
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
   const handleDragStart = useCallback((id: string) => setDraggedId(id), []);
   const handleDragEnd = useCallback(() => setDraggedId(null), []);
 
-  // Root drop zone for moving to top level
   const handleRootDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (draggedId && onMove) {
@@ -185,13 +180,13 @@ export function CategoryTree({
   if (!tree) {
     return (
       <div className="p-4 text-center text-muted-foreground text-sm">
-        <p>No categories yet.</p>
+        <p>{t("categories.noCategories")}</p>
         {onCreate && (
           <button
             onClick={() => onCreate(null)}
             className="mt-2 text-primary hover:underline text-sm"
           >
-            Create your first category
+            {t("categories.createFirst")}
           </button>
         )}
       </div>
@@ -227,7 +222,7 @@ export function CategoryTree({
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 5v14M5 12h14" />
           </svg>
-          New Category
+          {t("categories.newCategory")}
         </button>
       )}
     </div>

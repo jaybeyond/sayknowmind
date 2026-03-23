@@ -21,7 +21,17 @@
     "chat": "Chat",
     "knowledge": "Knowledge Graph",
     "categories": "Categories",
-    "settings": "Settings"
+    "settings": "Settings",
+    "renamed": "Renamed",
+    "renameFailed": "Failed to rename",
+    "deleted": "Deleted",
+    "deleteFailed": "Failed to delete",
+    "categoryCreated": "Category created",
+    "createFailed": "Failed to create",
+    "rename": "Rename",
+    "newCategoryPlaceholder": "New category...",
+    "noTags": "No tags yet",
+    "tools": "TOOLS"
   },
   "header": {
     "memory": "Memory",
@@ -87,9 +97,14 @@
     "startChat": "Start a new conversation",
     "agentSteps": "Agent steps",
     "emptyTitle": "Ask anything",
-    "emptySubtitle": "Search and explore your saved knowledge",
+    "emptySubtitle": "Search and explore your saved knowledge. Ask questions, get summaries, or discover connections.",
     "simpleModeDesc": "Direct answers",
-    "agenticModeDesc": "Multi-step reasoning"
+    "agenticModeDesc": "Multi-step reasoning",
+    "conversations": "Conversations",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "daysAgo": "{{days}}d ago",
+    "errorFallback": "Sorry, something went wrong. Please try again."
   },
   "ingest": {
     "addUrl": "Add URL",
@@ -107,7 +122,11 @@
     "saving": "Saving...",
     "saved": "Saved!",
     "addDocument": "Add Document",
-    "dialogDescription": "Save a URL, upload a file, or paste text to your knowledge base."
+    "dialogDescription": "Save a URL, upload a file, or paste text to your knowledge base.",
+    "invalidUrl": "Please enter a valid URL (https://...)",
+    "networkError": "Network error — please try again",
+    "fileTooLarge": "File exceeds 10 MB limit",
+    "unsupportedType": "Unsupported file type. Accepted: .pdf .docx .txt .md .html"
   },
   "document": {
     "summary": "Summary",
@@ -121,6 +140,29 @@
     "description": "Description",
     "openOriginal": "Open original",
     "minRead": "min read"
+  },
+  "content": {
+    "unsupportedType": "Unsupported file type",
+    "fileTooLarge": "File exceeds 10MB limit",
+    "savingFile": "Saving file...",
+    "fileSaved": "File saved!",
+    "saveFailed": "Failed to save file",
+    "networkError": "Network error",
+    "dropToSave": "Drop to save",
+    "dropFormats": "PDF, DOCX, TXT, MD, HTML — max 10MB",
+    "needsProcessing": "{{count}} memories need AI processing",
+    "reprocess": "Reprocess",
+    "reprocessing": "Processing...",
+    "reprocessFailed": "Failed to start reprocessing",
+    "reprocessQueued": "{{count}} document(s) queued for reprocessing",
+    "clearFilters": "Clear filters",
+    "addFirst": "Add your first document",
+    "memoryCountOne": "{{count}} memory",
+    "memoryCountMany": "{{count}} memories",
+    "filtered": "(filtered)",
+    "favoritesOnly": "Favorites only",
+    "withTags": "With tags",
+    "withoutTags": "Without tags"
   },
   "emptyState": {
     "allDocuments": "Nothing saved yet",
@@ -145,7 +187,10 @@
     "creatingUnder": "Creating under: {{parent}}",
     "noDocuments": "No documents in this category",
     "loadingCategories": "Loading categories...",
-    "removeDocument": "Remove from category"
+    "removeDocument": "Remove from category",
+    "noCategories": "No categories yet.",
+    "createFirst": "Create your first category",
+    "newCategory": "New Category"
   },
   "settings": {
     "title": "Settings",

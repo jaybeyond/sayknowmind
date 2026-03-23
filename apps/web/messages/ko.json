@@ -21,7 +21,17 @@
     "chat": "채팅",
     "knowledge": "지식 그래프",
     "categories": "카테고리",
-    "settings": "설정"
+    "settings": "설정",
+    "renamed": "이름 변경됨",
+    "renameFailed": "이름 변경 실패",
+    "deleted": "삭제됨",
+    "deleteFailed": "삭제 실패",
+    "categoryCreated": "카테고리 생성됨",
+    "createFailed": "생성 실패",
+    "rename": "이름 변경",
+    "newCategoryPlaceholder": "새 카테고리...",
+    "noTags": "태그 없음",
+    "tools": "도구"
   },
   "header": {
     "memory": "메모리",
@@ -87,9 +97,14 @@
     "startChat": "새 대화 시작",
     "agentSteps": "에이전트 단계",
     "emptyTitle": "무엇이든 물어보세요",
-    "emptySubtitle": "저장된 지식을 검색하고 탐색하세요",
+    "emptySubtitle": "저장된 지식을 검색하고 탐색하세요. 질문하고, 요약을 받거나, 연결을 발견하세요.",
     "simpleModeDesc": "직접 답변",
-    "agenticModeDesc": "다단계 추론"
+    "agenticModeDesc": "다단계 추론",
+    "conversations": "대화 목록",
+    "today": "오늘",
+    "yesterday": "어제",
+    "daysAgo": "{{days}}일 전",
+    "errorFallback": "죄송합니다, 오류가 발생했습니다. 다시 시도해 주세요."
   },
   "ingest": {
     "addUrl": "URL 추가",
@@ -107,7 +122,11 @@
     "saving": "저장 중...",
     "saved": "저장됨!",
     "addDocument": "문서 추가",
-    "dialogDescription": "URL, 파일 또는 텍스트를 지식 베이스에 저장하세요."
+    "dialogDescription": "URL, 파일 또는 텍스트를 지식 베이스에 저장하세요.",
+    "invalidUrl": "올바른 URL을 입력하세요 (https://...)",
+    "networkError": "네트워크 오류 — 다시 시도해 주세요",
+    "fileTooLarge": "파일이 10MB 한도를 초과했습니다",
+    "unsupportedType": "지원하지 않는 파일 형식입니다. 허용: .pdf .docx .txt .md .html"
   },
   "document": {
     "summary": "요약",
@@ -121,6 +140,29 @@
     "description": "설명",
     "openOriginal": "원본 열기",
     "minRead": "분 읽기"
+  },
+  "content": {
+    "unsupportedType": "지원하지 않는 파일 형식",
+    "fileTooLarge": "파일이 10MB 한도를 초과했습니다",
+    "savingFile": "파일 저장 중...",
+    "fileSaved": "파일 저장됨!",
+    "saveFailed": "파일 저장 실패",
+    "networkError": "네트워크 오류",
+    "dropToSave": "놓아서 저장",
+    "dropFormats": "PDF, DOCX, TXT, MD, HTML — 최대 10MB",
+    "needsProcessing": "{{count}}개 메모리 AI 처리 필요",
+    "reprocess": "재처리",
+    "reprocessing": "처리 중...",
+    "reprocessFailed": "재처리 시작 실패",
+    "reprocessQueued": "{{count}}개 문서 재처리 대기 중",
+    "clearFilters": "필터 초기화",
+    "addFirst": "첫 문서 추가",
+    "memoryCountOne": "{{count}}개",
+    "memoryCountMany": "{{count}}개",
+    "filtered": "(필터됨)",
+    "favoritesOnly": "즐겨찾기만",
+    "withTags": "태그 있음",
+    "withoutTags": "태그 없음"
   },
   "emptyState": {
     "allDocuments": "저장된 항목이 없습니다",
@@ -145,7 +187,10 @@
     "creatingUnder": "상위 항목: {{parent}}",
     "noDocuments": "이 카테고리에 문서가 없습니다",
     "loadingCategories": "카테고리 로딩 중...",
-    "removeDocument": "카테고리에서 제거"
+    "removeDocument": "카테고리에서 제거",
+    "noCategories": "카테고리가 없습니다.",
+    "createFirst": "첫 카테고리 만들기",
+    "newCategory": "새 카테고리"
   },
   "settings": {
     "title": "설정",

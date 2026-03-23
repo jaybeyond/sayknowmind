@@ -21,7 +21,17 @@
     "chat": "チャット",
     "knowledge": "ナレッジグラフ",
     "categories": "カテゴリ",
-    "settings": "設定"
+    "settings": "設定",
+    "renamed": "名前を変更しました",
+    "renameFailed": "名前の変更に失敗しました",
+    "deleted": "削除しました",
+    "deleteFailed": "削除に失敗しました",
+    "categoryCreated": "カテゴリを作成しました",
+    "createFailed": "作成に失敗しました",
+    "rename": "名前を変更",
+    "newCategoryPlaceholder": "新しいカテゴリ...",
+    "noTags": "タグはまだありません",
+    "tools": "ツール"
   },
   "header": {
     "memory": "メモリ",
@@ -87,9 +97,14 @@
     "startChat": "新しい会話を始める",
     "agentSteps": "エージェントのステップ",
     "emptyTitle": "何でも聞いてください",
-    "emptySubtitle": "保存したナレッジを検索・探索",
+    "emptySubtitle": "保存したナレッジを検索・探索できます。質問し、要約を取得し、つながりを発見しましょう。",
     "simpleModeDesc": "直接回答",
-    "agenticModeDesc": "多段階推論"
+    "agenticModeDesc": "多段階推論",
+    "conversations": "会話リスト",
+    "today": "今日",
+    "yesterday": "昨日",
+    "daysAgo": "{{days}}日前",
+    "errorFallback": "申し訳ありません、エラーが発生しました。もう一度お試しください。"
   },
   "ingest": {
     "addUrl": "URLを追加",
@@ -107,7 +122,11 @@
     "saving": "保存中...",
     "saved": "保存しました！",
     "addDocument": "ドキュメントを追加",
-    "dialogDescription": "URL、ファイル、またはテキストをナレッジベースに保存します。"
+    "dialogDescription": "URL、ファイル、またはテキストをナレッジベースに保存します。",
+    "invalidUrl": "有効な URL を入力してください (https://...)",
+    "networkError": "ネットワークエラー — もう一度お試しください",
+    "fileTooLarge": "ファイルが 10MB の制限を超えています",
+    "unsupportedType": "未対応のファイル形式です。対応: .pdf .docx .txt .md .html"
   },
   "document": {
     "summary": "要約",
@@ -121,6 +140,29 @@
     "description": "説明",
     "openOriginal": "元ページを開く",
     "minRead": "分で読める"
+  },
+  "content": {
+    "unsupportedType": "未対応のファイル形式",
+    "fileTooLarge": "ファイルが 10MB の制限を超えています",
+    "savingFile": "ファイルを保存中...",
+    "fileSaved": "ファイルを保存しました！",
+    "saveFailed": "ファイルの保存に失敗しました",
+    "networkError": "ネットワークエラー",
+    "dropToSave": "ドロップして保存",
+    "dropFormats": "PDF, DOCX, TXT, MD, HTML — 最大 10MB",
+    "needsProcessing": "{{count}} 件のメモリに AI 処理が必要",
+    "reprocess": "再処理",
+    "reprocessing": "処理中...",
+    "reprocessFailed": "再処理の開始に失敗しました",
+    "reprocessQueued": "{{count}} 件のドキュメントが再処理待ちです",
+    "clearFilters": "フィルターをクリア",
+    "addFirst": "最初のドキュメントを追加",
+    "memoryCountOne": "{{count}} 件",
+    "memoryCountMany": "{{count}} 件",
+    "filtered": "（フィルター済）",
+    "favoritesOnly": "お気に入りのみ",
+    "withTags": "タグあり",
+    "withoutTags": "タグなし"
   },
   "emptyState": {
     "allDocuments": "まだ保存されていません",
@@ -145,7 +187,10 @@
     "creatingUnder": "上位カテゴリ: {{parent}}",
     "noDocuments": "このカテゴリにドキュメントがありません",
     "loadingCategories": "カテゴリを読み込み中...",
-    "removeDocument": "カテゴリから削除"
+    "removeDocument": "カテゴリから削除",
+    "noCategories": "カテゴリはまだありません。",
+    "createFirst": "最初のカテゴリを作成",
+    "newCategory": "新しいカテゴリ"
   },
   "settings": {
     "title": "設定",

@@ -17,19 +17,20 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { CategoryNode } from "./category-manager";
+import { useTranslation } from "@/lib/i18n";
 
 interface CategoryGraphProps {
   tree: CategoryNode | null;
   onNodeClick?: (nodeId: string) => void;
 }
 
-// Convert category tree to React Flow nodes/edges
 function treeToFlow(
   node: CategoryNode,
   parentId: string | null = null,
   depth: number = 0,
   index: number = 0,
   _total: number = 1,
+  t: (key: string) => string,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -46,7 +47,7 @@ function treeToFlow(
           <span className="font-medium text-sm">{node.name}</span>
           {node.documentCount > 0 && (
             <span className="text-xs text-muted-foreground">
-              {node.documentCount} docs
+              {node.documentCount} {t("common.docs")}
             </span>
           )}
         </div>
@@ -75,13 +76,7 @@ function treeToFlow(
   let childIndex = 0;
   const childCount = node.children?.length ?? 0;
   for (const child of node.children ?? []) {
-    const sub = treeToFlow(
-      child,
-      node.id,
-      depth + 1,
-      index + childIndex,
-      childCount,
-    );
+    const sub = treeToFlow(child, node.id, depth + 1, index + childIndex, childCount, t);
     nodes.push(...sub.nodes);
     edges.push(...sub.edges);
     childIndex += 1 + (child.children?.length ?? 0);
@@ -91,6 +86,7 @@ function treeToFlow(
 }
 
 export function CategoryGraph({ tree, onNodeClick }: CategoryGraphProps) {
+  const { t } = useTranslation();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
@@ -105,15 +101,15 @@ export function CategoryGraph({ tree, onNodeClick }: CategoryGraphProps) {
       setEdges([]);
       return;
     }
-    const { nodes: newNodes, edges: newEdges } = treeToFlow(tree);
+    const { nodes: newNodes, edges: newEdges } = treeToFlow(tree, null, 0, 0, 1, t);
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [tree, setNodes, setEdges]);
+  }, [tree, setNodes, setEdges, t]);
 
   if (!tree) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <p className="text-muted-foreground text-sm">No categories yet</p>
+        <p className="text-muted-foreground text-sm">{t("categories.noCategories")}</p>
       </div>
     );
   }

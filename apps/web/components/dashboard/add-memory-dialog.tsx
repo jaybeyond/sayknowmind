@@ -14,6 +14,7 @@ import { useMemoryStore } from "@/store/memory-store";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Link, FileUp, FileText } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 type Tab = "url" | "file" | "text";
 
@@ -26,23 +27,25 @@ interface AddMemoryDialogProps {
 }
 
 export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
+  const { t } = useTranslation();
   const [tab, setTab] = React.useState<Tab>("url");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // URL tab state
   const [url, setUrl] = React.useState("");
-
-  // File tab state
   const [file, setFile] = React.useState<File | null>(null);
   const [dragOver, setDragOver] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-  // Text tab state
   const [textContent, setTextContent] = React.useState("");
   const [textTitle, setTextTitle] = React.useState("");
 
   const { fetchMemories } = useMemoryStore();
+
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: "url", label: t("ingest.tabUrl"), icon: <Link className="size-4" /> },
+    { id: "file", label: t("ingest.tabFile"), icon: <FileUp className="size-4" /> },
+    { id: "text", label: t("ingest.tabText"), icon: <FileText className="size-4" /> },
+  ];
 
   const reset = () => {
     setUrl("");
@@ -62,7 +65,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
   };
 
   const handleSuccess = async () => {
-    toast.success("Saved!");
+    toast.success(t("ingest.saved"));
     await fetchMemories();
     reset();
     onOpenChange(false);
@@ -76,7 +79,6 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
     );
   };
 
-  // --- URL ---
   const isValidUrl = (s: string) => {
     try {
       const u = new URL(s);
@@ -89,7 +91,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
   const submitUrl = async () => {
     const trimmed = url.trim();
     if (!isValidUrl(trimmed)) {
-      setError("Please enter a valid URL (https://...)");
+      setError(t("ingest.invalidUrl"));
       return;
     }
     setLoading(true);
@@ -108,18 +110,17 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
       }
       await handleSuccess();
     } catch {
-      setError("Network error -- please try again");
+      setError(t("ingest.networkError"));
     } finally {
       setLoading(false);
     }
   };
 
-  // --- File ---
   const validateFile = (f: File): string | null => {
-    if (f.size > MAX_FILE_SIZE) return "File exceeds 10 MB limit";
+    if (f.size > MAX_FILE_SIZE) return t("ingest.fileTooLarge");
     const ext = f.name.split(".").pop()?.toLowerCase();
     if (!ext || !["pdf", "docx", "txt", "md", "html"].includes(ext)) {
-      return "Unsupported file type. Accepted: .pdf .docx .txt .md .html";
+      return t("ingest.unsupportedType");
     }
     return null;
   };
@@ -130,10 +131,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
     const dropped = e.dataTransfer.files[0];
     if (!dropped) return;
     const err = validateFile(dropped);
-    if (err) {
-      setError(err);
-      return;
-    }
+    if (err) { setError(err); return; }
     setError(null);
     setFile(dropped);
   };
@@ -142,10 +140,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
     const selected = e.target.files?.[0];
     if (!selected) return;
     const err = validateFile(selected);
-    if (err) {
-      setError(err);
-      return;
-    }
+    if (err) { setError(err); return; }
     setError(null);
     setFile(selected);
   };
@@ -157,10 +152,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/ingest/file", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch("/api/ingest/file", { method: "POST", body: formData });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         handleError(res, data);
@@ -168,13 +160,12 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
       }
       await handleSuccess();
     } catch {
-      setError("Network error -- please try again");
+      setError(t("ingest.networkError"));
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Text ---
   const submitText = async () => {
     const trimmed = textContent.trim();
     if (!trimmed) return;
@@ -193,7 +184,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
       }
       await handleSuccess();
     } catch {
-      setError("Network error -- please try again");
+      setError(t("ingest.networkError"));
     } finally {
       setLoading(false);
     }
@@ -212,52 +203,39 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
     (tab === "file" && !file) ||
     (tab === "text" && !textContent.trim());
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "url", label: "URL", icon: <Link className="size-4" /> },
-    { id: "file", label: "File", icon: <FileUp className="size-4" /> },
-    { id: "text", label: "Text", icon: <FileText className="size-4" /> },
-  ];
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Document</DialogTitle>
-          <DialogDescription>
-            Save a URL, upload a file, or paste text to your knowledge base.
-          </DialogDescription>
+          <DialogTitle>{t("ingest.addDocument")}</DialogTitle>
+          <DialogDescription>{t("ingest.dialogDescription")}</DialogDescription>
         </DialogHeader>
 
-        {/* Tab switcher */}
         <div className="flex gap-1 rounded-lg bg-muted p-1">
-          {tabs.map((t) => (
+          {tabs.map((item) => (
             <button
-              key={t.id}
+              key={item.id}
               type="button"
               disabled={loading}
-              onClick={() => {
-                setTab(t.id);
-                setError(null);
-              }}
+              onClick={() => { setTab(item.id); setError(null); }}
               className={cn(
                 "flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                tab === t.id
+                tab === item.id
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {t.icon}
-              {t.label}
+              {item.icon}
+              {item.label}
             </button>
           ))}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* URL tab */}
           {tab === "url" && (
             <Input
               type="url"
-              placeholder="https://example.com/article"
+              placeholder={t("ingest.urlPlaceholder")}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               disabled={loading}
@@ -265,14 +243,10 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
             />
           )}
 
-          {/* File tab */}
           {tab === "file" && (
             <div>
               <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleFileDrop}
                 onClick={() => fileInputRef.current?.click()}
@@ -288,12 +262,8 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
                   <p className="text-sm font-medium">{file.name}</p>
                 ) : (
                   <>
-                    <p className="text-sm text-muted-foreground">
-                      Drop a file here or click to browse
-                    </p>
-                    <p className="text-xs text-muted-foreground/60">
-                      .pdf .docx .txt .md .html -- max 10 MB
-                    </p>
+                    <p className="text-sm text-muted-foreground">{t("ingest.dragDrop")}</p>
+                    <p className="text-xs text-muted-foreground/60">{t("ingest.supportedFormats")}</p>
                   </>
                 )}
               </div>
@@ -307,17 +277,16 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
             </div>
           )}
 
-          {/* Text tab */}
           {tab === "text" && (
             <div className="space-y-3">
               <Input
-                placeholder="Title (optional)"
+                placeholder={t("ingest.titlePlaceholder")}
                 value={textTitle}
                 onChange={(e) => setTextTitle(e.target.value)}
                 disabled={loading}
               />
               <textarea
-                placeholder="Paste or type your content here..."
+                placeholder={t("ingest.textPlaceholder")}
                 value={textContent}
                 onChange={(e) => setTextContent(e.target.value)}
                 disabled={loading}
@@ -330,16 +299,11 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleOpenChange(false)}
-              disabled={loading}
-            >
-              Cancel
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={loading}>
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={isSubmitDisabled}>
-              {loading ? "Saving..." : "Save"}
+              {loading ? t("ingest.saving") : t("common.save")}
             </Button>
           </div>
         </form>

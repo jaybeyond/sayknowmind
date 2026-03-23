@@ -4,6 +4,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SendHorizontal, Sparkles, MessageSquare } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -18,6 +19,7 @@ export function ChatInput({
   mode,
   onModeChange,
 }: ChatInputProps) {
+  const { t } = useTranslation();
   const [value, setValue] = React.useState("");
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -38,7 +40,6 @@ export function ChatInput({
     if (!trimmed || isDisabled) return;
     onSend(trimmed);
     setValue("");
-    // Reset height after clearing
     requestAnimationFrame(() => {
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
@@ -61,7 +62,7 @@ export function ChatInput({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything about your knowledge..."
+          placeholder={t("chat.placeholder")}
           disabled={isDisabled}
           rows={1}
           className={cn(
@@ -80,7 +81,6 @@ export function ChatInput({
       </div>
 
       <div className="flex items-center justify-between">
-        {/* Mode toggle */}
         <div className="inline-flex items-center rounded-lg bg-muted p-0.5 text-xs">
           <button
             onClick={() => onModeChange("simple")}
@@ -92,7 +92,7 @@ export function ChatInput({
             )}
           >
             <MessageSquare className="size-3" />
-            Simple
+            {t("chat.simpleMode")}
           </button>
           <button
             onClick={() => onModeChange("agentic")}
@@ -104,11 +104,10 @@ export function ChatInput({
             )}
           >
             <Sparkles className="size-3" />
-            Agentic
+            {t("chat.agenticMode")}
           </button>
         </div>
 
-        {/* Character count */}
         {value.length > 500 && (
           <span className="text-xs text-muted-foreground">
             {value.length.toLocaleString()}
