@@ -267,8 +267,8 @@ impl AvailableProvidersResponse {
                     },
                 ],
                 default_models: DefaultModels {
-                    chat_model: "gemma3:12b".to_string(),
-                    embedding_model: "embeddinggemma:latest".to_string(),
+                    chat_model: "qwen3:4b".to_string(),
+                    embedding_model: "nomic-embed-text:latest".to_string(),
                     embedding_dimension: 768,
                 },
             },

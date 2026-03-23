@@ -22,6 +22,8 @@ export interface EQQueryRequest {
   mode?: QueryMode;
   include_references?: boolean;
   max_results?: number;
+  llm_provider?: string;
+  llm_model?: string;
 }
 
 export interface EQSourceReference {

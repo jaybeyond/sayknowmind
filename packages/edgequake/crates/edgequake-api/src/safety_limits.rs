@@ -353,7 +353,7 @@ pub fn default_model_for_provider(provider_name: &str) -> &'static str {
         "gemini" => "gemini-2.5-flash",
         "xai" => "grok-4-1-fast",
         "openrouter" => "openai/gpt-4o-mini",
-        "ollama" => "gemma3:12b",
+        "ollama" => "qwen3:4b",
         "lmstudio" | "lm-studio" | "lm_studio" => "gemma-3n-e4b-it",
         "mock" => "mock-model",
         _ => "gpt-4.1-nano",

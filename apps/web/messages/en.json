@@ -104,7 +104,12 @@
     "today": "Today",
     "yesterday": "Yesterday",
     "daysAgo": "{{days}}d ago",
-    "errorFallback": "Sorry, something went wrong. Please try again."
+    "errorFallback": "Sorry, something went wrong. Please try again.",
+    "phaseThinking": "Analyzing your question...",
+    "phaseSearching": "Searching knowledge base...",
+    "phaseAnswering": "Generating answer...",
+    "noResponse": "No response generated.",
+    "stop": "Stop"
   },
   "ingest": {
     "addUrl": "Add URL",

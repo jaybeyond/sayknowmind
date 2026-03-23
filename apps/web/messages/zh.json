@@ -104,7 +104,12 @@
     "today": "今天",
     "yesterday": "昨天",
     "daysAgo": "{{days}}天前",
-    "errorFallback": "抱歉，出现了错误。请重试。"
+    "errorFallback": "抱歉，出现了错误。请重试。",
+    "phaseThinking": "正在分析您的问题...",
+    "phaseSearching": "正在搜索知识库...",
+    "phaseAnswering": "正在生成回答...",
+    "noResponse": "未生成回复。",
+    "stop": "停止"
   },
   "ingest": {
     "addUrl": "添加网址",

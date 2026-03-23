@@ -104,7 +104,12 @@
     "today": "今日",
     "yesterday": "昨日",
     "daysAgo": "{{days}}日前",
-    "errorFallback": "申し訳ありません、エラーが発生しました。もう一度お試しください。"
+    "errorFallback": "申し訳ありません、エラーが発生しました。もう一度お試しください。",
+    "phaseThinking": "質問を分析しています...",
+    "phaseSearching": "ナレッジベースを検索しています...",
+    "phaseAnswering": "回答を生成しています...",
+    "noResponse": "回答が生成されませんでした。",
+    "stop": "停止"
   },
   "ingest": {
     "addUrl": "URLを追加",

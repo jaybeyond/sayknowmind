@@ -18,15 +18,15 @@ use uuid::Uuid;
 //   - EDGEQUAKE_DEFAULT_EMBEDDING_MODEL=text-embedding-3-small
 //   - EDGEQUAKE_DEFAULT_EMBEDDING_DIMENSION=1536
 
-/// Default LLM model (Ollama gemma3:12b - 128K context, vision support).
-pub const DEFAULT_LLM_MODEL: &str = "gemma3:12b";
+/// Default LLM model (Ollama qwen3:4b).
+pub const DEFAULT_LLM_MODEL: &str = "qwen3:4b";
 
 /// Default LLM provider.
 pub const DEFAULT_LLM_PROVIDER: &str = "ollama";
 
-/// Default embedding model (Ollama embeddinggemma - 768 dimensions, 2K context).
+/// Default embedding model (Ollama nomic-embed-text - 768 dimensions).
 /// Synced with models.toml [defaults] section.
-pub const DEFAULT_EMBEDDING_MODEL: &str = "embeddinggemma";
+pub const DEFAULT_EMBEDDING_MODEL: &str = "nomic-embed-text";
 
 /// Default embedding provider.
 /// Synced with models.toml [defaults] section.

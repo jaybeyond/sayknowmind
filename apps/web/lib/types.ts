@@ -229,6 +229,14 @@ export interface AgentStep {
   timestamp: string;
 }
 
+export interface StreamSource {
+  id: string;
+  title: string;
+  url?: string;
+  excerpt: string;
+  score: number;
+}
+
 export interface SharedContent {
   id: string;
   documentId: string;
