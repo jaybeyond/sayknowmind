@@ -18,19 +18,50 @@ interface PipelineInput {
   writer: StreamWriter;
 }
 
-// ── Stage 1: Search Knowledge Base (MiniLM vector search) ────
+// ── Intent Detection (no LLM — fast regex) ────────────────────
 
-const GREETING_PATTERNS = /^(hi|hello|hey|안녕|こんにちは|你好|thanks|thank you|감사|ありがとう)\b/i;
+const GREETING_PATTERNS =
+  /^(hi|hello|hey|yo|sup|안녕|こんにちは|你好|thanks|thank you|감사|ありがとう|고마워|잘|좋아|ㅎㅎ|ㅋㅋ|ok|okay|네|응|ㅇㅇ)\s*[.!?~]*$/i;
+
+const CONVERSATIONAL_PATTERNS = [
+  /^(뭐|뭘|어떻게|왜|어디|누가|언제)\s/,    // Korean question words
+  /느린|빠른|좋은|나쁜|이상한/,               // Korean adjectives (opinions)
+  /같아|것 같|거 같|듯|보여/,                 // Korean speculation endings
+  /해줘|해봐|알려|설명|도와/,                 // Korean request endings
+  /^(what|how|why|can you|tell me|explain)/i, // English questions
+];
+
+function needsSearch(message: string): boolean {
+  const trimmed = message.trim();
+
+  // Pure greetings — no search
+  if (GREETING_PATTERNS.test(trimmed)) return false;
+
+  // Short conversational messages — no search
+  if (trimmed.length < 5) return false;
+
+  // Explicit search intent
+  if (/검색|찾아|search|find|look for|알려줘.*에 대해/i.test(trimmed)) return true;
+
+  // Conversational patterns — skip search, let LLM answer from context
+  for (const pattern of CONVERSATIONAL_PATTERNS) {
+    if (pattern.test(trimmed)) return false;
+  }
+
+  // Default: search if message is long enough to be a real question
+  return trimmed.length >= 8;
+}
+
+// ── Stage 1: Search Knowledge Base (MiniLM vector search) ────
 
 async function searchKnowledge(
   message: string,
   userId: string,
   writer: StreamWriter,
 ): Promise<{ sources: StreamSource[]; contextText: string }> {
-  // Skip search for pure greetings
-  if (GREETING_PATTERNS.test(message.trim())) {
+  if (!needsSearch(message)) {
     writer.status("thinking", "Processing...");
-    writer.log("Greeting detected — skipping knowledge base search");
+    writer.log("Conversational query — skipping knowledge base search");
     return { sources: [], contextText: "" };
   }
 
@@ -238,15 +269,23 @@ async function generateAnswer(
     ? docTitles.map((t, i) => `${i + 1}. ${t}`).join("\n")
     : "empty";
 
-  let systemPromptText = `You are SayKnowMind. You manage the user's personal knowledge base.
+  // System prompt with intent guidance (pattern from pi-mono)
+  let systemPromptText = `You are SayKnowMind, a personal knowledge assistant.
+You manage the user's saved documents and help them find information.
 You CAN access their data. NEVER say you cannot.
+
 The user has ${docCount} saved documents:
 ${docList}
 
-Respond in the SAME language as the user's question.`;
+IMPORTANT GUIDELINES:
+- Respond in the SAME language as the user's question.
+- For casual/conversational messages, respond naturally and briefly.
+- When citing documents, use [1], [2] format.
+- Be concise and helpful. Don't repeat the question back.
+- If asked about performance or speed, that's about the app — answer honestly.`;
 
   if (contextText) {
-    systemPromptText += `\n\nRelevant documents:\n${contextText}\n\nCite sources as [1], [2] etc.`;
+    systemPromptText += `\n\nRelevant documents:\n${contextText}\n\nCite these sources as [1], [2] etc. when using information from them.`;
   }
 
   const messages = [
@@ -256,7 +295,8 @@ Respond in the SAME language as the user's question.`;
 
   writer.log("Streaming response from LLM...");
 
-  // Parse qwen3 <think> tags: route thinking to logs, answer text to tokens
+  // Parse qwen3 thinking: /v1 returns reasoning_content separately,
+  // ollama.ts wraps it in <think> tags for us to route to logs
   let insideThink = false;
   let thinkBuffer = "";
   let answerText = "";

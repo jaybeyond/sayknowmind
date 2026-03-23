@@ -48,7 +48,9 @@ impl SOTAQueryEngine {
         let mut stats = crate::engine::QueryStats::default();
 
         // Step 1: Extract keywords (with caching)
-        let raw_keywords = if self.config.use_keyword_extraction {
+        // Skip keyword extraction for naive mode — it only needs embeddings, not LLM keywords
+        let skip_keywords = request.mode == Some(QueryMode::Naive);
+        let raw_keywords = if self.config.use_keyword_extraction && !skip_keywords {
             let kw_start = std::time::Instant::now();
             let kw = self
                 .keyword_extractor
@@ -250,12 +252,9 @@ impl SOTAQueryEngine {
         let mut stats = crate::engine::QueryStats::default();
 
         // Step 1: Extract keywords (with caching)
-        // WHY: Use extract_with_llm_override when user selected a specific LLM provider.
-        // This ensures keyword extraction uses the SAME LLM as answer generation.
-        // Without this, keyword extraction would use the server default (often Ollama)
-        // while answer generation uses the user's choice (e.g., OpenAI GPT-4).
-        // This bug caused inconsistent behavior and unexpected costs.
-        let raw_keywords = if self.config.use_keyword_extraction {
+        // Skip keyword extraction for naive mode — it only needs embeddings, not LLM keywords
+        let skip_keywords = request.mode == Some(QueryMode::Naive);
+        let raw_keywords = if self.config.use_keyword_extraction && !skip_keywords {
             let kw_start = std::time::Instant::now();
             let kw = self
                 .keyword_extractor

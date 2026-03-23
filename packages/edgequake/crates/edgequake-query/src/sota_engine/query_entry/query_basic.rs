@@ -48,7 +48,9 @@ impl SOTAQueryEngine {
         let mut stats = crate::engine::QueryStats::default();
 
         // Step 1: Extract keywords (with caching)
-        let raw_keywords = if self.config.use_keyword_extraction {
+        // Skip keyword extraction for naive mode — it only needs embeddings, not LLM keywords
+        let skip_keywords = request.mode == Some(QueryMode::Naive);
+        let raw_keywords = if self.config.use_keyword_extraction && !skip_keywords {
             let kw_start = std::time::Instant::now();
             let kw = self
                 .keyword_extractor
@@ -230,7 +232,9 @@ impl SOTAQueryEngine {
         let mut stats = crate::engine::QueryStats::default();
 
         // Step 1: Extract keywords (with caching)
-        let raw_keywords = if self.config.use_keyword_extraction {
+        // Skip keyword extraction for naive mode — it only needs embeddings, not LLM keywords
+        let skip_keywords = request.mode == Some(QueryMode::Naive);
+        let raw_keywords = if self.config.use_keyword_extraction && !skip_keywords {
             let kw_start = std::time::Instant::now();
             let kw = self
                 .keyword_extractor
@@ -400,7 +404,9 @@ impl SOTAQueryEngine {
         let mut stats = crate::engine::QueryStats::default();
 
         // Step 1: Extract keywords (with caching)
-        let raw_keywords = if self.config.use_keyword_extraction {
+        // Skip keyword extraction for naive mode — it only needs embeddings, not LLM keywords
+        let skip_keywords = request.mode == Some(QueryMode::Naive);
+        let raw_keywords = if self.config.use_keyword_extraction && !skip_keywords {
             let kw_start = std::time::Instant::now();
             let kw = self
                 .keyword_extractor
@@ -560,11 +566,9 @@ impl SOTAQueryEngine {
         request: &crate::engine::QueryRequest,
     ) -> Result<(QueryContext, QueryMode)> {
         // Step 1: Extract keywords (with caching)
-        // WHY: These methods (query, query_stream) don't have an LLM override parameter.
-        // They always use the engine's default LLM provider (self.llm_provider).
-        // Pass None to extract_with_llm_override to use the default LLM.
-        // For workspace-specific LLM selection, use query_with_full_config or query_stream_with_full_config.
-        let raw_keywords = if self.config.use_keyword_extraction {
+        // Skip keyword extraction for naive mode — it only needs embeddings, not LLM keywords
+        let skip_keywords = request.mode == Some(QueryMode::Naive);
+        let raw_keywords = if self.config.use_keyword_extraction && !skip_keywords {
             self.keyword_extractor
                 .extract_with_llm_override(&request.query, None)
                 .await?
