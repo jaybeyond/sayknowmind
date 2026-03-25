@@ -9,6 +9,7 @@ import { pushRoute } from "./routes/push.js";
 import { pullRoute } from "./routes/pull.js";
 import { ackRoute } from "./routes/ack.js";
 import { statusRoute } from "./routes/status.js";
+import { telegramProxyRoute } from "./routes/telegram-proxy.js";
 
 type Env = {
   Variables: {
@@ -50,6 +51,10 @@ export function createRelayApp(pool: Pool) {
   app.get("/relay/pull", (c) => pullRoute(c, pool));
   app.post("/relay/ack", (c) => ackRoute(c, pool));
   app.get("/relay/status", (c) => statusRoute(c, pool));
+
+  // Telegram webhook proxy — no auth (verified via webhook secret header)
+  // Telegram → relay (public) → web app (internal)
+  app.post("/telegram/webhook", (c) => telegramProxyRoute(c));
 
   return app;
 }

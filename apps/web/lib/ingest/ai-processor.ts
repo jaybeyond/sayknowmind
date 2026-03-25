@@ -1,22 +1,10 @@
 import type { EntityType, Language, CategorySuggestion } from "@/lib/types";
+import { callAiCloudFirst } from "@/lib/agents/cloud-ai";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
-const AI_API_KEY = process.env.AI_API_KEY ?? "";
 const AI_TIMEOUT = 60_000;
 const MAX_CONTENT_CHARS = 8000;
-
-const LLM_PROVIDER = process.env.LLM_PROVIDER ?? "server";
-const OLLAMA_URL = `http://localhost:${process.env.OLLAMA_PORT ?? "11434"}`;
-
-function getActiveModel(): string {
-  try {
-    return readFileSync(join(process.cwd(), ".sayknowmind-active-model"), "utf-8").trim();
-  } catch {
-    return process.env.LLM_MODEL ?? "qwen3:1.7b";
-  }
-}
 
 interface CustomPrompts {
   summary: string;
@@ -46,6 +34,7 @@ function getCustomPrompts(): CustomPrompts {
 interface AiChatRequest {
   system: string;
   message: string;
+  images?: string[]; // base64-encoded images for vision models
 }
 
 interface ExtractedEntity {
@@ -54,58 +43,18 @@ interface ExtractedEntity {
   confidence: number;
 }
 
-async function callOllama(req: AiChatRequest): Promise<string> {
-  const response = await fetch(`${OLLAMA_URL}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: getActiveModel(),
-      messages: [
-        { role: "system", content: req.system },
-        { role: "user", content: req.message },
-      ],
-      stream: false,
-    }),
-    signal: AbortSignal.timeout(AI_TIMEOUT),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Ollama returned ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.message?.content ?? "";
-}
-
-async function callAiServer(req: AiChatRequest): Promise<string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (AI_API_KEY) headers["Authorization"] = `Bearer ${AI_API_KEY}`;
-
-  const response = await fetch(`${AI_SERVER_URL}/ai/chat`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ system: req.system, message: req.message }),
-    signal: AbortSignal.timeout(AI_TIMEOUT),
-  });
-
-  if (!response.ok) {
-    throw new Error(`AI server returned ${response.status}: ${await response.text()}`);
-  }
-
-  const data = await response.json();
-  return data.response ?? data.message ?? data.content ?? "";
-}
-
+/**
+ * AI call priority (for ALL requests including vision):
+ * 1. Cloud providers (from .sayknowmind-providers.json — OpenRouter, etc.)
+ * 2. Ollama fallback ONLY on 400/402/429
+ */
 async function callAi(req: AiChatRequest): Promise<string> {
-  if (LLM_PROVIDER === "ollama") {
-    try {
-      return await callOllama(req);
-    } catch (err) {
-      console.warn("[ai-processor] Ollama unavailable, falling back to AI server:", err);
-      return await callAiServer(req);
-    }
-  }
-  return await callAiServer(req);
+  return await callAiCloudFirst({
+    system: req.system,
+    message: req.message,
+    images: req.images,
+    timeout: req.images?.length ? 120_000 : AI_TIMEOUT,
+  });
 }
 
 function truncate(text: string): string {
@@ -258,13 +207,17 @@ export async function suggestCategories(
     : "(No existing categories)";
 
   const result = await callAi({
-    system: `You are a categorization assistant. Given the content and the user's existing categories, suggest up to 3 categories this content should be assigned to.
-Category names should be in ${langMap[language]}.
+    system: `You are a categorization assistant. Given the content and the user's existing categories, suggest 1-2 categories this content should be assigned to.
+
+IMPORTANT RULES:
+1. ALWAYS prefer existing categories. Reuse them even if the match is partial.
+2. Only suggest a NEW category if the content truly doesn't fit ANY existing category.
+3. Keep category names broad and reusable (e.g. "Technology" not "React Server Components Tutorial").
+4. Maximum 1 new category per document. If you suggest a new one, also try to match an existing one.
+5. Category names must be in ${langMap[language]}.
 
 Existing categories:
 ${categoryList}
-
-If existing categories match, use their IDs. If a new category is needed, use "new" as the categoryId and suggest a name in ${langMap[language]}.
 
 Return a JSON array of objects with:
 - "categoryId": existing category ID or "new"
@@ -304,4 +257,79 @@ Output ONLY the JSON array.`,
     console.error("[ai-processor] Failed to parse category suggestion response:", result);
     return [];
   }
+}
+
+/**
+ * Describe an image using a vision model (OCR + understanding).
+ * Returns extracted text content and a suggested title.
+ */
+export async function describeImage(
+  base64Image: string,
+  language: Language = "en",
+): Promise<{ title: string; content: string }> {
+  const langMap: Record<Language, string> = {
+    ko: "Korean", en: "English", ja: "Japanese", zh: "Chinese",
+  };
+
+  const result = await callAi({
+    system: `You are an image analysis assistant. Analyze the image and provide:
+1. A short descriptive title (1 line)
+2. Full OCR text extraction (if any text is visible)
+3. A detailed description of the image content
+
+Respond in ${langMap[language]}.
+
+Format your response as:
+TITLE: <title>
+---
+<All extracted text from the image, then a description of the visual content>`,
+    message: "Analyze this image. Extract all visible text (OCR) and describe the content.",
+    images: [base64Image],
+  });
+
+  const titleMatch = result.match(/^TITLE:\s*(.+)/m);
+  const title = titleMatch?.[1]?.trim() ?? "Image";
+  const content = result
+    .replace(/^TITLE:\s*.+\n/m, "")
+    .replace(/^---\n?/m, "")
+    .trim();
+
+  return { title, content: content || result };
+}
+
+/**
+ * Describe a video frame using a vision model.
+ */
+export async function describeVideoFrame(
+  base64Frame: string,
+  language: Language = "en",
+): Promise<{ title: string; content: string }> {
+  const langMap: Record<Language, string> = {
+    ko: "Korean", en: "English", ja: "Japanese", zh: "Chinese",
+  };
+
+  const result = await callAi({
+    system: `You are a video analysis assistant. This is a keyframe from a video. Describe:
+1. A short title for this video
+2. What is happening in this frame
+3. Any text visible on screen (OCR)
+
+Respond in ${langMap[language]}.
+
+Format:
+TITLE: <title>
+---
+<description and extracted text>`,
+    message: "Describe this video frame.",
+    images: [base64Frame],
+  });
+
+  const titleMatch = result.match(/^TITLE:\s*(.+)/m);
+  const title = titleMatch?.[1]?.trim() ?? "Video";
+  const content = result
+    .replace(/^TITLE:\s*.+\n/m, "")
+    .replace(/^---\n?/m, "")
+    .trim();
+
+  return { title, content: content || result };
 }

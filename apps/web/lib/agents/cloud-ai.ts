@@ -25,6 +25,8 @@ const OLLAMA_FALLBACK_CODES = new Set([400, 402, 429]);
 export interface AiCallOptions {
   system: string;
   message: string;
+  /** Base64-encoded images for vision models */
+  images?: string[];
   /** Override providers instead of reading from config */
   providers?: ProviderEntry[];
   /** Timeout in ms (default 60s) */
@@ -40,6 +42,24 @@ class CloudHttpError extends Error {
 }
 
 /**
+ * Build OpenAI-compatible user message content.
+ * Plain text → string, with images → content array with image_url parts.
+ */
+function buildUserContent(
+  message: string,
+  images?: string[],
+): string | Array<{ type: string; text?: string; image_url?: { url: string } }> {
+  if (!images?.length) return message;
+  return [
+    { type: "text", text: message },
+    ...images.map((img) => ({
+      type: "image_url" as const,
+      image_url: { url: img.startsWith("data:") ? img : `data:image/jpeg;base64,${img}` },
+    })),
+  ];
+}
+
+/**
  * Call a cloud provider using OpenAI-compatible /v1/chat/completions (non-streaming).
  */
 async function callCloudProvider(
@@ -47,6 +67,7 @@ async function callCloudProvider(
   system: string,
   message: string,
   timeout: number,
+  images?: string[],
 ): Promise<string> {
   const url = `${provider.baseUrl.replace(/\/$/, "")}/v1/chat/completions`;
 
@@ -60,7 +81,7 @@ async function callCloudProvider(
       model: provider.model,
       messages: [
         { role: "system", content: system },
-        { role: "user", content: message },
+        { role: "user", content: buildUserContent(message, images) },
       ],
       stream: false,
     }),
@@ -80,24 +101,34 @@ async function callCloudProvider(
 
 /**
  * Call Ollama directly (non-streaming). Uses lightweight 1.7b model.
+ * For vision requests, uses the configured vision model.
  */
 async function callOllama(
   system: string,
   message: string,
   timeout: number,
+  images?: string[],
 ): Promise<string> {
+  const isVision = !!images?.length;
+  const model = isVision
+    ? (process.env.VISION_MODEL ?? "glm-ocr")
+    : getModelForRole("chat");
+
+  const userMessage: Record<string, unknown> = { role: "user", content: message };
+  if (isVision) userMessage.images = images;
+
   const res = await fetch(`${OLLAMA_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: getModelForRole("chat"),
+      model,
       messages: [
         { role: "system", content: system },
-        { role: "user", content: message },
+        userMessage,
       ],
       stream: false,
     }),
-    signal: AbortSignal.timeout(timeout),
+    signal: AbortSignal.timeout(isVision ? 120_000 : timeout),
   });
 
   if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
@@ -114,7 +145,7 @@ async function callOllama(
  * trigger local fallback to avoid freezing the machine with heavy models.
  */
 export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
-  const { system, message, timeout = AI_TIMEOUT } = opts;
+  const { system, message, images, timeout = AI_TIMEOUT } = opts;
   const providers = opts.providers ?? getOrderedProviders();
 
   let shouldFallbackToOllama = false;
@@ -122,7 +153,7 @@ export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
   // Try cloud providers in order
   for (const provider of providers) {
     try {
-      return await callCloudProvider(provider, system, message, timeout);
+      return await callCloudProvider(provider, system, message, timeout, images);
     } catch (err) {
       console.warn(`[cloud-ai] ${provider.id} failed:`, (err as Error).message);
       if (err instanceof CloudHttpError && OLLAMA_FALLBACK_CODES.has(err.status)) {
@@ -142,9 +173,9 @@ export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
   }
 
   if (shouldFallbackToOllama) {
-    console.warn("[cloud-ai] Falling back to Ollama (1.7b)");
+    console.warn(`[cloud-ai] Falling back to Ollama${images?.length ? " (vision)" : " (1.7b)"}`);
     try {
-      return await callOllama(system, message, timeout);
+      return await callOllama(system, message, timeout, images);
     } catch (err) {
       console.error("[cloud-ai] Ollama also failed:", (err as Error).message);
     }
