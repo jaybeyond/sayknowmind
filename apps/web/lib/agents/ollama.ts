@@ -4,11 +4,16 @@
  * instead of raw NDJSON, making streaming more reliable.
  */
 
+import { getModelForRole } from "@/lib/model-config";
+
 const OLLAMA_URL =
   process.env.OLLAMA_URL ??
   `http://localhost:${process.env.OLLAMA_PORT ?? "11434"}`;
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "qwen3:4b";
-/** Stream timeout — generous for cold-start, qwen3:4b loads fast once warm */
+
+function getChatModel(): string {
+  return process.env.OLLAMA_MODEL ?? getModelForRole("chat");
+}
+/** Stream timeout — generous for cold-start, qwen3:1.7b loads fast once warm */
 const STREAM_TIMEOUT = 120_000;
 /** Non-stream timeout */
 const GENERATE_TIMEOUT = 60_000;
@@ -24,7 +29,7 @@ export async function ollamaGenerate(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: OLLAMA_MODEL,
+      model: getChatModel(),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
@@ -44,6 +49,7 @@ export async function ollamaStreamChat(
   systemPrompt: string,
   messages: { role: string; content: string }[],
   onToken: (token: string) => void,
+  onReasoning?: (line: string) => void,
 ): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), STREAM_TIMEOUT);
@@ -53,7 +59,7 @@ export async function ollamaStreamChat(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: OLLAMA_MODEL,
+        model: getChatModel(),
         messages: [
           { role: "system", content: systemPrompt },
           ...messages.map((m) => ({ role: m.role, content: m.content })),
@@ -74,6 +80,8 @@ export async function ollamaStreamChat(
     const decoder = new TextDecoder();
     let fullText = "";
     let buffer = "";
+    let reasoningBuffer = "";
+    let inThinkTag = false;  // Track <think> blocks to filter from content
 
     while (true) {
       const { done, value } = await reader.read();
@@ -94,22 +102,64 @@ export async function ollamaStreamChat(
           const delta = obj.choices?.[0]?.delta;
           if (!delta) continue;
 
-          // Reasoning tokens (qwen3 thinking) — route separately via onReasoning
+          // Reasoning tokens (qwen3 thinking) — buffer and emit complete lines
           const reasoning = delta.reasoning_content ?? delta.reasoning ?? null;
-          if (reasoning) {
-            onToken(`<think>${reasoning}</think>`);
+          if (reasoning && onReasoning) {
+            reasoningBuffer += reasoning;
+            const rLines = reasoningBuffer.split("\n");
+            reasoningBuffer = rLines.pop() ?? "";
+            for (const rl of rLines) {
+              if (rl.trim()) onReasoning(rl.trim());
+            }
           }
 
           // Content tokens — the actual answer
-          const chunk = delta.content ?? "";
+          // Filter <think>...</think> blocks that qwen3 may embed in content
+          let chunk = delta.content ?? "";
           if (chunk) {
-            fullText += chunk;
-            onToken(chunk);
+            // Handle <think> tags spanning multiple chunks
+            if (inThinkTag) {
+              const endIdx = chunk.indexOf("</think>");
+              if (endIdx !== -1) {
+                // Route thinking text to reasoning callback
+                const thinkPart = chunk.slice(0, endIdx);
+                if (thinkPart.trim() && onReasoning) onReasoning(thinkPart.trim());
+                chunk = chunk.slice(endIdx + 8);
+                inThinkTag = false;
+              } else {
+                if (chunk.trim() && onReasoning) onReasoning(chunk.trim());
+                chunk = "";
+              }
+            }
+            if (!inThinkTag && chunk.includes("<think>")) {
+              const startIdx = chunk.indexOf("<think>");
+              const before = chunk.slice(0, startIdx);
+              const after = chunk.slice(startIdx + 7);
+              const endIdx = after.indexOf("</think>");
+              if (endIdx !== -1) {
+                const thinkPart = after.slice(0, endIdx);
+                if (thinkPart.trim() && onReasoning) onReasoning(thinkPart.trim());
+                chunk = before + after.slice(endIdx + 8);
+              } else {
+                if (after.trim() && onReasoning) onReasoning(after.trim());
+                chunk = before;
+                inThinkTag = true;
+              }
+            }
+            if (chunk) {
+              fullText += chunk;
+              onToken(chunk);
+            }
           }
         } catch {
           // skip malformed SSE data
         }
       }
+    }
+
+    // Flush remaining reasoning buffer
+    if (reasoningBuffer.trim() && onReasoning) {
+      onReasoning(reasoningBuffer.trim());
     }
 
     return fullText;
@@ -124,7 +174,7 @@ export function warmupOllama(): void {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: OLLAMA_MODEL,
+      model: getChatModel(),
       messages: [{ role: "user", content: "hi" }],
       stream: false,
       max_tokens: 1,
@@ -136,7 +186,5 @@ export function warmupOllama(): void {
   });
 }
 
-// Auto-warmup on module load (server-side only)
-if (typeof window === "undefined") {
-  warmupOllama();
-}
+// No auto-warmup — Ollama is only used as fallback when cloud returns 400/402/429.
+// Preloading models wastes RAM and can freeze the machine.
