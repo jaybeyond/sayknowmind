@@ -1,55 +1,54 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const checks: Record<string, string> = {
     node: process.version,
     DATABASE_URL: process.env.DATABASE_URL ? "set (" + process.env.DATABASE_URL.slice(0, 20) + "...)" : "NOT SET",
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ? "set (" + process.env.BETTER_AUTH_SECRET.length + " chars)" : "NOT SET",
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? "NOT SET",
+    TRUSTED_ORIGINS: process.env.TRUSTED_ORIGINS ?? "NOT SET",
+    requestUrl: req.url,
   };
 
-  // Test pg import
+  // Test DB connection
   try {
-    const pg = require("pg");
-    checks.pg = "OK (" + typeof pg.Pool + ")";
+    const { Pool } = require("pg");
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const result = await pool.query("SELECT NOW() as now, current_database() as db");
+    checks.dbConnection = "OK — " + result.rows[0].db + " @ " + result.rows[0].now;
+    await pool.end();
   } catch (e: any) {
-    checks.pg = "FAIL: " + e.message;
+    checks.dbConnection = "FAIL: " + e.message;
   }
 
-  // Test better-auth import
+  // Test auth table exists
   try {
-    const ba = await import("better-auth");
-    checks.betterAuth = "OK (" + typeof ba.betterAuth + ")";
+    const { Pool } = require("pg");
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const result = await pool.query(`SELECT COUNT(*) as cnt FROM "user"`);
+    checks.userTable = "OK — " + result.rows[0].cnt + " users";
+    await pool.end();
   } catch (e: any) {
-    checks.betterAuth = "FAIL: " + e.message;
+    checks.userTable = "FAIL: " + e.message;
   }
 
-  // Test better-auth/next-js import
-  try {
-    const nj = await import("better-auth/next-js");
-    checks.betterAuthNextJs = "OK (" + typeof nj.toNextJsHandler + ")";
-  } catch (e: any) {
-    checks.betterAuthNextJs = "FAIL: " + e.message;
-  }
-
-  // Test better-auth/cookies import
-  try {
-    const bc = await import("better-auth/cookies");
-    checks.betterAuthCookies = "OK (" + typeof bc.getSessionCookie + ")";
-  } catch (e: any) {
-    checks.betterAuthCookies = "FAIL: " + e.message;
-  }
-
-  // Test full auth init
+  // Test auth handler directly
   try {
     const { auth } = await import("@/lib/auth");
-    checks.authInit = "OK (" + typeof auth + ")";
-    // Try accessing auth.api to trigger the Proxy
-    checks.authApi = "OK (" + typeof auth.api + ")";
+    checks.authType = typeof auth;
+    checks.authHandler = typeof auth.handler;
+
+    // Try calling handler with a fake get-session request
+    const testUrl = (process.env.BETTER_AUTH_URL || "http://localhost:3000") + "/api/auth/get-session";
+    const testReq = new Request(testUrl, { method: "GET", headers: req.headers });
+    const response = await auth.handler(testReq);
+    checks.handlerStatus = String(response.status);
+    const body = await response.text();
+    checks.handlerBody = body.slice(0, 500);
   } catch (e: any) {
-    checks.authInit = "FAIL: " + e.message + "\n" + e.stack;
+    checks.authHandler = "FAIL: " + e.message + "\n" + e.stack;
   }
 
   return NextResponse.json(checks, { status: 200 });
