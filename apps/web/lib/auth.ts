@@ -5,7 +5,6 @@ import { nextCookies } from "better-auth/next-js";
 let _auth: any = null;
 
 function getPool() {
-  // Dynamic require to avoid bundling issues in standalone mode
   const { Pool } = require("pg") as typeof import("pg");
   return new Pool({
     connectionString:
@@ -14,7 +13,7 @@ function getPool() {
   });
 }
 
-function createAuth() {
+export function getAuth() {
   if (_auth) return _auth;
   const pool = getPool();
   _auth = betterAuth({
@@ -22,7 +21,6 @@ function createAuth() {
     secret: process.env.BETTER_AUTH_SECRET || "build-time-placeholder-do-not-use",
     baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
 
-    // Email & password authentication
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
@@ -31,26 +29,24 @@ function createAuth() {
       requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === "true",
     },
 
-    // Session management: 24h expiry with auto-renewal
     session: {
-      expiresIn: 60 * 60 * 24, // 24 hours
-      updateAge: 60 * 60 * 12, // refresh after 12 hours
+      expiresIn: 60 * 60 * 24,
+      updateAge: 60 * 60 * 12,
       cookieCache: {
         enabled: true,
-        maxAge: 5 * 60, // 5-minute cache
+        maxAge: 5 * 60,
       },
     },
 
-    // Rate limiting for account lockout
     rateLimit: {
       enabled: true,
-      window: 60 * 15, // 15-minute window
+      window: 60 * 15,
       max: 100,
       storage: "database",
       customRules: {
         "/sign-in/email": {
-          window: 60 * 15, // 15-minute window
-          max: 20, // 20 attempts per 15 min
+          window: 60 * 15,
+          max: 20,
         },
         "/sign-up/email": {
           window: 60,
@@ -68,10 +64,13 @@ function createAuth() {
   return _auth;
 }
 
-// Lazy getter — auth is only created on first access
+// For backward compat — modules that do `import { auth } from "@/lib/auth"`
 export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
   get(_target, prop) {
-    return (createAuth() as any)[prop];
+    const instance = getAuth();
+    const value = instance[prop];
+    // Bind methods so `this` works correctly
+    return typeof value === "function" ? value.bind(instance) : value;
   },
 });
 
