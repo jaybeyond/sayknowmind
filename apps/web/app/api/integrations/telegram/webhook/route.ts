@@ -39,6 +39,7 @@ const t: Record<string, Record<Lang, string>> = {
   startBadCode:       { en: "❌ Invalid or expired link code.\nGo to Settings → Integrations → Telegram to generate a new one.", ko: "❌ 유효하지 않거나 만료된 연결 코드입니다.\n설정 → 연동 → Telegram에서 새 코드를 생성하세요.", ja: "❌ 無効または期限切れのコードです。\n設定 → 連携 → Telegramで新しいコードを生成してください。", zh: "❌ 无效或已过期的关联码。\n请在设置 → 集成 → Telegram中生成新码。" },
   startAlready:       { en: "👋 Account already linked.\n\n/help for usage.", ko: "👋 이미 연결된 계정입니다.\n\n/help 로 사용법을 확인하세요.", ja: "👋 すでに連携済みです。\n\n/help で使い方を確認。", zh: "👋 账号已关联。\n\n/help 查看用法。" },
   startWelcome:       { en: "👋 SayKnowMind Bot.\n\nTo link your account:\n1️⃣ Settings → Integrations → Telegram → \"Generate link code\"\n2️⃣ Send <code>/start code</code>\n\nYour ID: <code>{tgId}</code>", ko: "👋 SayKnowMind Bot입니다.\n\n계정을 연결하려면:\n1️⃣ 설정 → 연동 → Telegram → \"연결 코드 생성\"\n2️⃣ 생성된 코드로 <code>/start 코드</code> 전송\n\n내 ID: <code>{tgId}</code>", ja: "👋 SayKnowMind Botです。\n\nアカウント連携:\n1️⃣ 設定 → 連携 → Telegram → 「コード生成」\n2️⃣ <code>/start コード</code>を送信\n\nあなたのID: <code>{tgId}</code>", zh: "👋 SayKnowMind Bot。\n\n关联账号:\n1️⃣ 设置 → 集成 → Telegram → \"生成关联码\"\n2️⃣ 发送 <code>/start 码</code>\n\n你的ID: <code>{tgId}</code>" },
+  startAutoCreated:   { en: "✅ Welcome to SayKnowMind!\n\nYour account has been created automatically.\n\n📎 Send URL → save web page\n📷 Send photo/file → save to knowledge base\n💬 Ask questions → search saved knowledge\n📝 \"save: ...\" → save text memo\n\n/help for all commands.", ko: "✅ SayKnowMind에 오신 것을 환영합니다!\n\n계정이 자동으로 생성되었습니다.\n\n📎 URL 보내기 → 웹페이지 저장\n📷 사진/파일 보내기 → 지식베이스에 저장\n💬 질문하기 → 저장된 지식에서 검색\n📝 \"저장해: ...\" → 텍스트 메모 저장\n\n/help 로 전체 명령어를 확인하세요.", ja: "✅ SayKnowMindへようこそ!\n\nアカウントが自動作成されました。\n\n📎 URL送信 → ウェブページ保存\n📷 写真/ファイル送信 → ナレッジベースに保存\n💬 質問 → 保存された知識を検索\n📝 \"メモ: ...\" → テキストメモ保存\n\n/help で全コマンドを確認。", zh: "✅ 欢迎使用SayKnowMind!\n\n账号已自动创建。\n\n📎 发送URL → 保存网页\n📷 发送照片/文件 → 保存到知识库\n💬 提问 → 搜索已保存知识\n📝 \"保存: ...\" → 保存文字备忘\n\n/help 查看全部命令。" },
   help:               { en: "📚 <b>SayKnowMind Bot Usage</b>\n\n<b>Save:</b>\n📎 Send URL → save web page + AI analysis\n📷 Send photo → save image + OCR\n📄 Send file → save document (PDF, DOCX, etc.)\n📝 <code>save: content</code> → save text memo\n📝 <code>/memo content</code> → quick memo\n\n<b>Search:</b>\n💬 Ask a question → search saved knowledge\n🔍 <code>/search query</code> → direct search\n\n<b>Manage:</b>\n/categories — category list\n/recent — recent documents\n/status — service status\n/lang — change language\n/myid — Telegram ID\n/unlink — disconnect", ko: "📚 <b>SayKnowMind Bot 사용법</b>\n\n<b>저장하기:</b>\n📎 URL 보내기 → 웹페이지 저장 + AI 분석\n📷 사진 보내기 → 이미지 저장 + OCR\n📄 파일 보내기 → 문서 저장 (PDF, DOCX 등)\n📝 <code>저장해: 내용</code> → 텍스트 메모 저장\n📝 <code>/memo 내용</code> → 빠른 메모 저장\n\n<b>검색하기:</b>\n💬 질문하면 저장된 지식에서 답변\n🔍 <code>/search 검색어</code> → 직접 검색\n\n<b>관리:</b>\n/categories — 카테고리 목록\n/recent — 최근 저장 문서\n/status — 서비스 상태\n/lang — 언어 변경\n/myid — 텔레그램 ID\n/unlink — 연결 해제", ja: "📚 <b>SayKnowMind Bot 使い方</b>\n\n<b>保存:</b>\n📎 URL送信 → ウェブページ保存 + AI分析\n📷 写真送信 → 画像保存 + OCR\n📄 ファイル送信 → ドキュメント保存\n📝 <code>メモ: 内容</code> → テキストメモ\n📝 <code>/memo 内容</code> → クイックメモ\n\n<b>検索:</b>\n💬 質問 → 保存済み知識を検索\n🔍 <code>/search キーワード</code> → 直接検索\n\n<b>管理:</b>\n/categories — カテゴリ一覧\n/recent — 最近の保存\n/status — サービス状態\n/lang — 言語変更\n/myid — Telegram ID\n/unlink — 連携解除", zh: "📚 <b>SayKnowMind Bot 用法</b>\n\n<b>保存:</b>\n📎 发送URL → 保存网页 + AI分析\n📷 发送照片 → 保存图片 + OCR\n📄 发送文件 → 保存文档\n📝 <code>保存: 内容</code> → 文字备忘\n📝 <code>/memo 内容</code> → 快捷备忘\n\n<b>搜索:</b>\n💬 提问 → 搜索已保存知识\n🔍 <code>/search 关键词</code> → 直接搜索\n\n<b>管理:</b>\n/categories — 分类列表\n/recent — 最近文档\n/status — 服务状态\n/lang — 切换语言\n/myid — Telegram ID\n/unlink — 解除关联" },
   myId:               { en: "🆔 Telegram ID: <code>{tgId}</code>\n\nEnter this ID in Settings → Integrations → Telegram to link.", ko: "🆔 텔레그램 ID: <code>{tgId}</code>\n\n설정 → 연동 → Telegram에서 이 ID를 입력하면 연결할 수 있습니다.", ja: "🆔 Telegram ID: <code>{tgId}</code>\n\n設定 → 連携 → Telegramでこの IDを入力して連携。", zh: "🆔 Telegram ID: <code>{tgId}</code>\n\n在设置 → 集成 → Telegram中输入此ID即可关联。" },
   unlinked:           { en: "✅ Account disconnected.", ko: "✅ 계정 연결이 해제되었습니다.", ja: "✅ アカウント連携を解除しました。", zh: "✅ 账号已解除关联。" },
@@ -697,7 +698,7 @@ export async function POST(request: NextRequest) {
     `SELECT user_id FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1`,
     [tgUserId],
   ).catch(() => ({ rows: [] }));
-  const userId = linked.rows[0]?.user_id as string | undefined;
+  let userId = linked.rows[0]?.user_id as string | undefined;
 
   // ── Commands ────────────────────────────────────────────
 
@@ -706,6 +707,7 @@ export async function POST(request: NextRequest) {
     if (text.startsWith("/start")) {
       const linkCode = text.split(" ")[1];
       if (linkCode && !userId) {
+        // Manual link with code from web settings
         const linkResult = await pool.query(
           `UPDATE channel_links
            SET channel_user_id = $1, channel_username = $2, linked_at = NOW()
@@ -722,7 +724,41 @@ export async function POST(request: NextRequest) {
       } else if (userId) {
         await sendMessage(botToken, chatId, msg("startAlready", L));
       } else {
-        await sendMessage(botToken, chatId, msg("startWelcome", L, { tgId: tgUserId }));
+        // Auto-create account for new Telegram users
+        try {
+          const newUserId = crypto.randomUUID();
+          const tgUsername = message.from.username ?? `tg_${tgUserId}`;
+          const displayName = message.from.first_name || tgUsername;
+          const autoEmail = `tg_${tgUserId}@telegram.sayknowmind.local`;
+
+          await pool.query(
+            `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+             VALUES ($1, $2, $3, FALSE, NOW(), NOW())
+             ON CONFLICT (email) DO NOTHING`,
+            [newUserId, displayName, autoEmail],
+          );
+
+          // Check if insert succeeded or user already exists
+          const userRow = await pool.query(
+            `SELECT id FROM "user" WHERE email = $1`,
+            [autoEmail],
+          );
+          const actualUserId = userRow.rows[0]?.id ?? newUserId;
+
+          // Create channel_links entry
+          await pool.query(
+            `INSERT INTO channel_links (user_id, channel, channel_user_id, channel_username, linked_at)
+             VALUES ($1, 'telegram', $2, $3, NOW())
+             ON CONFLICT (user_id, channel) DO UPDATE
+             SET channel_user_id = $2, channel_username = $3, linked_at = NOW()`,
+            [actualUserId, tgUserId, message.from.username ?? null],
+          );
+
+          await sendMessage(botToken, chatId, msg("startAutoCreated", L));
+        } catch (err) {
+          console.error("[telegram] Auto-registration failed:", err);
+          await sendMessage(botToken, chatId, msg("startWelcome", L, { tgId: tgUserId }));
+        }
       }
       return NextResponse.json({ ok: true });
     }
@@ -857,18 +893,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // Unknown command — not linked
+    // Unknown command — not linked, suggest /start
     if (!userId) {
-      await sendMessage(botToken, chatId, msg("linkFirst", L, { tgId: tgUserId }));
+      await sendMessage(botToken, chatId, "👋 Send /start to create your account and get started!");
       return NextResponse.json({ ok: true });
     }
   }
 
-  // ── Require linked account for content operations ───────
+  // ── Auto-register unlinked users for content operations ──
 
   if (!userId) {
-    await sendMessage(botToken, chatId, msg("linkFirstShort", L, { tgId: tgUserId }));
-    return NextResponse.json({ ok: true });
+    try {
+      const newUserId = crypto.randomUUID();
+      const tgUsername = message.from.username ?? `tg_${tgUserId}`;
+      const displayName = message.from.first_name || tgUsername;
+      const autoEmail = `tg_${tgUserId}@telegram.sayknowmind.local`;
+
+      await pool.query(
+        `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, FALSE, NOW(), NOW())
+         ON CONFLICT (email) DO NOTHING`,
+        [newUserId, displayName, autoEmail],
+      );
+      const userRow = await pool.query(`SELECT id FROM "user" WHERE email = $1`, [autoEmail]);
+      const actualUserId = userRow.rows[0]?.id ?? newUserId;
+
+      await pool.query(
+        `INSERT INTO channel_links (user_id, channel, channel_user_id, channel_username, linked_at)
+         VALUES ($1, 'telegram', $2, $3, NOW())
+         ON CONFLICT (user_id, channel) DO UPDATE
+         SET channel_user_id = $2, channel_username = $3, linked_at = NOW()`,
+        [actualUserId, tgUserId, message.from.username ?? null],
+      );
+
+      userId = actualUserId;
+    } catch (err) {
+      console.error("[telegram] Auto-registration failed:", err);
+      await sendMessage(botToken, chatId, msg("linkFirstShort", L, { tgId: tgUserId }));
+      return NextResponse.json({ ok: true });
+    }
   }
 
   // ── URL Ingestion (direct DB call) ──────────────────────
