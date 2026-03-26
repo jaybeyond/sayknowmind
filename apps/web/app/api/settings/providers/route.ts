@@ -6,9 +6,12 @@ import {
   type ProviderConfig,
 } from "@/lib/provider-config";
 
+export const dynamic = "force-dynamic";
+
 /** GET — return saved provider config (keys masked) */
 export async function GET() {
-  const userId = await getUserIdFromRequest();
+  let userId: string | null = null;
+  try { userId = await getUserIdFromRequest(); } catch { /* auth error */ }
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
@@ -29,7 +32,8 @@ export async function GET() {
 
 /** POST — save provider config */
 export async function POST(request: NextRequest) {
-  const userId = await getUserIdFromRequest();
+  let userId: string | null = null;
+  try { userId = await getUserIdFromRequest(); } catch { /* auth error */ }
   if (!userId) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
