@@ -191,8 +191,15 @@ async function processJob(job: JobRow): Promise<void> {
     await updateJobProgress(jobId, 50);
 
     // Step 2: Extract entities (40% → 70%)
+    let entityCount = 0;
     try {
       const entities = await extractEntities(doc.content, language);
+      entityCount = entities.length;
+      // Debug: log entity extraction result to error_message for troubleshooting
+      await pool.query(
+        `UPDATE ingestion_jobs SET error_message = $1 WHERE id = $2`,
+        [`entities_extracted=${entities.length}${entities.length > 0 ? ` first=${entities[0].name}` : " (empty)"}`, jobId],
+      );
       if (entities.length > 0) {
         await insertEntities(
           entities.map((e) => ({
@@ -202,9 +209,18 @@ async function processJob(job: JobRow): Promise<void> {
             confidence: e.confidence,
           })),
         );
+        await pool.query(
+          `UPDATE ingestion_jobs SET error_message = $1 WHERE id = $2`,
+          [`entities_inserted=${entities.length}`, jobId],
+        );
       }
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(`[job-queue] Entity extraction failed for job ${jobId}:`, err);
+      await pool.query(
+        `UPDATE ingestion_jobs SET error_message = $1 WHERE id = $2`,
+        [`entity_error: ${msg.slice(0, 500)}`, jobId],
+      ).catch(() => {});
     }
     await updateJobProgress(jobId, 70);
 
