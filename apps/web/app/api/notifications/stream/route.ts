@@ -16,6 +16,7 @@ export async function GET() {
   }
 
   const encoder = new TextEncoder();
+  let cleanup: (() => void) | null = null;
 
   const stream = new ReadableStream({
     start(controller) {
@@ -24,8 +25,10 @@ export async function GET() {
 
       // Register listener
       const unsubscribe = addSSEListener(userId, (notification) => {
-        const data = JSON.stringify(notification);
-        controller.enqueue(encoder.encode(`event: notification\ndata: ${data}\n\n`));
+        try {
+          const data = JSON.stringify(notification);
+          controller.enqueue(encoder.encode(`event: notification\ndata: ${data}\n\n`));
+        } catch { /* stream closed */ }
       });
 
       // Heartbeat every 30s to keep connection alive
@@ -37,21 +40,13 @@ export async function GET() {
         }
       }, 30_000);
 
-      // Cleanup on close
-      const cleanup = () => {
+      // Store cleanup in outer scope (avoids TDZ referencing `stream` inside its own constructor)
+      cleanup = () => {
         unsubscribe();
         clearInterval(heartbeat);
       };
-
-      // AbortSignal is not directly accessible here, so we rely on
-      // the stream being closed when the client disconnects
-      controller.enqueue(encoder.encode(""));
-
-      // Store cleanup for cancel
-      (stream as unknown as { _cleanup?: () => void })._cleanup = cleanup;
     },
     cancel() {
-      const cleanup = (stream as unknown as { _cleanup?: () => void })._cleanup;
       if (cleanup) cleanup();
     },
   });
