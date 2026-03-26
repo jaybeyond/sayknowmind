@@ -38,13 +38,21 @@ export function NotificationBell() {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // SSE stream for real-time updates
+  // SSE stream for real-time updates (with backoff, max 5 retries)
   useEffect(() => {
     let eventSource: EventSource | null = null;
     let retryTimeout: ReturnType<typeof setTimeout>;
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
 
     function connect() {
+      if (retryCount >= MAX_RETRIES) return;
+
       eventSource = new EventSource("/api/notifications/stream");
+
+      eventSource.addEventListener("connected", () => {
+        retryCount = 0; // Reset on successful connection
+      });
 
       eventSource.addEventListener("notification", (event) => {
         try {
@@ -56,8 +64,12 @@ export function NotificationBell() {
 
       eventSource.onerror = () => {
         eventSource?.close();
-        // Reconnect after 5s
-        retryTimeout = setTimeout(connect, 5000);
+        retryCount++;
+        if (retryCount < MAX_RETRIES) {
+          // Exponential backoff: 5s, 10s, 20s, 40s
+          const delay = 5000 * Math.pow(2, retryCount - 1);
+          retryTimeout = setTimeout(connect, delay);
+        }
       };
     }
 
