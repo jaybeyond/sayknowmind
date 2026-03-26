@@ -934,6 +934,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Final guard — should never reach here, but satisfies TypeScript
+  if (!userId) {
+    return NextResponse.json({ ok: true });
+  }
+
   // ── URL Ingestion (direct DB call) ──────────────────────
 
   if (msgType === "url") {
