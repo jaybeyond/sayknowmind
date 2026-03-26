@@ -236,7 +236,17 @@
     "tabIntegrations": "連携",
     "tabServices": "サービス",
     "summaryPrompts": "要約プロンプト",
-    "summaryPromptsDesc": "AI が保存コンテンツを要約する方法をカスタマイズ"
+    "summaryPromptsDesc": "AI が保存コンテンツを要約する方法をカスタマイズ",
+    "cloudModeNote": "クラウドモード — AI 機能は外部 API を使用します。",
+    "desktopModeNote": "デスクトップモード — 以下からモデルをダウンロードしてローカル AI を使用します。",
+    "embeddingProvider": "埋め込みプロバイダー",
+    "embeddingProviderDesc": "文書埋め込み（ベクトル検索）に使用するプロバイダーを選択",
+    "embeddingModel": "埋め込みモデル",
+    "embeddingKeyNote": "上記の対応するクラウドプロバイダーの API キーを使用します。",
+    "testConnection": "接続テスト",
+    "embeddingNoKey": "先にこのプロバイダーの API キーを設定してください",
+    "embeddingTestOk": "埋め込みプロバイダーの接続に成功しました",
+    "embeddingTestFail": "埋め込みプロバイダーのテストに失敗しました"
   },
   "profile": {
     "displayName": "表示名",
@@ -455,6 +465,13 @@
     "enabled": "Ollama が有効になりました",
     "disabled": "Ollama が無効になりました",
     "toggleFailed": "Ollama の切り替えに失敗しました",
-    "disabledHelp": "上の Ollama を有効にすると、ローカルで AI モデルを実行できます。クラウドプロバイダーは AI タブから引き続き利用できます。"
+    "disabledHelp": "上の Ollama を有効にすると、ローカルで AI モデルを実行できます。クラウドプロバイダーは AI タブから引き続き利用できます。",
+    "setupGuide": "デスクトップセットアップガイド",
+    "setupStep1": "ollama.com から Ollama をダウンロードしてインストール",
+    "setupStep2": "'ollama serve' を実行してローカルサーバーを起動",
+    "setupStep3": "上の更新をクリックして Ollama を検出し、必要なモデルをダウンロード",
+    "downloadOllama": "Ollama をダウンロード",
+    "requiredModels": "必須モデル",
+    "notSet": "未設定"
   }
 }

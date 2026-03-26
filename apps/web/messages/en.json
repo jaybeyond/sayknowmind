@@ -236,7 +236,17 @@
     "tabIntegrations": "Integrations",
     "tabServices": "Services",
     "summaryPrompts": "Summary Prompts",
-    "summaryPromptsDesc": "Customize how AI summarizes your saved content"
+    "summaryPromptsDesc": "Customize how AI summarizes your saved content",
+    "cloudModeNote": "Running in cloud mode — AI features use external APIs.",
+    "desktopModeNote": "Running in desktop mode — download models below for local AI.",
+    "embeddingProvider": "Embedding Provider",
+    "embeddingProviderDesc": "Select the provider for document embedding (vector search)",
+    "embeddingModel": "Embedding Model",
+    "embeddingKeyNote": "Uses the API key from the matching cloud provider above.",
+    "testConnection": "Test Connection",
+    "embeddingNoKey": "Set the API key for this provider first",
+    "embeddingTestOk": "Embedding provider connected successfully",
+    "embeddingTestFail": "Embedding provider test failed"
   },
   "profile": {
     "displayName": "Display name",
@@ -455,6 +465,13 @@
     "enabled": "Ollama enabled",
     "disabled": "Ollama disabled",
     "toggleFailed": "Failed to toggle Ollama",
-    "disabledHelp": "Enable Ollama above to run AI models locally. Cloud providers are still available in the AI tab."
+    "disabledHelp": "Enable Ollama above to run AI models locally. Cloud providers are still available in the AI tab.",
+    "setupGuide": "Desktop Setup Guide",
+    "setupStep1": "Download and install Ollama from ollama.com",
+    "setupStep2": "Run 'ollama serve' to start the local server",
+    "setupStep3": "Click Refresh above to detect Ollama, then download required models",
+    "downloadOllama": "Download Ollama",
+    "requiredModels": "Required Models",
+    "notSet": "Not set"
   }
 }

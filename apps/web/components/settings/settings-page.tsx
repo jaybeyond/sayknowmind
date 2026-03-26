@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { ProfileTab } from "./profile-tab";
 import { AppearanceTab } from "./appearance-tab";
@@ -11,6 +11,7 @@ import { PromptEditor } from "./prompt-editor";
 import { IntegrationsTab } from "./integrations-tab";
 import { ServicesTab } from "./services-tab";
 import { useTranslation } from "@/lib/i18n";
+import { isCloud, isDesktop } from "@/lib/environment";
 
 type TabId = "profile" | "appearance" | "ai" | "models" | "prompts" | "privacy" | "integrations" | "services";
 
@@ -18,16 +19,23 @@ export function SettingsPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
-  const tabs = [
-    { id: "profile" as TabId, label: t("settings.tabProfile") },
-    { id: "appearance" as TabId, label: t("settings.tabAppearance") },
-    { id: "ai" as TabId, label: t("settings.tabAi") },
-    { id: "models" as TabId, label: t("settings.tabModels") },
-    { id: "prompts" as TabId, label: t("settings.tabPrompts") },
-    { id: "privacy" as TabId, label: t("settings.tabPrivacy") },
-    { id: "integrations" as TabId, label: t("settings.tabIntegrations") },
-    { id: "services" as TabId, label: t("settings.tabServices") },
-  ];
+  const cloud = isCloud();
+  const desktop = isDesktop();
+
+  const tabs = useMemo(() => {
+    const all: { id: TabId; label: string }[] = [
+      { id: "profile", label: t("settings.tabProfile") },
+      { id: "appearance", label: t("settings.tabAppearance") },
+      { id: "ai", label: t("settings.tabAi") },
+      // Models tab only shown in desktop mode or when not explicitly cloud
+      ...(!cloud ? [{ id: "models" as TabId, label: t("settings.tabModels") }] : []),
+      { id: "prompts", label: t("settings.tabPrompts") },
+      { id: "privacy", label: t("settings.tabPrivacy") },
+      { id: "integrations", label: t("settings.tabIntegrations") },
+      { id: "services", label: t("settings.tabServices") },
+    ];
+    return all;
+  }, [t, cloud]);
 
   return (
     <main className="flex-1 overflow-auto">
@@ -56,10 +64,20 @@ export function SettingsPage() {
           ))}
         </div>
 
+        {/* Environment mode banner */}
+        {(cloud || desktop) && (
+          <div className={cn(
+            "rounded-lg px-3 py-2 text-xs font-medium",
+            cloud ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          )}>
+            {cloud ? t("settings.cloudModeNote") : t("settings.desktopModeNote")}
+          </div>
+        )}
+
         {activeTab === "profile" && <ProfileTab />}
         {activeTab === "appearance" && <AppearanceTab />}
         {activeTab === "ai" && <AITab />}
-        {activeTab === "models" && <ModelsTab />}
+        {activeTab === "models" && !cloud && <ModelsTab />}
         {activeTab === "prompts" && (
           <div className="space-y-4">
             <div>

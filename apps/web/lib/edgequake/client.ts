@@ -189,3 +189,66 @@ export async function healthCheck(): Promise<boolean> {
     return false;
   }
 }
+
+// ── Embedding Provider Runtime Switching ─────────────────────
+
+export interface EmbeddingProviderConfig {
+  provider: string;   // "ollama" | "openai" | "gemini" | "voyage" | "cohere"
+  model: string;
+  apiKey?: string;
+}
+
+/**
+ * Switch EdgeQuake's embedding provider at runtime via workspace API.
+ * This updates the active workspace config so new indexing uses the new provider.
+ */
+export async function updateEmbeddingProvider(
+  config: EmbeddingProviderConfig,
+): Promise<void> {
+  const response = await fetch(
+    `${EDGEQUAKE_URL}/api/v1/workspaces/${EDGEQUAKE_WORKSPACE_ID}`,
+    {
+      method: "PUT",
+      headers: headers(),
+      body: JSON.stringify({
+        embedding_provider: config.provider,
+        embedding_model: config.model,
+        ...(config.apiKey ? { embedding_api_key: config.apiKey } : {}),
+      }),
+      signal: AbortSignal.timeout(EDGEQUAKE_TIMEOUT),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`EdgeQuake embedding provider update failed: ${response.status}`);
+  }
+}
+
+/** Test whether an embedding provider config is valid by pinging EdgeQuake */
+export async function testEmbeddingProvider(
+  config: EmbeddingProviderConfig,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const response = await fetch(
+      `${EDGEQUAKE_URL}/api/v1/embeddings/test`,
+      {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          provider: config.provider,
+          model: config.model,
+          api_key: config.apiKey,
+          text: "hello",
+        }),
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return { ok: false, error: text || `HTTP ${response.status}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
+  }
+}

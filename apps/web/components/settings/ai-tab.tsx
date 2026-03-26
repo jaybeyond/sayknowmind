@@ -16,9 +16,11 @@ import {
   Zap,
   Loader2,
   RefreshCw,
+  Database,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
+import { isCloud } from "@/lib/environment";
 
 // ─── Provider definitions ────────────────────────────────────
 
@@ -406,12 +408,34 @@ function ProviderCard({
 
 // ─── Main component ──────────────────────────────────────────
 
+// ─── Embedding provider definitions (cloud mode) ────────────
+
+interface EmbeddingDef {
+  id: string;
+  name: string;
+  models: string[];
+  defaultModel: string;
+}
+
+const EMBEDDING_PROVIDERS: EmbeddingDef[] = [
+  { id: "openai", name: "OpenAI", models: ["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"], defaultModel: "text-embedding-3-small" },
+  { id: "gemini", name: "Google Gemini", models: ["text-embedding-004", "embedding-001"], defaultModel: "text-embedding-004" },
+  { id: "voyage", name: "Voyage AI", models: ["voyage-3", "voyage-3-lite", "voyage-code-3"], defaultModel: "voyage-3" },
+  { id: "cohere", name: "Cohere", models: ["embed-v4.0", "embed-multilingual-v3.0", "embed-english-v3.0"], defaultModel: "embed-v4.0" },
+];
+
 export function AITab() {
   const { t } = useTranslation();
+  const cloudMode = isCloud();
   const [chatMode, setChatMode] = useState("simple");
   const [keyValues, setKeyValues] = useState<Record<string, string>>({});
   const [activeProviderId, setActiveProviderId] = useState<string>("");
   const [modelValues, setModelValues] = useState<Record<string, string>>({});
+
+  // Embedding provider state (cloud mode)
+  const [embeddingProvider, setEmbeddingProvider] = useState("openai");
+  const [embeddingModel, setEmbeddingModel] = useState("text-embedding-3-small");
+  const [embeddingTesting, setEmbeddingTesting] = useState(false);
 
   const chatModes = [
     { id: "simple", label: t("chat.simpleMode"), description: t("chat.simpleModeDesc"), icon: Bot },
@@ -439,6 +463,10 @@ export function AITab() {
       }
       setKeyValues(loaded);
       setModelValues(models);
+
+      // Load embedding config
+      setEmbeddingProvider(localStorage.getItem("sayknowmind-embedding-provider") ?? "openai");
+      setEmbeddingModel(localStorage.getItem("sayknowmind-embedding-model") ?? "text-embedding-3-small");
     };
     syncFromStorage();
   }, []);
@@ -461,6 +489,39 @@ export function AITab() {
 
   const handleModelChange = (providerId: string, value: string) => {
     setModelValues((prev) => ({ ...prev, [providerId]: value }));
+  };
+
+  const handleTestEmbedding = async () => {
+    // Find the API key for the selected embedding provider
+    const providerKeyMap: Record<string, string> = {
+      openai: "sayknowmind-openai-key",
+      gemini: "sayknowmind-google-key",
+      voyage: "sayknowmind-voyage-key",
+      cohere: "sayknowmind-cohere-key",
+    };
+    const apiKey = keyValues[providerKeyMap[embeddingProvider] ?? ""] ?? "";
+    if (!apiKey) {
+      toast.error(t("settings.embeddingNoKey"));
+      return;
+    }
+    setEmbeddingTesting(true);
+    try {
+      const res = await fetch("/api/models/embedding/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: embeddingProvider, model: embeddingModel, apiKey }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success(t("settings.embeddingTestOk"));
+      } else {
+        toast.error(data.error ?? t("settings.embeddingTestFail"));
+      }
+    } catch {
+      toast.error(t("settings.embeddingTestFail"));
+    } finally {
+      setEmbeddingTesting(false);
+    }
   };
 
   const handleSave = async () => {
@@ -486,6 +547,10 @@ export function AITab() {
       localStorage.removeItem("sayknowmind-active-provider");
     }
 
+    // Save embedding config
+    localStorage.setItem("sayknowmind-embedding-provider", embeddingProvider);
+    localStorage.setItem("sayknowmind-embedding-model", embeddingModel);
+
     // Sync provider configs to server (for ingestion pipeline)
     try {
       const serverProviders = providers
@@ -504,6 +569,7 @@ export function AITab() {
         body: JSON.stringify({
           activeProviderId,
           providers: serverProviders,
+          embedding: cloudMode ? { provider: embeddingProvider, model: embeddingModel } : undefined,
         }),
       });
     } catch {
@@ -585,6 +651,76 @@ export function AITab() {
           ))}
         </div>
       </div>
+
+      {/* Embedding Provider — cloud mode only */}
+      {cloudMode && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Database className="size-4 text-muted-foreground" />
+            <div>
+              <h3 className="text-sm font-medium">{t("settings.embeddingProvider")}</h3>
+              <p className="text-xs text-muted-foreground">
+                {t("settings.embeddingProviderDesc")}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border p-4 space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                {t("settings.embeddingProvider")}
+              </label>
+              <select
+                value={embeddingProvider}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setEmbeddingProvider(id);
+                  const def = EMBEDDING_PROVIDERS.find((p) => p.id === id);
+                  if (def) setEmbeddingModel(def.defaultModel);
+                }}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {EMBEDDING_PROVIDERS.map((ep) => (
+                  <option key={ep.id} value={ep.id}>{ep.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                {t("settings.embeddingModel")}
+              </label>
+              <select
+                value={embeddingModel}
+                onChange={(e) => setEmbeddingModel(e.target.value)}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {(EMBEDDING_PROVIDERS.find((p) => p.id === embeddingProvider)?.models ?? []).map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground">
+              {t("settings.embeddingKeyNote")}
+            </p>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestEmbedding}
+              disabled={embeddingTesting}
+            >
+              {embeddingTesting ? (
+                <Loader2 className="size-3.5 mr-1 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3.5 mr-1" />
+              )}
+              {t("settings.testConnection")}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Server-side notice */}
       <div className="rounded-xl border border-dashed border-muted-foreground/30 p-4 space-y-2">

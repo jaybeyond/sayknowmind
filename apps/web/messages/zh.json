@@ -236,7 +236,17 @@
     "tabIntegrations": "集成",
     "tabServices": "服务",
     "summaryPrompts": "摘要提示词",
-    "summaryPromptsDesc": "自定义 AI 总结保存内容的方式"
+    "summaryPromptsDesc": "自定义 AI 总结保存内容的方式",
+    "cloudModeNote": "云端模式 — AI 功能使用外部 API。",
+    "desktopModeNote": "桌面模式 — 请下载模型以使用本地 AI。",
+    "embeddingProvider": "嵌入提供商",
+    "embeddingProviderDesc": "选择文档嵌入（向量搜索）使用的提供商",
+    "embeddingModel": "嵌入模型",
+    "embeddingKeyNote": "使用上方对应云端提供商的 API 密钥。",
+    "testConnection": "测试连接",
+    "embeddingNoKey": "请先设置该提供商的 API 密钥",
+    "embeddingTestOk": "嵌入提供商连接成功",
+    "embeddingTestFail": "嵌入提供商测试失败"
   },
   "profile": {
     "displayName": "显示名称",
@@ -455,6 +465,13 @@
     "enabled": "Ollama 已启用",
     "disabled": "Ollama 已禁用",
     "toggleFailed": "切换 Ollama 失败",
-    "disabledHelp": "启用上方的 Ollama 以在本地运行 AI 模型。云服务商仍可在 AI 选项卡中使用。"
+    "disabledHelp": "启用上方的 Ollama 以在本地运行 AI 模型。云服务商仍可在 AI 选项卡中使用。",
+    "setupGuide": "桌面设置指南",
+    "setupStep1": "从 ollama.com 下载并安装 Ollama",
+    "setupStep2": "运行 'ollama serve' 启动本地服务器",
+    "setupStep3": "点击上方刷新检测 Ollama，然后下载所需模型",
+    "downloadOllama": "下载 Ollama",
+    "requiredModels": "必需模型",
+    "notSet": "未设置"
   }
 }

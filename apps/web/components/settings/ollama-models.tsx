@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
+import { isDesktop } from "@/lib/environment";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -538,12 +539,72 @@ export function OllamaModels() {
         </div>
       )}
 
-      {/* Offline help */}
+      {/* Offline help / Desktop setup guide */}
       {enabled && online === false && (
-        <div className="rounded-lg border border-dashed border-muted-foreground/30 p-3">
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {t("ollama.installHelp")}
-          </p>
+        <div className="rounded-lg border border-dashed border-muted-foreground/30 p-3 space-y-3">
+          {isDesktop() && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">{t("ollama.setupGuide")}</h4>
+              <ol className="text-xs text-muted-foreground leading-relaxed space-y-1 list-decimal list-inside">
+                <li>{t("ollama.setupStep1")}</li>
+                <li>{t("ollama.setupStep2")}</li>
+                <li>{t("ollama.setupStep3")}</li>
+              </ol>
+              <div className="flex gap-2 pt-1">
+                <a
+                  href="https://ollama.com/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  <Download className="size-3" />
+                  {t("ollama.downloadOllama")}
+                </a>
+              </div>
+            </div>
+          )}
+          {!isDesktop() && (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("ollama.installHelp")}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Required models checklist (desktop mode) */}
+      {enabled && online && isDesktop() && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+          <h4 className="text-xs font-medium">{t("ollama.requiredModels")}</h4>
+          <div className="space-y-1">
+            {[
+              { role: "chat", model: config.chat, required: true },
+              { role: "embedding", model: config.embedding, required: true },
+              { role: "ocr", model: config.ocr, required: false },
+            ].map(({ role, model, required }) => {
+              const installed = model && isInstalled(model);
+              return (
+                <div key={role} className="flex items-center gap-2 text-xs">
+                  {installed ? (
+                    <CheckCircle2 className="size-3.5 text-green-500" />
+                  ) : (
+                    <XCircle className={cn("size-3.5", required ? "text-destructive" : "text-muted-foreground")} />
+                  )}
+                  <span className={cn(installed ? "text-foreground" : "text-muted-foreground")}>
+                    {t(`ollama.role.${role}`)}: {model || t("ollama.notSet")}
+                  </span>
+                  {!installed && model && (
+                    <button
+                      onClick={() => handlePull(model)}
+                      disabled={!!pulling}
+                      className="text-primary hover:underline text-[11px]"
+                    >
+                      {t("ollama.pull")}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
