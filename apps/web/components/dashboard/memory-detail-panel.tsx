@@ -35,15 +35,16 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
   const { t } = useTranslation();
   const [relatedDocs, setRelatedDocs] = useState<RelatedDoc[]>([]);
 
+  const memoryId = memory?.id;
   useEffect(() => {
-    if (!memory) { setRelatedDocs([]); return; }
+    if (!memoryId) return;
     let cancelled = false;
-    fetch(`/api/documents/${memory.id}/related`)
+    fetch(`/api/documents/${memoryId}/related`)
       .then((r) => r.ok ? r.json() : { relations: [] })
       .then((data) => { if (!cancelled) setRelatedDocs(data.relations ?? []); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [memory?.id]);
+      .catch(() => { if (!cancelled) setRelatedDocs([]); });
+    return () => { cancelled = true; setRelatedDocs([]); };
+  }, [memoryId]);
 
   if (!memory) return null;
 

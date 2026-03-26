@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import en from "@/messages/en.json";
@@ -74,8 +74,7 @@ function getNestedValue(obj: Record<string, unknown>, path: string): string {
 export function useTranslation() {
   const { locale: storeLocale, setLocale } = useI18nStore();
   // Delay using persisted locale until after hydration to avoid server/client mismatch
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
 
   const locale = mounted ? storeLocale : "en";
   const t = (key: string): string => getNestedValue(messages[locale] as unknown as Record<string, unknown>, key);
