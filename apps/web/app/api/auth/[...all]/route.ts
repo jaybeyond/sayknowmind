@@ -28,7 +28,15 @@ export async function GET(req: NextRequest) {
       { status: 503 },
     );
   }
-  return handler.GET(req);
+  try {
+    return await handler.GET(req);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message + "\n" + e.stack : String(e);
+    return NextResponse.json(
+      { error: "Auth GET handler error", detail: msg },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -39,5 +47,13 @@ export async function POST(req: NextRequest) {
       { status: 503 },
     );
   }
-  return handler.POST(req);
+  try {
+    return await handler.POST(req);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message + "\n" + e.stack : String(e);
+    return NextResponse.json(
+      { error: "Auth POST handler error", detail: msg },
+      { status: 500 },
+    );
+  }
 }
