@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import en from "@/messages/en.json";
@@ -71,7 +72,12 @@ function getNestedValue(obj: Record<string, unknown>, path: string): string {
  *   t("sidebar.favorites") // "Favorites" or "즐겨찾기"
  */
 export function useTranslation() {
-  const { locale, setLocale } = useI18nStore();
+  const { locale: storeLocale, setLocale } = useI18nStore();
+  // Delay using persisted locale until after hydration to avoid server/client mismatch
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const locale = mounted ? storeLocale : "en";
   const t = (key: string): string => getNestedValue(messages[locale] as unknown as Record<string, unknown>, key);
   return { t, locale, setLocale };
 }
