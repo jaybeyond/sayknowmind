@@ -3,6 +3,8 @@ import { MemoryHeader } from "@/components/dashboard/header";
 import { ArchiveContent } from "@/components/dashboard/archive-content";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
+export const dynamic = "force-dynamic";
+
 export default function ArchivePage() {
   return (
     <SidebarProvider className="bg-sidebar">

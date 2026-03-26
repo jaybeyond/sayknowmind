@@ -3,6 +3,8 @@ import { MemoryHeader } from "@/components/dashboard/header";
 import { MemoryContent } from "@/components/dashboard/content";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
+export const dynamic = "force-dynamic";
+
 export default function MemoryPage() {
   return (
     <SidebarProvider className="bg-sidebar">

@@ -3,6 +3,8 @@ import { MemoryHeader } from "@/components/dashboard/header";
 import { FavoritesContent } from "@/components/dashboard/favorites-content";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
+export const dynamic = "force-dynamic";
+
 export default function FavoritesPage() {
   return (
     <SidebarProvider className="bg-sidebar">

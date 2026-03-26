@@ -2,6 +2,8 @@ import { MemorySidebar } from "@/components/dashboard/sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { CategoryManager } from "@/components/categories/category-manager";
 
+export const dynamic = "force-dynamic";
+
 export default function CategoriesPage() {
   return (
     <SidebarProvider className="bg-sidebar">

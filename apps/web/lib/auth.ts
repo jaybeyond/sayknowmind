@@ -10,6 +10,8 @@ const pool = new Pool({
 
 export const auth = betterAuth({
   database: pool,
+  secret: process.env.BETTER_AUTH_SECRET || "build-time-placeholder-do-not-use",
+  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
 
   // Email & password authentication
   emailAndPassword: {
