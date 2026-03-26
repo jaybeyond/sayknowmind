@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { getNotifications, getUnreadCount, markAsRead, deleteNotifications } from "@/lib/notifications";
 
+export const dynamic = "force-dynamic";
+
 /** GET /api/notifications — list notifications */
 export async function GET(request: NextRequest) {
-  const userId = await getUserIdFromRequest();
+  let userId: string | null = null;
+  try { userId = await getUserIdFromRequest(); } catch { /* auth error */ }
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const unreadOnly = request.nextUrl.searchParams.get("unread") === "true";

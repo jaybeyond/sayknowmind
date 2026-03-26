@@ -1,9 +1,16 @@
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { addSSEListener } from "@/lib/notifications";
 
+export const dynamic = "force-dynamic";
+
 /** GET /api/notifications/stream — SSE real-time notification stream */
 export async function GET() {
-  const userId = await getUserIdFromRequest();
+  let userId: string | null = null;
+  try {
+    userId = await getUserIdFromRequest();
+  } catch {
+    return new Response("Auth error", { status: 401 });
+  }
   if (!userId) {
     return new Response("Unauthorized", { status: 401 });
   }
