@@ -255,7 +255,14 @@
     "emailNote": "이메일은 변경할 수 없습니다",
     "noName": "이름 미설정",
     "updated": "프로필이 업데이트되었습니다",
-    "saveFailed": "저장에 실패했습니다"
+    "saveFailed": "저장에 실패했습니다",
+    "changePassword": "비밀번호 변경",
+    "currentPassword": "현재 비밀번호",
+    "newPassword": "새 비밀번호",
+    "confirmPassword": "새 비밀번호 확인",
+    "passwordChanged": "비밀번호가 변경되었습니다",
+    "passwordChangeFailed": "비밀번호 변경에 실패했습니다",
+    "passwordTooShort": "비밀번호는 최소 8자 이상이어야 합니다"
   },
   "ai": {
     "cloudProviders": "클라우드 제공업체",

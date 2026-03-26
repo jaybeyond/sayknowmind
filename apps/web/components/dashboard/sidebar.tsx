@@ -180,7 +180,7 @@ export function MemorySidebar({
               </span>
               <ChevronDown className="size-3 text-muted-foreground" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuContent side="right" align="start" className="w-56">
               <DropdownMenuItem>
                 <div className="size-5 rounded-full bg-linear-to-br from-blue-400 via-indigo-500 to-violet-500 mr-2" />
                 {userName || t("app.title")}

@@ -255,7 +255,14 @@
     "emailNote": "Email cannot be changed",
     "noName": "No name set",
     "updated": "Profile updated",
-    "saveFailed": "Failed to save"
+    "saveFailed": "Failed to save",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "passwordChanged": "Password changed successfully",
+    "passwordChangeFailed": "Failed to change password",
+    "passwordTooShort": "Password must be at least 8 characters"
   },
   "ai": {
     "cloudProviders": "Cloud Providers",

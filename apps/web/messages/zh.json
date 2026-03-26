@@ -255,7 +255,14 @@
     "emailNote": "邮箱不可更改",
     "noName": "未设置名称",
     "updated": "个人资料已更新",
-    "saveFailed": "保存失败"
+    "saveFailed": "保存失败",
+    "changePassword": "修改密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "confirmPassword": "确认新密码",
+    "passwordChanged": "密码修改成功",
+    "passwordChangeFailed": "密码修改失败",
+    "passwordTooShort": "密码至少需要8个字符"
   },
   "ai": {
     "cloudProviders": "云端服务商",
