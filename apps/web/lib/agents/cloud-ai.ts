@@ -12,14 +12,6 @@ import { getOrderedProviders, type ProviderEntry } from "@/lib/provider-config";
 const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 const AI_TIMEOUT = 60_000;
 
-/**
- * HTTP status codes that trigger AI server fallback.
- * 400 = bad request (model not found, etc.)
- * 402 = payment required (quota exhausted)
- * 429 = rate limited
- */
-const FALLBACK_CODES = new Set([400, 402, 429]);
-
 export interface AiCallOptions {
   system: string;
   message: string;
@@ -141,14 +133,11 @@ async function callAiServer(
  * Cloud-first AI call with AI server fallback.
  *
  * Tries each configured cloud provider in order (active first).
- * Falls back to AI server cascade when cloud returns 400, 402, or 429
- * (quota/rate-limit issues), or when no providers are configured.
+ * Always falls back to AI server if all cloud providers fail or none configured.
  */
 export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
   const { system, message, images, timeout = AI_TIMEOUT } = opts;
   const providers = opts.providers ?? getOrderedProviders();
-
-  let shouldFallback = false;
 
   // Try cloud providers in order
   for (const provider of providers) {
@@ -156,28 +145,17 @@ export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
       return await callCloudProvider(provider, system, message, timeout, images);
     } catch (err) {
       console.warn(`[cloud-ai] ${provider.id} failed:`, (err as Error).message);
-      if (err instanceof CloudHttpError && FALLBACK_CODES.has(err.status)) {
-        shouldFallback = true;
-      }
     }
   }
 
-  // No providers configured → use AI server
-  if (!shouldFallback) {
-    if (providers.length > 0) {
-      console.warn("[cloud-ai] Cloud providers failed with non-recoverable errors — skipping AI server fallback");
-    } else {
-      shouldFallback = true;
-    }
+  // All cloud providers failed (or none configured) → always fall back to AI server
+  if (providers.length > 0) {
+    console.warn("[cloud-ai] All cloud providers failed — falling back to AI server");
   }
-
-  if (shouldFallback) {
-    console.warn(`[cloud-ai] Falling back to AI server cascade`);
-    try {
-      return await callAiServer(system, message, timeout, images);
-    } catch (err) {
-      console.error("[cloud-ai] AI server also failed:", (err as Error).message);
-    }
+  try {
+    return await callAiServer(system, message, timeout, images);
+  } catch (err) {
+    console.error("[cloud-ai] AI server also failed:", (err as Error).message);
   }
 
   return "";
