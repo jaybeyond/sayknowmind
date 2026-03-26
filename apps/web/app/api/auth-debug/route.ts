@@ -51,5 +51,22 @@ export async function GET(req: NextRequest) {
     checks.authHandler = "FAIL: " + e.message + "\n" + e.stack;
   }
 
+  // Test POST sign-up
+  try {
+    const { auth } = await import("@/lib/auth");
+    const signupUrl = (process.env.BETTER_AUTH_URL || "http://localhost:3000") + "/api/auth/sign-up/email";
+    const signupReq = new Request(signupUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "debug-test@test.com", password: "DebugTest123!", name: "Debug" }),
+    });
+    const signupRes = await auth.handler(signupReq);
+    checks.signupStatus = String(signupRes.status);
+    const signupBody = await signupRes.text();
+    checks.signupBody = signupBody.slice(0, 500);
+  } catch (e: any) {
+    checks.signupError = e.message + "\n" + (e.stack ?? "").slice(0, 500);
+  }
+
   return NextResponse.json(checks, { status: 200 });
 }
