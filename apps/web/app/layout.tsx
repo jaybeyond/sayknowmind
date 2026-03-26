@@ -39,11 +39,11 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} antialiased font-sans`}
         style={{ fontFamily: "var(--font-sans), Satoshi, sans-serif" }}
+        suppressHydrationWarning
       >
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
-          enableSystem
           disableTransitionOnChange
         >
           <OfflineBanner />
