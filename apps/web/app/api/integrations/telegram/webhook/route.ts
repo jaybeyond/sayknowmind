@@ -13,8 +13,8 @@ import {
   type TelegramUpdate,
   type TelegramInlineKeyboardMarkup,
 } from "@/lib/integrations/telegram";
-import { insertDocument, assignDocumentCategory } from "@/lib/ingest/document-store";
-import { createJob } from "@/lib/ingest/job-queue";
+import { insertDocument, assignDocumentCategory, findDuplicateByUrl, findDuplicateByFileName, deduplicateName } from "@/lib/ingest/document-store";
+import { createJob, getJobStatus } from "@/lib/ingest/job-queue";
 import { fetchUrl } from "@/lib/ingest/url-fetcher";
 import { parseFile } from "@/lib/ingest/parsers";
 import { saveFile } from "@/lib/ingest/file-storage";
@@ -70,6 +70,13 @@ const t: Record<string, Record<Lang, string>> = {
   aiUnavailable:      { en: "AI service is temporarily unavailable. Please try again shortly.", ko: "AI 서비스에 일시적으로 연결할 수 없습니다. 잠시 후 다시 시도해주세요.", ja: "AIサービスに一時的に接続できません。しばらくしてからもう一度お試しください。", zh: "AI服务暂时无法连接。请稍后再试。" },
   aiError:            { en: "❌ An error occurred. Please try again.", ko: "❌ 처리 중 오류가 발생했습니다. 다시 시도해주세요.", ja: "❌ エラーが発生しました。もう一度お試しください。", zh: "❌ 发生错误。请重试。" },
   imageLabel:         { en: "Telegram image", ko: "텔레그램 이미지", ja: "Telegram画像", zh: "Telegram图片" },
+  jobDone:            { en: "✅ AI analysis complete for <b>{title}</b>:\n{summary}", ko: "✅ <b>{title}</b> AI 분석 완료:\n{summary}", ja: "✅ <b>{title}</b> AI分析完了:\n{summary}", zh: "✅ <b>{title}</b> AI分析完成:\n{summary}" },
+  jobFailed:          { en: "⚠️ AI analysis failed for <b>{title}</b>. The document is saved but not summarized.", ko: "⚠️ <b>{title}</b> AI 분석 실패. 문서는 저장되었으나 요약되지 않았습니다.", ja: "⚠️ <b>{title}</b> AI分析に失敗。ドキュメントは保存済みですが要約されていません。", zh: "⚠️ <b>{title}</b> AI分析失败。文档已保存但未生成摘要。" },
+  dupFound:           { en: "⚠️ Already saved: <b>{title}</b>\nSave a copy with a different name?", ko: "⚠️ 이미 저장됨: <b>{title}</b>\n다른 이름으로 복사본을 저장할까요?", ja: "⚠️ 既に保存済み: <b>{title}</b>\n別名でコピーを保存しますか？", zh: "⚠️ 已存在: <b>{title}</b>\n用不同名称保存副本？" },
+  dupSaveBtn:         { en: "Save copy ✅", ko: "복사본 저장 ✅", ja: "コピー保存 ✅", zh: "保存副本 ✅" },
+  dupCancelBtn:       { en: "Cancel ❌", ko: "취소 ❌", ja: "キャンセル ❌", zh: "取消 ❌" },
+  dupSaved:           { en: "✅ Copy saved: <b>{title}</b>", ko: "✅ 복사본 저장됨: <b>{title}</b>", ja: "✅ コピー保存: <b>{title}</b>", zh: "✅ 副本已保存: <b>{title}</b>" },
+  dupCancelled:       { en: "❌ Cancelled — not saved.", ko: "❌ 취소됨 — 저장하지 않았습니다.", ja: "❌ キャンセル — 保存されませんでした。", zh: "❌ 已取消 — 未保存。" },
 };
 
 /** Get a translated string, replacing {key} placeholders. */
@@ -79,6 +86,45 @@ function msg(key: string, lang: Lang, vars?: Record<string, string | number>): s
   return Object.entries(vars).reduce(
     (s, [k, v]) => s.split(`{${k}}`).join(String(v)), template,
   );
+}
+
+// ── Pending Duplicate Saves (in-memory, 5-min TTL) ──────────
+
+import { randomBytes } from "node:crypto";
+
+interface PendingDup {
+  type: "url" | "photo" | "document";
+  userId: string;
+  lang: Lang;
+  url?: string;
+  fileId?: string;
+  fileName?: string;
+  caption?: string;
+  mimeType?: string;
+  existingTitle: string;
+  expiresAt: number;
+}
+
+const pendingDups = new Map<string, PendingDup>();
+
+function storePendingDup(data: Omit<PendingDup, "expiresAt">): string {
+  // Clean expired
+  const now = Date.now();
+  for (const [k, v] of pendingDups) {
+    if (v.expiresAt < now) pendingDups.delete(k);
+  }
+  const id = randomBytes(4).toString("hex");
+  pendingDups.set(id, { ...data, expiresAt: now + 5 * 60_000 });
+  return id;
+}
+
+function buildDupKeyboard(dupId: string, lang: Lang): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[
+      { text: msg("dupSaveBtn", lang), callback_data: `dup:y:${dupId}` },
+      { text: msg("dupCancelBtn", lang), callback_data: `dup:n:${dupId}` },
+    ]],
+  };
 }
 
 // ── Bot Token Resolution ─────────────────────────────────────
@@ -97,16 +143,27 @@ async function getBotToken(): Promise<string | null> {
 
 async function getBotTokenForTelegramUser(telegramUserId: string): Promise<{ token: string | null; lang: Lang }> {
   try {
+    // Join with user table to get the browser-set locale as primary language source
     const result = await pool.query(
-      `SELECT bot_token, lang FROM channel_links
-       WHERE channel = 'telegram' AND channel_user_id = $1`,
+      `SELECT cl.bot_token, cl.user_id, u.locale, cl.lang
+       FROM channel_links cl
+       LEFT JOIN "user" u ON u.id = cl.user_id
+       WHERE cl.channel = 'telegram' AND cl.channel_user_id = $1`,
       [telegramUserId],
     );
     const row = result.rows[0];
     if (row) {
+      // Priority: user.locale (browser setting) > channel_links.lang (telegram /lang) > "en"
+      const userLocale = row.locale as string | null;
+      const channelLang = row.lang as string | null;
+      const lang = (
+        userLocale && SUPPORTED_LANGS.includes(userLocale as Lang) ? userLocale
+        : channelLang && SUPPORTED_LANGS.includes(channelLang as Lang) ? channelLang
+        : "en"
+      ) as Lang;
       return {
         token: (row.bot_token as string) ?? null,
-        lang: (SUPPORTED_LANGS.includes(row.lang as Lang) ? row.lang : "en") as Lang,
+        lang,
       };
     }
   } catch { /* fallback */ }
@@ -119,21 +176,37 @@ async function getBotTokenForTelegramUser(telegramUserId: string): Promise<{ tok
 async function getUserLang(tgUserId: string): Promise<Lang> {
   try {
     const result = await pool.query(
-      `SELECT lang FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1`,
+      `SELECT u.locale, cl.lang
+       FROM channel_links cl
+       LEFT JOIN "user" u ON u.id = cl.user_id
+       WHERE cl.channel = 'telegram' AND cl.channel_user_id = $1`,
       [tgUserId],
     );
-    const val = result.rows[0]?.lang as string | undefined;
-    if (val && SUPPORTED_LANGS.includes(val as Lang)) return val as Lang;
+    const row = result.rows[0];
+    if (row) {
+      const userLocale = row.locale as string | null;
+      const channelLang = row.lang as string | null;
+      if (userLocale && SUPPORTED_LANGS.includes(userLocale as Lang)) return userLocale as Lang;
+      if (channelLang && SUPPORTED_LANGS.includes(channelLang as Lang)) return channelLang as Lang;
+    }
   } catch { /* default */ }
   return "en";
 }
 
 async function setUserLang(tgUserId: string, lang: Lang): Promise<void> {
-  await pool.query(
+  // Update both channel_links.lang AND user.locale to keep them in sync
+  const result = await pool.query(
     `UPDATE channel_links SET lang = $1, updated_at = NOW()
-     WHERE channel = 'telegram' AND channel_user_id = $2`,
+     WHERE channel = 'telegram' AND channel_user_id = $2 RETURNING user_id`,
     [lang, tgUserId],
   );
+  const userId = result.rows[0]?.user_id;
+  if (userId) {
+    await pool.query(
+      `UPDATE "user" SET locale = $1, "updatedAt" = NOW() WHERE id = $2`,
+      [lang, userId],
+    ).catch(() => {});
+  }
 }
 
 // ── Category Inline Keyboard ─────────────────────────────────
@@ -233,7 +306,7 @@ async function getUserContext(userId: string) {
   };
 }
 
-// ── AI Call (Cloud-first → Ollama fallback) ──────────────────
+// ── AI Call (Cloud-first → AI server fallback) ───────────────
 
 async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
   return await callAiCloudFirst({
@@ -241,6 +314,85 @@ async function callAI(systemPrompt: string, userMessage: string): Promise<string
     message: userMessage,
     timeout: 60_000,
   });
+}
+
+// ── Job Completion Notifier ──────────────────────────────────
+
+/**
+ * Fire-and-forget: polls job status and sends a Telegram notification
+ * when the ingestion job completes (summary, keywords, etc.).
+ */
+function notifyJobCompletion(
+  botToken: string,
+  chatId: number,
+  userId: string,
+  jobId: string,
+  title: string,
+  lang: Lang,
+): void {
+  const MAX_POLLS = 60;   // 60 * 3s = 180s max wait
+  const INTERVAL = 3_000;
+  let polls = 0;
+
+  console.log(`[telegram] Starting job notification polling for ${jobId}`);
+
+  const timer = setInterval(async () => {
+    polls++;
+    try {
+      const status = await getJobStatus(jobId, userId);
+      if (!status) {
+        console.warn(`[telegram] Job ${jobId} not found — stopping poll`);
+        clearInterval(timer);
+        return;
+      }
+
+      if (status.status === "completed") {
+        clearInterval(timer);
+        console.log(`[telegram] Job ${jobId} completed after ${polls * 3}s — sending notification`);
+
+        // Fetch the document summary from AI processing
+        let summary = "";
+        try {
+          const doc = await pool.query(
+            `SELECT LEFT(summary, 300) as excerpt FROM documents WHERE id = (
+              SELECT document_id FROM ingestion_jobs WHERE id = $1
+            )`,
+            [jobId],
+          );
+          const excerpt = doc.rows[0]?.excerpt ?? "";
+          summary = excerpt.length > 200 ? excerpt.slice(0, 200) + "..." : excerpt;
+        } catch { /* non-critical */ }
+
+        // Fallback: use content if no summary
+        if (!summary) {
+          try {
+            const doc = await pool.query(
+              `SELECT LEFT(content, 300) as excerpt FROM documents WHERE id = (
+                SELECT document_id FROM ingestion_jobs WHERE id = $1
+              )`,
+              [jobId],
+            );
+            const excerpt = doc.rows[0]?.excerpt ?? "";
+            summary = excerpt.length > 200 ? excerpt.slice(0, 200) + "..." : excerpt;
+          } catch { /* non-critical */ }
+        }
+
+        await sendMessage(botToken, chatId,
+          msg("jobDone", lang, { title, summary: summary || "✅" }));
+      } else if (status.status === "failed") {
+        clearInterval(timer);
+        console.warn(`[telegram] Job ${jobId} failed: ${status.error ?? "unknown"}`);
+        await sendMessage(botToken, chatId,
+          msg("jobFailed", lang, { title }));
+      } else if (polls >= MAX_POLLS) {
+        clearInterval(timer);
+        console.warn(`[telegram] Job ${jobId} polling timed out after ${MAX_POLLS * 3}s`);
+      }
+    } catch (err) {
+      console.error(`[telegram] Job ${jobId} poll error:`, (err as Error).message);
+      if (polls >= MAX_POLLS) clearInterval(timer);
+    }
+  }, INTERVAL);
 }
 
 // ── Telegram Conversation History ────────────────────────────
@@ -392,37 +544,135 @@ export async function POST(request: NextRequest) {
     }
 
     if (data.startsWith("c:")) {
-      const parts = data.split(":");
-      const doc12 = parts[1];
-      const cat12 = parts[2];
+      try {
+        const parts = data.split(":");
+        const doc12 = parts[1];
+        const cat12 = parts[2];
 
-      const [docResult, catResult] = await Promise.all([
-        pool.query(
-          `SELECT id FROM documents WHERE id LIKE $1 || '%' AND user_id = $2 ORDER BY created_at DESC LIMIT 1`,
-          [doc12, cbUserId],
-        ),
-        pool.query(
-          `SELECT id, name FROM categories WHERE id LIKE $1 || '%' AND user_id = $2 LIMIT 1`,
-          [cat12, cbUserId],
-        ),
-      ]);
+        const [docResult, catResult] = await Promise.all([
+          pool.query(
+            `SELECT id FROM documents WHERE id::text LIKE $1 || '%' AND user_id = $2 ORDER BY created_at DESC LIMIT 1`,
+            [doc12, cbUserId],
+          ),
+          pool.query(
+            `SELECT id, name FROM categories WHERE id::text LIKE $1 || '%' AND user_id = $2 LIMIT 1`,
+            [cat12, cbUserId],
+          ),
+        ]);
 
-      if (docResult.rows[0] && catResult.rows[0]) {
-        await assignDocumentCategory(docResult.rows[0].id, catResult.rows[0].id);
-        await answerCallbackQuery(cbBotToken, cbq.id, `✅ ${catResult.rows[0].name}`);
-        const originalText = cbq.message?.text ?? "✅";
-        await editMessageText(cbBotToken, cbChatId, cbMessageId,
-          `${originalText}\n\n✅ ${msg("savedToCategory", cbLang, { name: catResult.rows[0].name })}`);
-        await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
-      } else {
-        await answerCallbackQuery(cbBotToken, cbq.id, msg("docOrCatNotFound", cbLang));
-        await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
+        if (docResult.rows[0] && catResult.rows[0]) {
+          await assignDocumentCategory(docResult.rows[0].id, catResult.rows[0].id);
+          await answerCallbackQuery(cbBotToken, cbq.id, `✅ ${catResult.rows[0].name}`);
+          const originalText = cbq.message?.text ?? "✅";
+          await editMessageText(cbBotToken, cbChatId, cbMessageId,
+            `${originalText}\n\n✅ ${msg("savedToCategory", cbLang, { name: catResult.rows[0].name })}`);
+          await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
+        } else {
+          await answerCallbackQuery(cbBotToken, cbq.id, msg("docOrCatNotFound", cbLang));
+          await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
+        }
+      } catch (err) {
+        console.error("[telegram] Category callback error:", err);
+        await answerCallbackQuery(cbBotToken, cbq.id, "❌ Error").catch(() => {});
+        await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId).catch(() => {});
       }
     } else if (data.startsWith("skip:")) {
       await answerCallbackQuery(cbBotToken, cbq.id, "✅");
       const originalText = cbq.message?.text ?? "✅";
       await editMessageText(cbBotToken, cbChatId, cbMessageId,
         `${originalText}\n\n⏭ ${msg("skipped", cbLang)}`);
+      await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
+
+    // ── Duplicate: save copy ──
+    } else if (data.startsWith("dup:y:")) {
+      const dupId = data.split(":")[2];
+      const pending = pendingDups.get(dupId);
+      pendingDups.delete(dupId);
+
+      if (!pending || pending.userId !== cbUserId) {
+        await answerCallbackQuery(cbBotToken, cbq.id, "❌ Expired");
+        await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
+        return NextResponse.json({ ok: true });
+      }
+
+      try {
+        const L = pending.lang;
+        let newTitle = deduplicateName(pending.existingTitle);
+
+        if (pending.type === "url" && pending.url) {
+          const fetched = await fetchUrl(pending.url);
+          const documentId = await insertDocument({
+            userId: cbUserId, title: newTitle, content: fetched.content,
+            url: pending.url, sourceType: "web",
+            metadata: { wordCount: fetched.wordCount, language: L, source: "telegram", ...fetched.metadata },
+          });
+          const jobId = await createJob(cbUserId, documentId);
+          await answerCallbackQuery(cbBotToken, cbq.id, "✅");
+          await editMessageText(cbBotToken, cbChatId, cbMessageId, msg("dupSaved", L, { title: newTitle }));
+          await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
+          const categories = await listCategories(cbUserId);
+          if (categories.length > 0) {
+            await sendMessage(cbBotToken, cbChatId, msg("urlSaved", L, { title: newTitle }), {
+              replyMarkup: buildCategoryKeyboard(categories, documentId, L),
+            });
+          }
+          notifyJobCompletion(cbBotToken, cbChatId, cbUserId, jobId, newTitle, L);
+
+        } else if ((pending.type === "photo" || pending.type === "document") && pending.fileId) {
+          const fileInfo = await getFile(cbBotToken, pending.fileId);
+          if (!fileInfo) throw new Error("Cannot re-download file");
+          const buffer = await downloadFile(cbBotToken, fileInfo.file_path);
+          const newFileName = deduplicateName(pending.fileName ?? "file");
+          newTitle = deduplicateName(pending.existingTitle);
+          const mimeType = pending.mimeType ?? "application/octet-stream";
+          const caption = pending.caption ?? "";
+
+          let content = caption || (pending.type === "photo" ? "[image]" : `[file: ${newFileName}]`);
+          try {
+            const parsed = await parseFile(buffer, mimeType, newFileName);
+            if (parsed.content) content = parsed.content;
+          } catch { /* use caption */ }
+
+          const fileType = pending.type === "photo" ? "image" : mimeType.split("/")[0];
+          const documentId = await insertDocument({
+            userId: cbUserId, title: newTitle, content, sourceType: "file",
+            metadata: {
+              wordCount: content.split(/\s+/).filter(Boolean).length,
+              language: L, fileType, fileName: newFileName,
+              fileSize: buffer.length, source: "telegram",
+              ...(pending.type === "photo" && buffer.length < 5_000_000 ? { fileBase64: buffer.toString("base64") } : {}),
+            },
+          });
+          const filePath = await saveFile(documentId, newFileName, buffer);
+          await pool.query(
+            `UPDATE documents SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
+            [JSON.stringify({ filePath }), documentId],
+          );
+          const jobId = await createJob(cbUserId, documentId);
+          await answerCallbackQuery(cbBotToken, cbq.id, "✅");
+          await editMessageText(cbBotToken, cbChatId, cbMessageId, msg("dupSaved", L, { title: newTitle }));
+          await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
+          const categories = await listCategories(cbUserId);
+          if (categories.length > 0) {
+            const savedMsg = pending.type === "photo" ? "photoSaved" : "fileSaved";
+            await sendMessage(cbBotToken, cbChatId, msg(savedMsg, L, { title: newTitle }), {
+              replyMarkup: buildCategoryKeyboard(categories, documentId, L),
+            });
+          }
+          notifyJobCompletion(cbBotToken, cbChatId, cbUserId, jobId, newTitle, L);
+        }
+      } catch (err) {
+        console.error("[telegram] Duplicate save error:", err);
+        await answerCallbackQuery(cbBotToken, cbq.id, "❌ Error").catch(() => {});
+        await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId).catch(() => {});
+      }
+
+    // ── Duplicate: cancel ──
+    } else if (data.startsWith("dup:n:")) {
+      const dupId = data.split(":")[2];
+      pendingDups.delete(dupId);
+      await answerCallbackQuery(cbBotToken, cbq.id, "✅");
+      await editMessageText(cbBotToken, cbChatId, cbMessageId, msg("dupCancelled", cbLang));
       await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
     }
 
@@ -575,13 +825,14 @@ export async function POST(request: NextRequest) {
           userId, title, content, sourceType: "text",
           metadata: { wordCount, language: L, source: "telegram" },
         });
-        await createJob(userId, documentId);
+        const jobId = await createJob(userId, documentId);
 
         const categories = await listCategories(userId);
         await sendMessage(botToken, chatId, msg("memoSaved", L, { title }), {
           replyToMessageId: message.message_id,
           replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
         });
+        notifyJobCompletion(botToken, chatId, userId, jobId, title, L);
       } catch {
         await sendMessage(botToken, chatId, msg("memoFail", L));
       }
@@ -628,6 +879,17 @@ export async function POST(request: NextRequest) {
     await sendTyping(botToken, chatId);
 
     try {
+      // Duplicate check
+      const existingUrl = await findDuplicateByUrl(userId, url);
+      if (existingUrl) {
+        const dupId = storePendingDup({ type: "url", userId, lang: L, url, existingTitle: existingUrl.title });
+        await sendMessage(botToken, chatId, msg("dupFound", L, { title: existingUrl.title }), {
+          replyToMessageId: message.message_id,
+          replyMarkup: buildDupKeyboard(dupId, L),
+        });
+        return NextResponse.json({ ok: true });
+      }
+
       const fetched = await fetchUrl(url);
       const title = fetched.title || new URL(url).hostname;
       const wordCount = fetched.wordCount || fetched.content.split(/\s+/).filter(Boolean).length;
@@ -636,13 +898,14 @@ export async function POST(request: NextRequest) {
         userId, title, content: fetched.content, url, sourceType: "web",
         metadata: { wordCount, language: L, source: "telegram", ...fetched.metadata },
       });
-      await createJob(userId, documentId);
+      const jobId = await createJob(userId, documentId);
 
       const categories = await listCategories(userId);
       await sendMessage(botToken, chatId, msg("urlSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
       });
+      notifyJobCompletion(botToken, chatId, userId, jobId, title, L);
     } catch (err) {
       console.error("[telegram] URL ingest error:", err);
       await sendMessage(botToken, chatId, msg("urlFail", L));
@@ -666,11 +929,27 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      const buffer = await downloadFile(botToken, fileInfo.file_path);
       const fileName = fileInfo.file_path.split("/").pop() ?? "photo.jpg";
-      const mimeType = fileName.endsWith(".png") ? "image/png" : "image/jpeg";
       const caption = message.caption ?? "";
       const title = caption || `${msg("imageLabel", L)} ${new Date().toLocaleDateString(L === "ko" ? "ko-KR" : L === "ja" ? "ja-JP" : L === "zh" ? "zh-CN" : "en-US")}`;
+
+      // Duplicate check by fileName
+      const existingPhoto = await findDuplicateByFileName(userId, fileName);
+      if (existingPhoto) {
+        const dupId = storePendingDup({
+          type: "photo", userId, lang: L, fileId: largest.file_id,
+          fileName, caption, mimeType: fileName.endsWith(".png") ? "image/png" : "image/jpeg",
+          existingTitle: existingPhoto.title,
+        });
+        await sendMessage(botToken, chatId, msg("dupFound", L, { title: existingPhoto.title }), {
+          replyToMessageId: message.message_id,
+          replyMarkup: buildDupKeyboard(dupId, L),
+        });
+        return NextResponse.json({ ok: true });
+      }
+
+      const buffer = await downloadFile(botToken, fileInfo.file_path);
+      const mimeType = fileName.endsWith(".png") ? "image/png" : "image/jpeg";
 
       let content = caption || "[image]";
       try {
@@ -691,14 +970,20 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      await saveFile(documentId, fileName, buffer);
-      await createJob(userId, documentId);
+      const filePath = await saveFile(documentId, fileName, buffer);
+      // Store filePath in metadata so /api/files/[id] and preview work
+      await pool.query(
+        `UPDATE documents SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
+        [JSON.stringify({ filePath }), documentId],
+      );
+      const jobId = await createJob(userId, documentId);
 
       const categories = await listCategories(userId);
       await sendMessage(botToken, chatId, msg("photoSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
       });
+      notifyJobCompletion(botToken, chatId, userId, jobId, title, L);
     } catch (err) {
       console.error("[telegram] Photo ingest error:", err);
       await sendMessage(botToken, chatId, msg("photoFail", L));
@@ -718,13 +1003,28 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      const fileName = doc.file_name ?? "file";
+      const mimeType = doc.mime_type ?? "application/octet-stream";
+      const caption = message.caption ?? "";
+
+      // Duplicate check by fileName
+      const existingDoc = await findDuplicateByFileName(userId, fileName);
+      if (existingDoc) {
+        const dupId = storePendingDup({
+          type: "document", userId, lang: L, fileId: doc.file_id,
+          fileName, caption, mimeType, existingTitle: existingDoc.title,
+        });
+        await sendMessage(botToken, chatId, msg("dupFound", L, { title: existingDoc.title }), {
+          replyToMessageId: message.message_id,
+          replyMarkup: buildDupKeyboard(dupId, L),
+        });
+        return NextResponse.json({ ok: true });
+      }
+
       const fileInfo = await getFile(botToken, doc.file_id);
       if (!fileInfo) throw new Error("Cannot get file info");
 
       const buffer = await downloadFile(botToken, fileInfo.file_path);
-      const fileName = doc.file_name ?? fileInfo.file_path.split("/").pop() ?? "file";
-      const mimeType = doc.mime_type ?? "application/octet-stream";
-      const caption = message.caption ?? "";
 
       let content = caption || `[file: ${fileName}]`;
       let title = caption || fileName;
@@ -750,14 +1050,20 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      await saveFile(documentId, fileName, buffer);
-      await createJob(userId, documentId);
+      const filePath = await saveFile(documentId, fileName, buffer);
+      // Store filePath in metadata so /api/files/[id] and preview work
+      await pool.query(
+        `UPDATE documents SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
+        [JSON.stringify({ filePath }), documentId],
+      );
+      const jobId = await createJob(userId, documentId);
 
       const categories = await listCategories(userId);
       await sendMessage(botToken, chatId, msg("fileSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
       });
+      notifyJobCompletion(botToken, chatId, userId, jobId, title, L);
     } catch (err) {
       console.error("[telegram] Document ingest error:", err);
       await sendMessage(botToken, chatId, msg("fileFail", L));
@@ -782,13 +1088,14 @@ export async function POST(request: NextRequest) {
         userId, title, content, sourceType: "text",
         metadata: { wordCount, language: L, source: "telegram" },
       });
-      await createJob(userId, documentId);
+      const jobId = await createJob(userId, documentId);
 
       const categories = await listCategories(userId);
       await sendMessage(botToken, chatId, msg("memoSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
       });
+      notifyJobCompletion(botToken, chatId, userId, jobId, title, L);
     } catch {
       await sendMessage(botToken, chatId, msg("saveTextFail", L));
     }

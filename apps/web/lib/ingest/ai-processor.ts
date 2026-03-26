@@ -128,6 +128,7 @@ Extract up to 20 most relevant entities. Output ONLY the JSON array, no markdown
 }
 
 export interface StructuredMetadata {
+  title: string;
   summary: string;
   what_it_solves: string;
   key_points: string[];
@@ -148,6 +149,7 @@ export async function generateStructuredMetadata(
 
   const result = await callAi({
     system: `You are a knowledge extraction assistant. Analyze the provided content and return a JSON object with these fields:
+- "title": a concise, descriptive title (1 line, max 80 chars) — MUST be written in ${langMap[language]}
 - "summary": ${prompts.summary} — MUST be written in ${langMap[language]}
 - "what_it_solves": ${prompts.whatItSolves} — MUST be written in ${langMap[language]}
 - "key_points": ${prompts.keyPoints} (strings) — MUST be written in ${langMap[language]}
@@ -168,6 +170,7 @@ Output ONLY the JSON object, no markdown fences or explanation.`,
     const fallbackTime = Math.max(1, Math.round(wordCount / 200));
 
     return {
+      title: typeof parsed.title === "string" ? parsed.title.slice(0, 120) : "",
       summary: typeof parsed.summary === "string" ? parsed.summary : "",
       what_it_solves: typeof parsed.what_it_solves === "string" ? parsed.what_it_solves : "",
       key_points: Array.isArray(parsed.key_points)
@@ -183,6 +186,7 @@ Output ONLY the JSON object, no markdown fences or explanation.`,
   } catch {
     console.error("[ai-processor] Failed to parse structured metadata:", result);
     return {
+      title: "",
       summary: "",
       what_it_solves: "",
       key_points: [],

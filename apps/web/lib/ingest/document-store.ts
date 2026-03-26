@@ -59,12 +59,20 @@ export async function insertDocument(params: InsertDocumentParams): Promise<stri
 
 export async function updateDocument(
   documentId: string,
-  updates: { summary?: string; metadata?: Record<string, unknown> },
+  updates: { title?: string; content?: string; summary?: string; metadata?: Record<string, unknown> },
 ): Promise<void> {
   const setClauses: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
 
+  if (updates.title !== undefined) {
+    setClauses.push(`title = $${idx++}`);
+    values.push(updates.title);
+  }
+  if (updates.content !== undefined) {
+    setClauses.push(`content = $${idx++}`);
+    values.push(updates.content);
+  }
   if (updates.summary !== undefined) {
     setClauses.push(`summary = $${idx++}`);
     values.push(updates.summary);
@@ -119,6 +127,49 @@ export async function insertEntities(entities: InsertEntityParams[]): Promise<st
   );
 
   return result.rows.map((r: { id: string }) => r.id);
+}
+
+// ── Duplicate Detection ───────────────────────────────────────
+
+export async function findDuplicateByUrl(
+  userId: string,
+  url: string,
+): Promise<{ id: string; title: string } | null> {
+  const result = await pool.query(
+    `SELECT id, title FROM documents
+     WHERE user_id = $1 AND url = $2
+       AND (metadata->>'status' IS NULL OR metadata->>'status' = 'active')
+     LIMIT 1`,
+    [userId, url],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function findDuplicateByFileName(
+  userId: string,
+  fileName: string,
+): Promise<{ id: string; title: string } | null> {
+  const result = await pool.query(
+    `SELECT id, title FROM documents
+     WHERE user_id = $1 AND metadata->>'fileName' = $2
+       AND (metadata->>'status' IS NULL OR metadata->>'status' = 'active')
+     LIMIT 1`,
+    [userId, fileName],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Append " (2)" / " (3)" etc. to a name, preserving file extension. */
+export function deduplicateName(name: string): string {
+  // Match: base + optional " (N)" + optional .ext
+  const m = name.match(/^(.+?)(\s*\((\d+)\))?(\.[^.]+)?$/);
+  if (m) {
+    const base = m[1];
+    const num = m[3] ? parseInt(m[3]) + 1 : 2;
+    const ext = m[4] ?? "";
+    return `${base} (${num})${ext}`;
+  }
+  return `${name} (2)`;
 }
 
 export async function assignDocumentCategory(

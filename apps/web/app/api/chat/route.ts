@@ -20,10 +20,16 @@ export async function POST(request: NextRequest) {
     if (blocked) return blocked;
 
     const body = await request.json();
-    const { message, conversationId: reqConvId } = body as {
+    const { message, conversationId: reqConvId, providers: rawProviders } = body as {
       message?: string;
       conversationId?: string;
+      providers?: Array<{ id?: string; apiKey?: string; model?: string; baseUrl?: string }>;
     };
+
+    // Validate provider configs — filter to only complete entries
+    const providers = (rawProviders ?? [])
+      .filter((p) => p.apiKey && p.model && p.baseUrl)
+      .map((p) => ({ id: p.id ?? "custom", apiKey: p.apiKey!, model: p.model!, baseUrl: p.baseUrl! }));
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
       return NextResponse.json(
@@ -80,6 +86,7 @@ export async function POST(request: NextRequest) {
           userId,
           history,
           writer,
+          providers,
         });
       },
     });

@@ -1,7 +1,7 @@
 import { pool } from "@/lib/db";
 import type { IngestStatus, IngestStatusResponse } from "@/lib/types";
 import { getDocument, updateDocument, insertEntities, assignDocumentCategory } from "./document-store";
-import { generateSummary, extractEntities, suggestCategories, generateStructuredMetadata, type StructuredMetadata } from "./ai-processor";
+import { generateSummary, extractEntities, suggestCategories, generateStructuredMetadata, describeImage, describeVideoFrame, type StructuredMetadata } from "./ai-processor";
 import { indexDocument } from "@/lib/edgequake/client";
 import { detectLanguage } from "./language-detect";
 
@@ -113,24 +113,67 @@ async function processJob(job: JobRow): Promise<void> {
       return;
     }
 
-    // Use user's preferred locale from metadata, fall back to content detection
+    // Resolve language: user DB locale > document metadata > content detection
     const meta = (doc.metadata ?? {}) as Record<string, unknown>;
     const validLangs = ["ko", "en", "ja", "zh"] as const;
-    const storedLang = typeof meta.language === "string" ? meta.language : "";
-    const language = validLangs.includes(storedLang as typeof validLangs[number])
-      ? (storedLang as typeof validLangs[number])
-      : detectLanguage(doc.content);
-    await updateJobProgress(jobId, 20);
+    let language: typeof validLangs[number] = "en";
+    try {
+      const userRow = await pool.query(`SELECT locale FROM "user" WHERE id = $1`, [userId]);
+      const userLocale = userRow.rows[0]?.locale as string | undefined;
+      if (userLocale && validLangs.includes(userLocale as typeof validLangs[number])) {
+        language = userLocale as typeof validLangs[number];
+      }
+    } catch { /* fallback */ }
+    if (language === "en") {
+      const storedLang = typeof meta.language === "string" ? meta.language : "";
+      if (validLangs.includes(storedLang as typeof validLangs[number])) {
+        language = storedLang as typeof validLangs[number];
+      } else {
+        language = detectLanguage(doc.content);
+      }
+    }
+    await updateJobProgress(jobId, 15);
+
+    // Step 0: Vision analysis for images/videos (saved first, analyzed now)
+    const fileType = typeof meta.fileType === "string" ? meta.fileType : "";
+    const fileBase64 = typeof meta.fileBase64 === "string" ? meta.fileBase64 : "";
+    if ((fileType === "image" || fileType === "video") && fileBase64) {
+      try {
+        const result = fileType === "image"
+          ? await describeImage(fileBase64, language)
+          : await describeVideoFrame(fileBase64, language);
+
+        // Only update if vision returned actual content — don't overwrite with empty
+        if (result.content && result.content.trim().length > 0) {
+          await updateDocument(documentId, {
+            title: result.title || doc.title,
+            content: result.content,
+            metadata: { visionAnalyzed: true, fileBase64: null },
+          });
+          doc.content = result.content;
+          doc.title = result.title || doc.title;
+        } else {
+          console.warn(`[job-queue] Vision returned empty for job ${jobId} — keeping original content`);
+          await updateDocument(documentId, { metadata: { visionAnalyzed: true, fileBase64: null } });
+        }
+      } catch (err) {
+        console.warn(`[job-queue] Vision analysis failed for job ${jobId}, continuing with original content:`, err);
+        // Clear base64 even on failure to free space
+        await updateDocument(documentId, { metadata: { fileBase64: null } });
+      }
+      await updateJobProgress(jobId, 20);
+    }
 
     // Step 1: Generate structured metadata via AI (20% → 50%)
     let structuredMeta: StructuredMetadata = {
-      summary: "", what_it_solves: "", key_points: [], tags: [], reading_time_minutes: 1,
+      title: "", summary: "", what_it_solves: "", key_points: [], tags: [], reading_time_minutes: 1,
     };
     try {
       const wordCount = doc.content ? doc.content.split(/\s+/).length : 0;
       structuredMeta = await generateStructuredMetadata(doc.content ?? "", language, wordCount);
 
       await updateDocument(documentId, {
+        title: structuredMeta.title || undefined,
         summary: structuredMeta.summary || undefined,
         metadata: {
           summary: structuredMeta.summary,
@@ -179,21 +222,33 @@ async function processJob(job: JobRow): Promise<void> {
       const suggestions = await suggestCategories(doc.content, userId, existingCategories, language);
 
       // Auto-assign categories based on AI suggestions
+      let newCategoryCreated = false;
       for (const suggestion of suggestions) {
-        if (suggestion.confidence < 0.5) continue;
+        // Existing categories: 0.5 threshold, new categories: 0.8 threshold
+        const isNew = suggestion.categoryId === "new";
+        if (suggestion.confidence < (isNew ? 0.8 : 0.5)) continue;
 
         let categoryId = suggestion.categoryId;
 
-        // Create new category if AI suggests one that doesn't exist
-        if (categoryId === "new" && suggestion.categoryName) {
-          const insertResult = await pool.query(
-            `INSERT INTO categories (user_id, name) VALUES ($1, $2)
-             ON CONFLICT (user_id, name, COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'))
-             DO UPDATE SET name = EXCLUDED.name
-             RETURNING id`,
-            [userId, suggestion.categoryName],
+        // Create new category if AI suggests one that doesn't exist (max 1 per document)
+        if (isNew && suggestion.categoryName && !newCategoryCreated) {
+          // Check if a similar category already exists (case-insensitive)
+          const similar = existingCategories.find(
+            (c) => c.name.toLowerCase() === suggestion.categoryName.toLowerCase(),
           );
-          categoryId = insertResult.rows[0]?.id;
+          if (similar) {
+            categoryId = similar.id;
+          } else {
+            const insertResult = await pool.query(
+              `INSERT INTO categories (user_id, name) VALUES ($1, $2)
+               ON CONFLICT (user_id, name, COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'))
+               DO UPDATE SET name = EXCLUDED.name
+               RETURNING id`,
+              [userId, suggestion.categoryName],
+            );
+            categoryId = insertResult.rows[0]?.id;
+            newCategoryCreated = true;
+          }
         }
 
         if (categoryId && categoryId !== "new") {

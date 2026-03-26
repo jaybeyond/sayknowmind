@@ -50,21 +50,6 @@ export function CategoryManager() {
   const [documents, setDocuments] = useState<CategoryDocument[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
 
-  const flattenApiTree = (node: any): CategoryNode | null => {
-    if (!node?.category) return null;
-    return {
-      id: node.category.id,
-      name: node.category.name,
-      parentId: node.category.parentId ?? null,
-      depth: node.category.depth,
-      path: node.category.path,
-      description: node.category.description,
-      color: node.category.color,
-      children: (node.children ?? []).map(flattenApiTree).filter(Boolean) as CategoryNode[],
-      documentCount: node.documentCount ?? 0,
-    };
-  };
-
   const findNode = useCallback((node: CategoryNode | null, id: string): CategoryNode | null => {
     if (!node) return null;
     if (node.id === id) return node;
@@ -76,6 +61,21 @@ export function CategoryManager() {
   }, []);
 
   const fetchCategories = useCallback(async () => {
+    const flattenApiTree = (node: any): CategoryNode | null => {
+      if (!node?.category) return null;
+      return {
+        id: node.category.id,
+        name: node.category.name,
+        parentId: node.category.parentId ?? null,
+        depth: node.category.depth,
+        path: node.category.path,
+        description: node.category.description,
+        color: node.category.color,
+        children: (node.children ?? []).map(flattenApiTree).filter(Boolean) as CategoryNode[],
+        documentCount: node.documentCount ?? 0,
+      };
+    };
+
     try {
       const res = await fetch("/api/categories");
       if (!res.ok) return;

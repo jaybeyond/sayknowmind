@@ -196,4 +196,21 @@ export class CloudflareService implements OnModuleInit {
   isReady(): boolean {
     return this.isAvailable && !!this.accountId && !!this.apiToken;
   }
+
+  updateApiKey(key: string, accountId?: string) {
+    this.apiToken = key;
+    if (accountId) this.accountId = accountId;
+    this.isAvailable = !!(key && this.accountId);
+    if (this.isAvailable) {
+      this.client = axios.create({
+        baseURL: `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/ai`,
+        timeout: 120000,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiToken}`,
+        },
+      });
+    }
+    this.logger.log(`🔑 Cloudflare key ${key ? 'updated' : 'removed'}`);
+  }
 }

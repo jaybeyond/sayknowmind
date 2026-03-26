@@ -245,9 +245,11 @@ export interface SharedContent {
   arweaveTxId?: string;
   ceramicStreamId?: string;
   accessConditions: AccessConditions;
+  encryptionMethod?: string;
   isRevoked: boolean;
   createdAt: Date;
   revokedAt?: Date;
+  expiresAt?: Date;
 }
 
 export interface AccessConditions {

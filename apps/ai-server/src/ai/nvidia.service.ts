@@ -58,6 +58,12 @@ export class NvidiaService implements OnModuleInit {
     return this.isConfigured;
   }
 
+  updateApiKey(key: string) {
+    this.apiKey = key;
+    this.isConfigured = !!key;
+    this.logger.log(`🔑 NVIDIA key ${key ? 'updated' : 'removed'}`);
+  }
+
   /**
    * NVIDIA NIM chat (non-streaming)
    */

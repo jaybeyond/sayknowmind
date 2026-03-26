@@ -24,6 +24,10 @@ import {
   AlignLeft,
   Clock,
   Loader2,
+  Download,
+  ImageIcon,
+  Video,
+  File,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
@@ -53,15 +57,16 @@ const ProcessingBadge = ({ status }: { status?: Memory["jobStatus"] }) => {
   );
 };
 
-const DocTypeIcon = ({ type }: { type?: "url" | "file" | "text" }) => {
-  switch (type) {
-    case "file":
-      return <FileText className="size-3.5 text-muted-foreground" />;
-    case "text":
-      return <AlignLeft className="size-3.5 text-muted-foreground" />;
-    default:
-      return <Globe className="size-3.5 text-muted-foreground" />;
+const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text"; fileType?: string }) => {
+  if (type === "file") {
+    switch (fileType) {
+      case "image": return <ImageIcon className="size-3.5 text-muted-foreground" />;
+      case "video": return <Video className="size-3.5 text-muted-foreground" />;
+      default: return <FileText className="size-3.5 text-muted-foreground" />;
+    }
   }
+  if (type === "text") return <AlignLeft className="size-3.5 text-muted-foreground" />;
+  return <Globe className="size-3.5 text-muted-foreground" />;
 };
 
 export function MemoryCard({
@@ -78,10 +83,18 @@ export function MemoryCard({
     navigator.clipboard.writeText(memory.url);
   };
 
+  const isFile = memory.docType === "file";
+  const isImage = isFile && memory.fileType === "image";
+  const isVideo = isFile && memory.fileType === "video";
+  const fileUrl = isFile ? `/api/files/${memory.id}` : null;
+  const downloadUrl = fileUrl ? `${fileUrl}?download=1` : null;
+
   const handleClick = () => {
     if (onSelect) {
       onSelect(memory);
-    } else {
+    } else if (fileUrl && (isImage || isVideo)) {
+      window.open(fileUrl, "_blank");
+    } else if (memory.url) {
       window.open(memory.url, "_blank");
     }
   };
@@ -90,18 +103,18 @@ export function MemoryCard({
     return (
       <div className="group flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
         <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0">
-          <Image
-            src={memory.favicon}
-            alt={memory.title}
-            width={24}
-            height={24}
-            className={cn("size-6", memory.hasDarkIcon && "dark:invert")}
-          />
+          {isImage && fileUrl ? (
+            <Image src={fileUrl} alt={memory.title} width={40} height={40} className="size-10 object-cover" unoptimized />
+          ) : memory.favicon ? (
+            <Image src={memory.favicon} alt={memory.title} width={24} height={24} className={cn("size-6", memory.hasDarkIcon && "dark:invert")} />
+          ) : (
+            <File className="size-5 text-muted-foreground" />
+          )}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <DocTypeIcon type={memory.docType} />
+            <DocTypeIcon type={memory.docType} fileType={memory.fileType} />
             <h3 className="font-medium truncate">{memory.title}</h3>
             {memory.jobStatus && memory.jobStatus !== "completed" && (
               <span className={cn(
@@ -162,6 +175,11 @@ export function MemoryCard({
               )}
             />
           </Button>
+          {downloadUrl && (
+            <Button variant="ghost" size="icon-xs" asChild>
+              <a href={downloadUrl}><Download className="size-4" /></a>
+            </Button>
+          )}
           <Button variant="ghost" size="icon-xs" onClick={handleClick}>
             <ExternalLink className="size-4" />
           </Button>
@@ -230,14 +248,24 @@ export function MemoryCard({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleCopyUrl}>
-              <Copy className="size-4 mr-2" />
-              {t("memory.copyUrl")}
-            </DropdownMenuItem>
+            {memory.url && (
+              <DropdownMenuItem onClick={handleCopyUrl}>
+                <Copy className="size-4 mr-2" />
+                {t("memory.copyUrl")}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={handleClick}>
               <ExternalLink className="size-4 mr-2" />
               {t("memory.openInNewTab")}
             </DropdownMenuItem>
+            {downloadUrl && (
+              <DropdownMenuItem asChild>
+                <a href={downloadUrl}>
+                  <Download className="size-4 mr-2" />
+                  {t("common.download")}
+                </a>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem>
               <Pencil className="size-4 mr-2" />
               {t("common.edit")}
@@ -279,14 +307,27 @@ export function MemoryCard({
               priority
             />
           </div>
+        ) : isVideo && fileUrl ? (
+          <div className="h-36 relative overflow-hidden bg-black flex items-center justify-center">
+            <video src={fileUrl} className="h-full w-full object-cover" muted preload="metadata" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="size-10 rounded-full bg-black/60 flex items-center justify-center">
+                <Video className="size-5 text-white" />
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="h-32 bg-linear-to-br from-muted/50 to-muted flex items-center justify-center">
             <div className="size-12 rounded-xl bg-background shadow-sm flex items-center justify-center">
-              {memory.docType === "file" ? (
+              {isImage ? (
+                <ImageIcon className="size-8 text-muted-foreground" />
+              ) : isVideo ? (
+                <Video className="size-8 text-muted-foreground" />
+              ) : memory.docType === "file" ? (
                 <FileText className="size-8 text-muted-foreground" />
               ) : memory.docType === "text" ? (
                 <FileType className="size-8 text-muted-foreground" />
-              ) : (
+              ) : memory.favicon ? (
                 <Image
                   src={memory.favicon}
                   alt={memory.title}
@@ -294,6 +335,8 @@ export function MemoryCard({
                   height={32}
                   className={cn("size-8", memory.hasDarkIcon && "dark:invert")}
                 />
+              ) : (
+                <Globe className="size-8 text-muted-foreground" />
               )}
             </div>
           </div>
@@ -302,7 +345,7 @@ export function MemoryCard({
         <div className="p-4 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
-              <DocTypeIcon type={memory.docType} />
+              <DocTypeIcon type={memory.docType} fileType={memory.fileType} />
               <h3 className="font-medium line-clamp-1">{memory.title}</h3>
             </div>
           </div>

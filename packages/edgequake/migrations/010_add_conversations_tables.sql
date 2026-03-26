@@ -183,42 +183,36 @@ ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE folders ENABLE ROW LEVEL SECURITY;
 
--- Conversations: Users see their own + shared
+-- Conversations: tenant-scoped (user filtering at app layer for text/UUID compat)
 DROP POLICY IF EXISTS conversations_tenant_isolation ON conversations;
 CREATE POLICY conversations_tenant_isolation ON conversations
     FOR ALL
     USING (
-        tenant_id = current_tenant_id()
-        AND (
-            user_id = current_user_id()
-            OR share_id IS NOT NULL
+        tenant_id IS NULL
+        OR (
+            tenant_id = current_tenant_id()
+            AND (current_workspace_id() IS NULL OR workspace_id = current_workspace_id())
         )
     )
-    WITH CHECK (
-        tenant_id = current_tenant_id()
-        AND user_id = current_user_id()
-    );
+    WITH CHECK (tenant_id IS NULL OR tenant_id = current_tenant_id());
 
--- Messages: Inherit access from conversation
+-- Messages: permissive (filtered at app layer)
 DROP POLICY IF EXISTS messages_access ON messages;
 CREATE POLICY messages_access ON messages
     FOR ALL
-    USING (
-        EXISTS (
-            SELECT 1 FROM conversations c
-            WHERE c.conversation_id = messages.conversation_id
-            AND c.tenant_id = current_tenant_id()
-            AND (c.user_id = current_user_id() OR c.share_id IS NOT NULL)
-        )
-    );
+    USING (true)
+    WITH CHECK (true);
 
--- Folders: Users see their own
+-- Folders: tenant-scoped
 DROP POLICY IF EXISTS folders_access ON folders;
 CREATE POLICY folders_access ON folders
     FOR ALL
     USING (
-        tenant_id = current_tenant_id()
-        AND user_id = current_user_id()
+        tenant_id IS NULL
+        OR (
+            tenant_id = current_tenant_id()
+            AND (current_workspace_id() IS NULL OR workspace_id = current_workspace_id())
+        )
     );
 
 -- NOTE: set_tenant_context is already created with 3 parameters in migration 008

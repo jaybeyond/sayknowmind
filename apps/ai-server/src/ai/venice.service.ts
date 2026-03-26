@@ -54,6 +54,15 @@ export class VeniceService implements OnModuleInit {
     return this.isConfigured;
   }
 
+  updateApiKey(key: string) {
+    this.apiKey = key;
+    this.isConfigured = !!key;
+    if (key) {
+      this.client.defaults.headers.common['Authorization'] = `Bearer ${key}`;
+    }
+    this.logger.log(`🔑 Venice key ${key ? 'updated' : 'removed'}`);
+  }
+
   /**
    * Venice AI chat (non-streaming)
    */

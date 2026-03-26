@@ -96,6 +96,15 @@ export class OpenRouterService implements OnModuleInit {
     return this.isConfigured;
   }
 
+  updateApiKey(key: string) {
+    this.apiKey = key;
+    this.isConfigured = !!key;
+    if (key) {
+      this.client.defaults.headers.common['Authorization'] = `Bearer ${key}`;
+    }
+    this.logger.log(`🔑 OpenRouter key ${key ? 'updated' : 'removed'}`);
+  }
+
   /**
    * OpenRouter chat (non-streaming)
    * @param tools - SayKnowbot Tool definitions (optional, used only in Electron environment)

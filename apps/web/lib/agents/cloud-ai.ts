@@ -4,23 +4,21 @@
  *
  * Priority:
  * 1. Cloud providers (from .sayknowmind-providers.json via getOrderedProviders)
- * 2. Ollama (local fallback)
+ * 2. AI server cascade (port 4000)
  */
 
 import { getOrderedProviders, type ProviderEntry } from "@/lib/provider-config";
-import { getModelForRole } from "@/lib/model-config";
 
-const OLLAMA_URL = `http://localhost:${process.env.OLLAMA_PORT ?? "11434"}`;
+const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 const AI_TIMEOUT = 60_000;
 
 /**
- * HTTP status codes that trigger Ollama fallback.
+ * HTTP status codes that trigger AI server fallback.
  * 400 = bad request (model not found, etc.)
  * 402 = payment required (quota exhausted)
  * 429 = rate limited
- * All other errors (500, timeout, network) → fail without loading local model.
  */
-const OLLAMA_FALLBACK_CODES = new Set([400, 402, 429]);
+const FALLBACK_CODES = new Set([400, 402, 429]);
 
 export interface AiCallOptions {
   system: string;
@@ -100,55 +98,57 @@ async function callCloudProvider(
 }
 
 /**
- * Call Ollama directly (non-streaming). Uses lightweight 1.7b model.
- * For vision requests, uses the configured vision model.
+ * Call AI server (non-streaming) with cascade fallback.
+ * For vision requests, sends images as base64.
  */
-async function callOllama(
+async function callAiServer(
   system: string,
   message: string,
   timeout: number,
   images?: string[],
 ): Promise<string> {
-  const isVision = !!images?.length;
-  const model = isVision
-    ? (process.env.VISION_MODEL ?? "glm-ocr")
-    : getModelForRole("chat");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const apiKey = process.env.AI_API_KEY;
+  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
-  const userMessage: Record<string, unknown> = { role: "user", content: message };
-  if (isVision) userMessage.images = images;
+  const body: Record<string, unknown> = {
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: message },
+    ],
+    stream: false,
+  };
+  if (images?.length) {
+    body.images = images.map((img) => ({
+      data: img.startsWith("data:") ? img.split(",")[1] ?? img : img,
+      mimeType: "image/jpeg",
+    }));
+  }
 
-  const res = await fetch(`${OLLAMA_URL}/api/chat`, {
+  const res = await fetch(`${AI_SERVER_URL}/ai/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: system },
-        userMessage,
-      ],
-      stream: false,
-    }),
-    signal: AbortSignal.timeout(isVision ? 120_000 : timeout),
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(images?.length ? 120_000 : timeout),
   });
 
-  if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
+  if (!res.ok) throw new Error(`AI server returned ${res.status}`);
   const data = await res.json();
-  return data.message?.content ?? "";
+  return data.content ?? "";
 }
 
 /**
- * Cloud-first AI call with selective Ollama fallback.
+ * Cloud-first AI call with AI server fallback.
  *
  * Tries each configured cloud provider in order (active first).
- * Only falls back to local Ollama when cloud returns 400, 402, or 429
- * (quota/rate-limit issues). Other errors (500, timeout, network) do NOT
- * trigger local fallback to avoid freezing the machine with heavy models.
+ * Falls back to AI server cascade when cloud returns 400, 402, or 429
+ * (quota/rate-limit issues), or when no providers are configured.
  */
 export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
   const { system, message, images, timeout = AI_TIMEOUT } = opts;
   const providers = opts.providers ?? getOrderedProviders();
 
-  let shouldFallbackToOllama = false;
+  let shouldFallback = false;
 
   // Try cloud providers in order
   for (const provider of providers) {
@@ -156,28 +156,27 @@ export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
       return await callCloudProvider(provider, system, message, timeout, images);
     } catch (err) {
       console.warn(`[cloud-ai] ${provider.id} failed:`, (err as Error).message);
-      if (err instanceof CloudHttpError && OLLAMA_FALLBACK_CODES.has(err.status)) {
-        shouldFallbackToOllama = true;
+      if (err instanceof CloudHttpError && FALLBACK_CODES.has(err.status)) {
+        shouldFallback = true;
       }
     }
   }
 
-  // Only fall back to Ollama on 400/402/429 (quota/rate-limit)
-  if (!shouldFallbackToOllama) {
+  // No providers configured → use AI server
+  if (!shouldFallback) {
     if (providers.length > 0) {
-      console.warn("[cloud-ai] Cloud providers failed with non-recoverable errors — skipping Ollama fallback");
+      console.warn("[cloud-ai] Cloud providers failed with non-recoverable errors — skipping AI server fallback");
     } else {
-      // No providers configured at all → must use Ollama
-      shouldFallbackToOllama = true;
+      shouldFallback = true;
     }
   }
 
-  if (shouldFallbackToOllama) {
-    console.warn(`[cloud-ai] Falling back to Ollama${images?.length ? " (vision)" : " (1.7b)"}`);
+  if (shouldFallback) {
+    console.warn(`[cloud-ai] Falling back to AI server cascade`);
     try {
-      return await callOllama(system, message, timeout, images);
+      return await callAiServer(system, message, timeout, images);
     } catch (err) {
-      console.error("[cloud-ai] Ollama also failed:", (err as Error).message);
+      console.error("[cloud-ai] AI server also failed:", (err as Error).message);
     }
   }
 

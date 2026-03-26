@@ -13,7 +13,7 @@ interface CategoriesState {
   categories: CategoryItem[];
   isLoading: boolean;
   fetchCategories: () => Promise<void>;
-  addCategory: (name: string, parentId?: string) => Promise<boolean>;
+  addCategory: (name: string, parentId?: string) => Promise<string | null>;
   renameCategory: (id: string, name: string) => Promise<boolean>;
   deleteCategory: (id: string) => Promise<boolean>;
 }
@@ -48,12 +48,13 @@ export const useCategoriesStore = create<CategoriesState>((set, get) => ({
         body: JSON.stringify({ name, parentId }),
       });
       if (res.ok) {
+        const data = await res.json();
         await get().fetchCategories();
-        return true;
+        return data.categoryId as string;
       }
-      return false;
+      return null;
     } catch {
-      return false;
+      return null;
     }
   },
 

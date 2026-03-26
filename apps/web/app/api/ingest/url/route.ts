@@ -3,7 +3,7 @@ import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { checkAntiBot } from "@/lib/antibot";
 import { fetchUrl } from "@/lib/ingest/url-fetcher";
 import { detectLanguage } from "@/lib/ingest/language-detect";
-import { insertDocument } from "@/lib/ingest/document-store";
+import { insertDocument, assignDocumentCategory, findDuplicateByUrl, deduplicateName } from "@/lib/ingest/document-store";
 import { createJob } from "@/lib/ingest/job-queue";
 import { ErrorCode } from "@/lib/types";
 
@@ -23,13 +23,24 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { url, categoryId, tags, locale } = body as { url?: string; categoryId?: string; tags?: string[]; locale?: string };
+    const { url, categoryId, tags, locale, force } = body as { url?: string; categoryId?: string; tags?: string[]; locale?: string; force?: boolean };
 
     if (!url || typeof url !== "string") {
       return NextResponse.json(
         { code: ErrorCode.INGEST_INVALID_URL, message: "URL is required", timestamp: new Date().toISOString() },
         { status: 400 },
       );
+    }
+
+    // Duplicate check
+    if (!force) {
+      const existing = await findDuplicateByUrl(userId, url);
+      if (existing) {
+        return NextResponse.json(
+          { duplicate: true, existingId: existing.id, existingTitle: existing.title, message: "URL already saved" },
+          { status: 409 },
+        );
+      }
     }
 
     // Fetch and parse URL content
@@ -54,8 +65,12 @@ export async function POST(request: NextRequest) {
       ? (locale as typeof validLocales[number])
       : detectLanguage(fetched.content);
 
-    // Store document
-    const title = fetched.title || new URL(url).hostname;
+    // Store document (rename title if force-saving duplicate)
+    let title = fetched.title || new URL(url).hostname;
+    if (force) {
+      const dup = await findDuplicateByUrl(userId, url);
+      if (dup) title = deduplicateName(dup.title);
+    }
     const documentId = await insertDocument({
       userId,
       title,
@@ -70,6 +85,11 @@ export async function POST(request: NextRequest) {
         ...fetched.metadata,
       },
     });
+
+    // Assign to collection if specified
+    if (categoryId) {
+      await assignDocumentCategory(documentId, categoryId);
+    }
 
     // Create async processing job
     const jobId = await createJob(userId, documentId);

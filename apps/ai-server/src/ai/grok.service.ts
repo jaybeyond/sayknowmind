@@ -51,6 +51,15 @@ export class GrokService implements OnModuleInit {
     return this.isConfigured;
   }
 
+  updateApiKey(key: string) {
+    this.apiKey = key;
+    this.isConfigured = !!key;
+    if (key) {
+      this.client.defaults.headers.common['Authorization'] = `Bearer ${key}`;
+    }
+    this.logger.log(`🔑 Grok key ${key ? 'updated' : 'removed'}`);
+  }
+
   async chat(messages: ChatMessage[], model?: string): Promise<ChatResult> {
     if (!this.isConfigured) throw new Error('Grok not configured');
 

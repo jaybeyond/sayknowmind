@@ -16,8 +16,9 @@ export function OfflineBanner() {
   const { t } = useTranslation();
 
   useEffect(() => {
-    // Set initial state (SSR-safe)
-    setOffline(!navigator.onLine);
+    // Sync with browser state via event handlers
+    const sync = () => setOffline(!navigator.onLine);
+    sync();
 
     const handleOffline = () => setOffline(true);
     const handleOnline = () => setOffline(false);

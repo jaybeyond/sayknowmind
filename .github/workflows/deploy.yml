@@ -1,0 +1,90 @@
+name: Deploy
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/sayknowmind
+
+jobs:
+  # ── Deploy to target environment ───────────────────────────
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate docker-compose.prod.yml
+        run: |
+          cat > docker-compose.prod.yml << 'COMPOSE'
+          version: "3.8"
+          services:
+            web:
+              image: ${REGISTRY}/${IMAGE_PREFIX}-web:${TAG}
+              restart: always
+              ports: ["3000:3000"]
+              env_file: .env
+              depends_on:
+                postgres: { condition: service_healthy }
+            ai-server:
+              image: ${REGISTRY}/${IMAGE_PREFIX}-ai-server:${TAG}
+              restart: always
+              ports: ["4000:4000"]
+              env_file: .env
+            dashboard:
+              image: ${REGISTRY}/${IMAGE_PREFIX}-dashboard:${TAG}
+              restart: always
+              ports: ["3001:3000"]
+            mcp-server:
+              image: ${REGISTRY}/${IMAGE_PREFIX}-mcp-server:${TAG}
+              restart: always
+              ports: ["8082:8082"]
+          COMPOSE
+
+      - name: Run DB migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          for f in db/migrations/*.sql; do
+            echo "Applying: $f"
+            psql "$DATABASE_URL" -f "$f" 2>&1 || true
+          done
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd /opt/sayknowmind
+            export TAG=${{ steps.tag.outputs.tag }}
+            export REGISTRY=${{ env.REGISTRY }}
+            export IMAGE_PREFIX=${{ env.IMAGE_PREFIX }}
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            echo "Deployed $TAG"

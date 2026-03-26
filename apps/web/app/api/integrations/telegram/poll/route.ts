@@ -75,24 +75,23 @@ export async function POST(request: NextRequest) {
         pollOffset = update.update_id + 1;
       }
 
-      try {
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-        if (secret) {
-          headers["x-telegram-bot-api-secret-token"] = secret;
-        }
-
-        await fetch(webhookUrl, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(update),
-          signal: AbortSignal.timeout(30_000),
-        });
-        processed++;
-      } catch (err) {
-        console.error("[telegram-poll] Failed to forward update:", (err as Error).message);
+      const fwdHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (secret) {
+        fwdHeaders["x-telegram-bot-api-secret-token"] = secret;
       }
+
+      // Fire-and-forget — don't block polling while webhook processes AI
+      fetch(webhookUrl, {
+        method: "POST",
+        headers: fwdHeaders,
+        body: JSON.stringify(update),
+        signal: AbortSignal.timeout(120_000),
+      }).catch((err) => {
+        console.error("[telegram-poll] Failed to forward update:", (err as Error).message);
+      });
+      processed++;
     }
 
     return NextResponse.json({ processed });

@@ -94,6 +94,13 @@ export function MemorySidebar({
   React.useEffect(() => {
     fetchMemories();
     fetchCategories();
+
+    // Auto-refresh every 30s to pick up Telegram / external additions
+    const timer = setInterval(() => {
+      fetchMemories();
+      fetchCategories();
+    }, 30_000);
+    return () => clearInterval(timer);
   }, [fetchMemories, fetchCategories]);
 
   const derivedTags = getDerivedTags();
@@ -121,9 +128,6 @@ export function MemorySidebar({
               <ChevronDown className="size-3 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuLabel className="text-muted-foreground text-xs font-medium">
-                {t("sidebar.workspaces")}
-              </DropdownMenuLabel>
               <DropdownMenuItem>
                 <div className="size-5 rounded-full bg-linear-to-br from-blue-400 via-indigo-500 to-violet-500 mr-2" />
                 {userName || t("app.title")}
@@ -132,20 +136,25 @@ export function MemorySidebar({
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setAddingCategory(true);
+                  setCollectionsOpen(true);
+                }}
+              >
                 <Plus className="size-4 mr-2" />
-                {t("sidebar.createWorkspace")}
+                {t("categories.create")}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/settings")}>
                 <User className="size-4 mr-2" />
                 {t("sidebar.accountSettings")}
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/settings")}>
                 <Settings className="size-4 mr-2" />
-                {t("sidebar.workspaceSettings")}
+                {t("sidebar.settings")}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
@@ -317,9 +326,14 @@ export function MemorySidebar({
                         e.preventDefault();
                         const trimmed = newCategoryName.trim();
                         if (trimmed) {
-                          const ok = await addCategory(trimmed);
-                          if (ok) toast.success(t("sidebar.categoryCreated"));
-                          else toast.error(t("sidebar.createFailed"));
+                          const newId = await addCategory(trimmed);
+                          if (newId) {
+                            toast.success(t("sidebar.categoryCreated"));
+                            setSelectedCollection(newId);
+                            clearTags();
+                          } else {
+                            toast.error(t("sidebar.createFailed"));
+                          }
                         }
                         setNewCategoryName("");
                         setAddingCategory(false);

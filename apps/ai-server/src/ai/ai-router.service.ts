@@ -677,6 +677,20 @@ export class AIRouterService implements OnModuleInit {
     throw new Error('ALL_VISION_MODELS_FAILED');
   }
 
+  /**
+   * Update provider API keys at runtime (called from web app settings).
+   */
+  updateProviderKeys(keys: Record<string, string>) {
+    if (keys.openrouter) this.openRouterService.updateApiKey(keys.openrouter);
+    if (keys.grok) this.grokService.updateApiKey(keys.grok);
+    if (keys.zai) this.zaiService.updateApiKey(keys.zai);
+    if (keys.venice) this.veniceService.updateApiKey(keys.venice);
+    if (keys.upstage) this.upstageService.updateApiKey(keys.upstage);
+    if (keys.nvidia) this.nvidiaService.updateApiKey(keys.nvidia);
+    if (keys.cloudflare) this.cloudflareService.updateApiKey(keys.cloudflare, keys.cloudflare_account_id);
+    this.logger.log(`🔑 Provider keys updated: ${Object.keys(keys).join(', ')}`);
+  }
+
   isReady(): boolean {
     return (this.useOpenRouter && this.openRouterService.isReady()) ||
            (this.useGrok && this.grokService.isReady()) ||

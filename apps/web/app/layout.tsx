@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
 import { OfflineBanner } from "@/components/offline-banner";
 import { AgentationWrapper } from "@/components/agentation-wrapper";
+import { TelegramPoller } from "@/components/telegram-poller";
 import "./globals.css";
 
 const inter = Inter({
@@ -48,6 +49,7 @@ export default function RootLayout({
           <OfflineBanner />
           {children}
           <Toaster richColors position="bottom-right" />
+          <TelegramPoller />
           <AgentationWrapper />
         </ThemeProvider>
       </body>

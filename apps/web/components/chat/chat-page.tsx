@@ -10,6 +10,73 @@ import type { ThinkingPhase } from "./thinking-indicator";
 import type { SourceCardData } from "./source-card";
 import { useTranslation } from "@/lib/i18n";
 
+// ── Provider base URL mapping (matches ai-tab.tsx provider IDs) ──
+const PROVIDER_BASE_URLS: Record<string, string> = {
+  openrouter: "https://openrouter.ai/api",
+  openai: "https://api.openai.com",
+  anthropic: "https://api.anthropic.com",
+  grok: "https://api.x.ai",
+  google: "https://generativelanguage.googleapis.com",
+  upstage: "https://api.upstage.ai",
+  nvidia: "https://integrate.api.nvidia.com",
+  venice: "https://api.venice.ai",
+  zai: "https://open.bigmodel.cn/api/paas",
+};
+
+const PROVIDER_IDS = [
+  "openrouter", "openai", "anthropic", "zai", "grok",
+  "google", "upstage", "venice", "nvidia", "cloudflare",
+];
+
+/** Build provider config for a single provider ID from localStorage */
+function buildProvider(providerId: string): { id: string; apiKey: string; model: string; baseUrl: string } | null {
+  const keyStorageId = providerId === "cloudflare"
+    ? "sayknowmind-cloudflare-token"
+    : `sayknowmind-${providerId}-key`;
+  const apiKey = localStorage.getItem(keyStorageId);
+  if (!apiKey) return null;
+
+  const model = localStorage.getItem(`sayknowmind-${providerId}-model`) ?? "";
+  if (!model) return null;
+
+  let baseUrl = PROVIDER_BASE_URLS[providerId];
+  if (providerId === "cloudflare") {
+    const accountId = localStorage.getItem("sayknowmind-cloudflare-account-id") ?? "";
+    if (!accountId) return null;
+    baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai`;
+  }
+
+  if (!baseUrl) return null;
+  return { id: providerId, apiKey, model, baseUrl };
+}
+
+/** Get all configured providers — active first, then fallbacks */
+function getProviders(): Array<{ id: string; apiKey: string; model: string; baseUrl: string }> {
+  if (typeof window === "undefined") return [];
+
+  const activeId = localStorage.getItem("sayknowmind-active-provider") ?? "";
+  const result: Array<{ id: string; apiKey: string; model: string; baseUrl: string }> = [];
+  const seen = new Set<string>();
+
+  // Active provider goes first
+  if (activeId) {
+    const active = buildProvider(activeId);
+    if (active) {
+      result.push(active);
+      seen.add(activeId);
+    }
+  }
+
+  // Then all other configured providers as fallbacks
+  for (const id of PROVIDER_IDS) {
+    if (seen.has(id)) continue;
+    const p = buildProvider(id);
+    if (p) result.push(p);
+  }
+
+  return result;
+}
+
 type ConversationMeta = {
   id: string;
   title: string;
@@ -48,9 +115,28 @@ export function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // Load conversation list on mount
+  // Load conversation list on mount and restore last conversation
   React.useEffect(() => {
-    fetchConversations();
+    (async () => {
+      try {
+        const res = await fetch("/api/conversations");
+        if (!res.ok) return;
+        const data = await res.json();
+        const convs: ConversationMeta[] = data.conversations ?? [];
+        setConversations(convs);
+
+        // Restore last conversation from sessionStorage or pick most recent
+        const lastId = sessionStorage.getItem("skm-last-conv");
+        const target = lastId && convs.find((c) => c.id === lastId)
+          ? lastId
+          : convs[0]?.id;
+        if (target) {
+          loadConversation(target);
+        }
+      } catch {
+        // ignore
+      }
+    })();
   }, []);
 
   const fetchConversations = async () => {
@@ -64,10 +150,18 @@ export function ChatPage() {
     }
   };
 
+  // Persist conversation ID across navigation
+  React.useEffect(() => {
+    if (conversationId) {
+      sessionStorage.setItem("skm-last-conv", conversationId);
+    }
+  }, [conversationId]);
+
   const startNewConversation = () => {
     if (abortRef.current) abortRef.current.abort();
     setMessages([]);
     setConversationId(null);
+    sessionStorage.removeItem("skm-last-conv");
     setIsStreaming(false);
   };
 
@@ -84,10 +178,19 @@ export function ChatPage() {
       }
       const data = await res.json();
       const loaded: ChatMessage[] = (data.messages ?? []).map(
-        (m: { id: string; role: string; content: string }) => ({
+        (m: { id: string; role: string; content: string; citations?: Array<{ id: string; title: string; url?: string; excerpt: string; score: number }> }) => ({
           id: m.id,
           role: m.role as "user" | "assistant",
           content: m.content,
+          ...(m.citations?.length ? {
+            sources: m.citations.map((c) => ({
+              id: c.id,
+              title: c.title,
+              url: c.url,
+              excerpt: c.excerpt,
+              score: c.score,
+            })),
+          } : {}),
         }),
       );
       setMessages(loaded);
@@ -152,7 +255,7 @@ export function ChatPage() {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
-        body: JSON.stringify({ message, conversationId }),
+        body: JSON.stringify({ message, conversationId, providers: getProviders() }),
         signal: controller.signal,
       });
 

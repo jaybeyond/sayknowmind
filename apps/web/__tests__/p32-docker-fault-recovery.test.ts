@@ -174,7 +174,6 @@ describe("Property 32: Docker container auto-restart verification", () => {
     { name: "ollama", restartPolicy: "unless-stopped" },
     { name: "searxng", restartPolicy: "unless-stopped" },
     { name: "mcp-server", restartPolicy: "unless-stopped" },
-    { name: "zeroclaw", restartPolicy: "unless-stopped", healthCheck: { interval: 30, retries: 3 } },
   ];
 
   it("all services have restart policy that auto-recovers from crashes", () => {

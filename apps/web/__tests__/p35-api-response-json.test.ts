@@ -27,7 +27,7 @@ const errorResponseArb = fc.record({
   code: fc.constantFrom(...Object.values(ErrorCode).filter((v) => typeof v === "number") as number[]),
   message: fc.string({ minLength: 1, maxLength: 200 }),
   details: fc.oneof(fc.string(), fc.integer(), fc.constant(undefined)),
-  timestamp: fc.date({ min: new Date("2000-01-01"), max: new Date("2030-12-31") }).map((d) => d.toISOString()),
+  timestamp: fc.date({ min: new Date("2000-01-01"), max: new Date("2030-12-31"), noInvalidDate: true }).map((d) => d.toISOString()),
   requestId: fc.uuid(),
 }) as fc.Arbitrary<ErrorResponse>;
 

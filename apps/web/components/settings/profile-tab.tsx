@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "@/lib/auth-client";
+import { useSession, authClient } from "@/lib/auth-client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,27 +13,27 @@ export function ProfileTab() {
   const { data: session, isPending, refetch } = useSession();
   const { t } = useTranslation();
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (session?.user?.name) {
-      setName(session.user.name);
-    }
-  }, [session?.user?.name]);
+    if (session?.user?.name) setName(session.user.name);
+    if (session?.user?.email) setEmail(session.user.email);
+  }, [session?.user?.name, session?.user?.email]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch("/api/user/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      if (res.ok) {
+      const updates: Record<string, string> = {};
+      if (name !== (user?.name ?? "")) updates.name = name;
+      if (email !== (user?.email ?? "")) updates.email = email;
+
+      const { error } = await authClient.updateUser(updates);
+      if (error) {
+        toast.error(error.message ?? t("profile.saveFailed"));
+      } else {
         toast.success(t("profile.updated"));
         refetch?.();
-      } else {
-        toast.error(t("profile.saveFailed"));
       }
     } catch {
       toast.error(t("profile.saveFailed"));
@@ -92,17 +92,18 @@ export function ProfileTab() {
           </label>
           <Input
             id="settings-email"
-            value={user?.email ?? ""}
-            disabled
-            className="opacity-60"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="email@example.com"
           />
-          <p className="text-xs text-muted-foreground">
-            {t("profile.emailNote")}
-          </p>
         </div>
       </div>
 
-      <Button onClick={handleSave} disabled={saving || name === (user?.name ?? "")}>
+      <Button
+        onClick={handleSave}
+        disabled={saving || (name === (user?.name ?? "") && email === (user?.email ?? ""))}
+      >
         {saving && <Loader2 className="size-4 animate-spin" />}
         {t("settings.saveChanges")}
       </Button>

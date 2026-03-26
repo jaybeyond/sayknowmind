@@ -17,6 +17,8 @@ export type Memory = {
   keyPoints?: string[];
   readingTimeMinutes?: number;
   docType?: "url" | "file" | "text";
+  fileType?: string; // image, video, pdf, docx, etc.
+  fileName?: string;
   ogImage?: string;
   jobStatus?: "pending" | "processing" | "completed" | "failed";
 };
@@ -32,6 +34,15 @@ function documentToMemory(row: Record<string, unknown>): Memory {
     (t): t is string => typeof t === "string"
   );
   const categories = (row.categories ?? []) as Array<{ id: string; name: string }>;
+
+  // Use DB source_type column (reliable) over metadata.doc_type
+  const sourceType = String(row.source_type ?? "");
+  const docType: "url" | "file" | "text" =
+    sourceType === "file" ? "file" : sourceType === "text" ? "text" : "url";
+
+  const fileType = typeof metadata.fileType === "string" ? metadata.fileType : undefined;
+  const hasFile = typeof metadata.filePath === "string";
+  const isImage = docType === "file" && fileType === "image";
 
   return {
     id: String(row.id),
@@ -49,8 +60,12 @@ function documentToMemory(row: Record<string, unknown>): Memory {
     whatItSolves: typeof metadata.what_it_solves === "string" ? metadata.what_it_solves : undefined,
     keyPoints: Array.isArray(metadata.key_points) ? (metadata.key_points as unknown[]).filter((k): k is string => typeof k === "string") : undefined,
     readingTimeMinutes: typeof metadata.reading_time_minutes === "number" ? metadata.reading_time_minutes : undefined,
-    docType: (metadata.doc_type === "file" || metadata.doc_type === "text") ? metadata.doc_type as "file" | "text" : "url",
-    ogImage: typeof metadata.ogImage === "string" ? metadata.ogImage : undefined,
+    docType,
+    fileType,
+    fileName: typeof metadata.fileName === "string" ? metadata.fileName : undefined,
+    ogImage: typeof metadata.ogImage === "string"
+      ? metadata.ogImage
+      : (isImage && hasFile ? `/api/files/${String(row.id)}` : undefined),
     jobStatus: typeof row.job_status === "string" ? row.job_status as Memory["jobStatus"] : undefined,
   };
 }
@@ -405,14 +420,21 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
 
   getDerivedTags: () => {
     const { memories } = get();
-    const counts = new Map<string, number>();
+    // Count case-insensitively to avoid duplicate tag ids
+    const counts = new Map<string, { name: string; count: number }>();
     for (const m of memories) {
       for (const tag of m.tags) {
-        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+        const key = tag.toLowerCase();
+        const existing = counts.get(key);
+        if (existing) {
+          existing.count++;
+        } else {
+          counts.set(key, { name: tag, count: 1 });
+        }
       }
     }
     return Array.from(counts.entries())
-      .map(([name, count]) => ({ id: name.toLowerCase(), name, count }))
+      .map(([id, { name, count }]) => ({ id, name, count }))
       .sort((a, b) => b.count - a.count);
   },
 }));

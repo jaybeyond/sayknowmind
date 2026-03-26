@@ -6,6 +6,9 @@ node_modules/
 dist/
 build/
 .next/
+
+# User uploads
+uploads/
 .turbo/
 target/
 out/
@@ -31,6 +34,7 @@ Thumbs.db
 *.pem
 *.pub
 keys/
+.sayknowmind-providers.json
 
 # Docker volumes data
 ollama-data/
@@ -56,6 +60,10 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Runtime
+.pids/
+.sayknowmind-active-model
 
 # Misc
 *.tgz

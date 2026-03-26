@@ -7,8 +7,16 @@ const EDGEQUAKE_URL = process.env.EDGEQUAKE_URL ?? "http://localhost:8080";
 const EDGEQUAKE_API_KEY = process.env.EDGEQUAKE_API_KEY ?? "";
 const EDGEQUAKE_TIMEOUT = 30_000;
 
+/** Default workspace/tenant for non-multi-tenant mode */
+const EDGEQUAKE_WORKSPACE_ID = process.env.EDGEQUAKE_WORKSPACE_ID ?? "00000000-0000-0000-0000-000000000003";
+const EDGEQUAKE_TENANT_ID = process.env.EDGEQUAKE_TENANT_ID ?? "00000000-0000-0000-0000-000000000002";
+
 function headers(): Record<string, string> {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
+  const h: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Workspace-ID": EDGEQUAKE_WORKSPACE_ID,
+    "X-Tenant-ID": EDGEQUAKE_TENANT_ID,
+  };
   if (EDGEQUAKE_API_KEY) h["Authorization"] = `Bearer ${EDGEQUAKE_API_KEY}`;
   return h;
 }

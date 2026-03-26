@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { type Memory } from "@/store/memory-store";
 import {
   X,
@@ -10,6 +11,9 @@ import {
   Lightbulb,
   ListChecks,
   FileText,
+  Download,
+  ImageIcon,
+  Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
@@ -67,6 +71,46 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
 
       {/* Content */}
       <div className="overflow-auto h-[calc(100%-80px)] p-5 space-y-5">
+        {/* File preview (images/videos) */}
+        {memory.docType === "file" && memory.fileType === "image" && memory.ogImage && (
+          <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted">
+            <Image
+              src={memory.ogImage}
+              alt={memory.title}
+              width={400}
+              height={300}
+              className="w-full h-auto object-contain max-h-64"
+              unoptimized
+            />
+          </div>
+        )}
+        {memory.docType === "file" && memory.fileType === "video" && (
+          <div className="relative w-full rounded-lg overflow-hidden border border-border bg-black">
+            <video
+              src={`/api/files/${memory.id}`}
+              controls
+              className="w-full max-h-64"
+              preload="metadata"
+            />
+          </div>
+        )}
+
+        {/* Download button for files */}
+        {memory.docType === "file" && (
+          <a
+            href={`/api/files/${memory.id}?download=1`}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+          >
+            <Download className="size-3.5" />
+            {t("common.download")}
+            {memory.fileName && (
+              <span className="text-muted-foreground text-xs truncate max-w-48">
+                ({memory.fileName})
+              </span>
+            )}
+          </a>
+        )}
+
         {/* Meta info */}
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
@@ -177,6 +221,17 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
           >
             <ExternalLink className="size-3.5" />
             {t("document.openOriginal")}
+          </a>
+        )}
+        {!memory.url && memory.docType === "file" && memory.ogImage && (
+          <a
+            href={memory.ogImage}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+          >
+            {memory.fileType === "image" ? <ImageIcon className="size-3.5" /> : <Video className="size-3.5" />}
+            {t("memory.openInNewTab")}
           </a>
         )}
       </div>

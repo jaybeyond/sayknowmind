@@ -231,6 +231,15 @@ export class ZaiService implements OnModuleInit {
     return this.isAvailable && !!this.apiKey;
   }
 
+  updateApiKey(key: string) {
+    this.apiKey = key;
+    this.isAvailable = !!key;
+    if (key) {
+      this.client.defaults.headers.common['Authorization'] = `Bearer ${key}`;
+    }
+    this.logger.log(`🔑 Z.AI key ${key ? 'updated' : 'removed'}`);
+  }
+
   /**
    * List of available models
    */

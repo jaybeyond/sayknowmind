@@ -20,11 +20,32 @@ export const useI18nStore = create<I18nState>()(
   persist(
     (set) => ({
       locale: "en",
-      setLocale: (locale: Locale) => set({ locale }),
+      setLocale: (locale: Locale) => {
+        set({ locale });
+        // Sync to server (fire-and-forget)
+        syncLocaleToServer(locale);
+      },
     }),
-    { name: "sayknowmind-locale" }
+    {
+      name: "sayknowmind-locale",
+      onRehydrateStorage: () => (state) => {
+        // After loading from localStorage, sync to server in case DB is out of date
+        if (state?.locale) {
+          syncLocaleToServer(state.locale);
+        }
+      },
+    }
   )
 );
+
+/** Sync locale to server DB (fire-and-forget). */
+function syncLocaleToServer(locale: Locale) {
+  fetch("/api/user/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ locale }),
+  }).catch(() => {});
+}
 
 /**
  * Get a nested value from an object using a dot-separated path.

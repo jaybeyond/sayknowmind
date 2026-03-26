@@ -1,4 +1,4 @@
-.PHONY: install dev dev-web dev-dashboard dev-ai up down logs build clean help
+.PHONY: install dev dev-web dev-dashboard dev-ai dev-all dev-stop dev-status up down logs build clean help
 
 # ============================================
 # SayknowMind v0.1.0 - Development Commands
@@ -23,6 +23,22 @@ dev-dashboard: ## Run RAG dashboard dev server (port 3001)
 
 dev-ai: ## Run AI server dev mode (port 4000)
 	cd apps/ai-server && npm run start:dev
+
+dev-all: ## Start ALL services (PostgreSQL+Ollama must be running)
+	./scripts/start-all.sh
+
+dev-stop: ## Stop all services started by dev-all
+	./scripts/stop-all.sh
+
+dev-status: ## Show status of all services
+	@for svc in "Web:3000" "AI-Server:4000" "EdgeQuake:8080" "MCP-Server:8082" "IPFS:5001" "Ollama:11434" "PostgreSQL:5433"; do \
+		name=$${svc%%:*}; port=$${svc#*:}; \
+		if lsof -i :$$port -sTCP:LISTEN >/dev/null 2>&1; then \
+			printf "  ✅ %-14s port %s\n" "$$name" "$$port"; \
+		else \
+			printf "  ❌ %-14s port %s\n" "$$name" "$$port"; \
+		fi; \
+	done
 
 # --- Docker ---
 up: ## Start all services with Docker Compose
@@ -52,3 +68,35 @@ db-reset: ## Reset database (WARNING: destroys data)
 # --- Status ---
 status: ## Show service status
 	docker compose ps
+
+# --- Deploy ---
+migrate: ## Run database migrations
+	./db/migrations/scripts/migrate.sh "$(DATABASE_URL)"
+
+deploy-staging: ## Deploy to staging (requires DEPLOY_HOST)
+	TAG=$$(git rev-parse --short HEAD) docker compose -f docker-compose.yml pull
+	TAG=$$(git rev-parse --short HEAD) docker compose -f docker-compose.yml up -d --remove-orphans
+
+release: ## Create a new release tag (usage: make release v=0.1.1)
+	@if [ -z "$(v)" ]; then echo "Usage: make release v=0.1.1"; exit 1; fi
+	git tag -a v$(v) -m "Release v$(v)"
+	git push origin v$(v)
+	@echo "Release v$(v) tagged and pushed. GitHub Actions will build artifacts."
+
+# --- Desktop ---
+desktop-dev: ## Run desktop app in dev mode
+	cd apps/desktop && cargo tauri dev
+
+desktop-build: ## Build desktop app for current platform
+	cd apps/web && pnpm build
+	cd apps/desktop && cargo tauri build
+
+# --- Mobile ---
+mobile-android: ## Build Android APK
+	cd apps/web && pnpm build
+	cd apps/mobile && npx cap sync android
+	cd apps/mobile/android && ./gradlew assembleRelease
+
+mobile-ios: ## Build iOS (macOS only)
+	cd apps/web && pnpm build
+	cd apps/mobile && npx cap sync ios

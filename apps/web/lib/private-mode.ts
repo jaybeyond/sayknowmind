@@ -151,12 +151,9 @@ export async function privateFetch(
 // ---------------------------------------------------------------------------
 
 /**
- * Get the LLM endpoint URL. In Private Mode, always use local Ollama.
+ * Get the LLM endpoint URL. Always routes through AI server.
  */
 export function getLLMEndpoint(): string {
-  if (isPrivateMode()) {
-    return process.env.OLLAMA_URL ?? "http://localhost:11434";
-  }
   return process.env.AI_SERVER_URL ?? "http://localhost:4000";
 }
 

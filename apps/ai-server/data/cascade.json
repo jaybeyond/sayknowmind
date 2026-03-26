@@ -1,6 +1,16 @@
 {
   "pro": [
     {
+      "type": "nvidia",
+      "model": "meta/llama-3.1-70b-instruct",
+      "name": "Llama 3.1 70B (NVIDIA NIM)"
+    },
+    {
+      "type": "nvidia",
+      "model": "deepseek-ai/deepseek-r1",
+      "name": "DeepSeek R1 (NVIDIA NIM)"
+    },
+    {
       "type": "openrouter",
       "model": "x-ai/grok-4.1-fast",
       "name": "Grok 4.1 Fast (OR)"
@@ -23,12 +33,22 @@
   ],
   "flash": [
     {
+      "type": "nvidia",
+      "model": "meta/llama-3.1-8b-instruct",
+      "name": "Llama 3.1 8B (NVIDIA NIM)"
+    },
+    {
       "type": "openrouter",
       "model": "stepfun/step-3.5-flash:free",
       "name": "Step 3.5 Flash"
     }
   ],
   "thinking": [
+    {
+      "type": "nvidia",
+      "model": "deepseek-ai/deepseek-r1",
+      "name": "DeepSeek R1 (NVIDIA NIM)"
+    },
     {
       "type": "openrouter",
       "model": "qwen/qwen3-235b-a22b:free",

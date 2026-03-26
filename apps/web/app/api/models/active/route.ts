@@ -1,23 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readModelConfig, writeModelConfig, type ModelRole } from "@/lib/model-config";
 
-const CONFIG_PATH = join(process.cwd(), ".sayknowmind-active-model");
+const VALID_ROLES: ModelRole[] = ["chat", "ocr", "embedding"];
 
 export async function GET() {
-  try {
-    const model = (await readFile(CONFIG_PATH, "utf-8")).trim();
-    return NextResponse.json({ model });
-  } catch {
-    return NextResponse.json({ model: process.env.LLM_MODEL ?? "qwen3:1.7b" });
-  }
+  const config = readModelConfig();
+  return NextResponse.json(config);
 }
 
 export async function POST(req: NextRequest) {
-  const { model } = await req.json();
+  const body = await req.json();
+  const { model, role, ollamaEnabled } = body as {
+    model?: string;
+    role?: string;
+    ollamaEnabled?: boolean;
+  };
+
+  // Toggle ollamaEnabled without requiring model
+  if (typeof ollamaEnabled === "boolean") {
+    const config = writeModelConfig({ ollamaEnabled });
+    return NextResponse.json({ ...config, ok: true });
+  }
+
   if (!model || typeof model !== "string") {
     return NextResponse.json({ error: "Model name required" }, { status: 400 });
   }
-  await writeFile(CONFIG_PATH, model, "utf-8");
-  return NextResponse.json({ model, ok: true });
+
+  // If role specified, set that role only. Otherwise set chat (backwards compat).
+  const targetRole: ModelRole = VALID_ROLES.includes(role as ModelRole)
+    ? (role as ModelRole)
+    : "chat";
+
+  const config = writeModelConfig({ [targetRole]: model });
+  return NextResponse.json({ ...config, ok: true });
 }

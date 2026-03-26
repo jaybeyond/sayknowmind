@@ -18,8 +18,8 @@ import { useTranslation } from "@/lib/i18n";
 
 type Tab = "url" | "file" | "text";
 
-const ACCEPTED_TYPES = ".pdf,.docx,.txt,.md,.html";
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ACCEPTED_TYPES = ".pdf,.docx,.txt,.md,.html,.png,.jpg,.jpeg,.webp,.gif,.svg,.mp4,.webm,.mov";
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB (images/videos need more)
 
 interface AddMemoryDialogProps {
   open: boolean;
@@ -27,7 +27,7 @@ interface AddMemoryDialogProps {
 }
 
 export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [tab, setTab] = React.useState<Tab>("url");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -39,7 +39,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
   const [textContent, setTextContent] = React.useState("");
   const [textTitle, setTextTitle] = React.useState("");
 
-  const { fetchMemories } = useMemoryStore();
+  const { fetchMemories, selectedCollection } = useMemoryStore();
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "url", label: t("ingest.tabUrl"), icon: <Link className="size-4" /> },
@@ -88,7 +88,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
     }
   };
 
-  const submitUrl = async () => {
+  const submitUrl = async (force = false) => {
     const trimmed = url.trim();
     if (!isValidUrl(trimmed)) {
       setError(t("ingest.invalidUrl"));
@@ -97,12 +97,24 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
     setLoading(true);
     setError(null);
     try {
-      const locale = navigator.language?.split("-")[0] ?? "en";
       const res = await fetch("/api/ingest/url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmed, locale }),
+        body: JSON.stringify({
+          url: trimmed,
+          locale,
+          force,
+          categoryId: selectedCollection !== "all" ? selectedCollection : undefined,
+        }),
       });
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        const existingTitle = data.existingTitle ?? "Unknown";
+        if (window.confirm(t("ingest.duplicateConfirm").replace("{title}", existingTitle))) {
+          await submitUrl(true);
+        }
+        return;
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         handleError(res, data);
@@ -119,7 +131,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
   const validateFile = (f: File): string | null => {
     if (f.size > MAX_FILE_SIZE) return t("ingest.fileTooLarge");
     const ext = f.name.split(".").pop()?.toLowerCase();
-    if (!ext || !["pdf", "docx", "txt", "md", "html"].includes(ext)) {
+    if (!ext || !["pdf", "docx", "txt", "md", "html", "png", "jpg", "jpeg", "webp", "gif", "svg", "mp4", "webm", "mov"].includes(ext)) {
       return t("ingest.unsupportedType");
     }
     return null;
@@ -145,14 +157,27 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
     setFile(selected);
   };
 
-  const submitFile = async () => {
+  const submitFile = async (force = false) => {
     if (!file) return;
     setLoading(true);
     setError(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("locale", locale);
+      if (force) formData.append("force", "true");
+      if (selectedCollection !== "all") {
+        formData.append("categoryId", selectedCollection);
+      }
       const res = await fetch("/api/ingest/file", { method: "POST", body: formData });
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        const existingTitle = data.existingTitle ?? "Unknown";
+        if (window.confirm(t("ingest.duplicateConfirm").replace("{title}", existingTitle))) {
+          await submitFile(true);
+        }
+        return;
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         handleError(res, data);
@@ -175,7 +200,12 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
       const res = await fetch("/api/ingest/text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: trimmed, title: textTitle.trim() || undefined }),
+        body: JSON.stringify({
+          content: trimmed,
+          title: textTitle.trim() || undefined,
+          locale,
+          categoryId: selectedCollection !== "all" ? selectedCollection : undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

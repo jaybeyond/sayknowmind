@@ -82,6 +82,12 @@ export class UpstageService implements OnModuleInit {
     return !!this.apiKey && this.isAvailable;
   }
 
+  updateApiKey(key: string) {
+    this.apiKey = key || null;
+    this.isAvailable = !!key;
+    this.logger.log(`🔑 Upstage key ${key ? 'updated' : 'removed'}`);
+  }
+
   /**
    * Detect Korean/Japanese text
    */

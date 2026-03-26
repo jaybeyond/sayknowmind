@@ -134,6 +134,8 @@ services:
       EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}
       AI_SERVER_URL: http://ai-server:4000
       AI_API_KEY: ${AI_API_KEY:-}
+      IPFS_KUBO_API: http://ipfs:5001
+      IPFS_GATEWAY: http://ipfs:8080/ipfs
     depends_on:
       postgres:
         condition: service_healthy
@@ -236,24 +238,19 @@ services:
     networks:
       - sayknowmind
 
-  # === ZEROCLAW (Web Scraper / Crawler) ===
-  zeroclaw:
-    build:
-      context: ./packages/zeroclaw
-      dockerfile: Dockerfile
-    container_name: sayknowmind-zeroclaw
+  # === IPFS KUBO (Decentralized Storage for Shared Mode) ===
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: sayknowmind-ipfs
     ports:
-      - "${ZEROCLAW_PORT:-8081}:8081"
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/sayknowmind
-      RUST_LOG: ${RUST_LOG:-info}
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - "${IPFS_API_PORT:-5001}:5001"
+      - "${IPFS_GATEWAY_PORT:-8180}:8080"
     volumes:
-      - user_data:/data/crawl_cache
+      - ipfs_data:/data/ipfs
+    environment:
+      IPFS_PROFILE: server
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      test: ["CMD-SHELL", "ipfs dag stat /ipfs/QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -269,6 +266,8 @@ volumes:
   ollama_data:
     driver: local
   user_data:
+    driver: local
+  ipfs_data:
     driver: local
 
 networks:

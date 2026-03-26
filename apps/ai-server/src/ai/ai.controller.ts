@@ -186,6 +186,16 @@ export class AIController {
     return this.aiRouterService.reloadCascade();
   }
 
+  /**
+   * Update provider API keys at runtime.
+   * Called by the web app when user saves provider settings.
+   */
+  @Put('keys')
+  updateProviderKeys(@Body() body: Record<string, string>) {
+    this.aiRouterService.updateProviderKeys(body);
+    return { ok: true, updated: Object.keys(body) };
+  }
+
   // ===== Knowledge Base API =====
 
   @Get('knowledge')

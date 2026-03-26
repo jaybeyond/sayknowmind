@@ -12,6 +12,9 @@ import {
   XCircle,
   HardDrive,
   RefreshCw,
+  MessageSquare,
+  ScanText,
+  Database,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
@@ -31,15 +34,29 @@ interface InstalledModel {
   };
 }
 
+type ModelRole = "chat" | "ocr" | "embedding";
+
+interface ModelConfig {
+  chat: string;
+  ocr: string;
+  embedding: string;
+}
+
+const ROLES: { id: ModelRole; icon: typeof MessageSquare; color: string }[] = [
+  { id: "chat", icon: MessageSquare, color: "text-blue-500 bg-blue-500/10 border-blue-500/30" },
+  { id: "ocr", icon: ScanText, color: "text-amber-500 bg-amber-500/10 border-amber-500/30" },
+  { id: "embedding", icon: Database, color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30" },
+];
+
 // ─── Popular models ─────────────────────────────────────────
 
 const popularModels = [
-  { name: "llama3.2", desc: "Meta — 3B, fast general-purpose" },
-  { name: "qwen2.5", desc: "Alibaba — 7B, multilingual" },
-  { name: "mistral", desc: "Mistral AI — 7B, balanced" },
-  { name: "gemma2", desc: "Google — 9B, efficient" },
-  { name: "deepseek-r1", desc: "DeepSeek — reasoning" },
-  { name: "phi4", desc: "Microsoft — 14B, compact" },
+  { name: "qwen3:1.7b", desc: "Alibaba — 1.7B, fast chat", role: "chat" as ModelRole },
+  { name: "qwen3:4b", desc: "Alibaba — 4B, balanced chat", role: "chat" as ModelRole },
+  { name: "qwen3-vl:2b", desc: "Alibaba — 2B, vision+OCR (32 langs)", role: "ocr" as ModelRole },
+  { name: "nomic-embed-text", desc: "Nomic — 137M, embedding", role: "embedding" as ModelRole },
+  { name: "all-minilm", desc: "Sentence-transformers — 23M, fast embed", role: "embedding" as ModelRole },
+  { name: "llama3.2", desc: "Meta — 3B, general-purpose", role: "chat" as ModelRole },
 ];
 
 // ─── Format helpers ─────────────────────────────────────────
@@ -64,6 +81,7 @@ function formatDate(iso: string): string {
 
 export function OllamaModels() {
   const { t } = useTranslation();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
   const [online, setOnline] = useState<boolean | null>(null);
   const [models, setModels] = useState<InstalledModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,27 +92,57 @@ export function OllamaModels() {
     pct: number;
   } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [activeModel, setActiveModel] = useState<string>("");
+  const [config, setConfig] = useState<ModelConfig>({ chat: "", ocr: "", embedding: "" });
 
-  const fetchActiveModel = useCallback(async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       const res = await fetch("/api/models/active");
       const data = await res.json();
-      setActiveModel(data.model ?? "");
+      setConfig({ chat: data.chat ?? "", ocr: data.ocr ?? "", embedding: data.embedding ?? "" });
+      setEnabled(data.ollamaEnabled ?? false);
     } catch {
       // ignore
     }
   }, []);
 
-  const handleSetActive = async (name: string) => {
+  const handleToggleEnabled = async (next: boolean) => {
+    setEnabled(next);
     try {
       await fetch("/api/models/active", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: name }),
+        body: JSON.stringify({ ollamaEnabled: next }),
       });
-      setActiveModel(name);
-      toast.success(t("ollama.activeSet").replace("{{name}}", name));
+      if (next) {
+        checkHealth().then(fetchModels);
+      } else {
+        setOnline(null);
+        setModels([]);
+      }
+      toast.success(next ? t("ollama.enabled") : t("ollama.disabled"));
+    } catch {
+      setEnabled(!next);
+      toast.error(t("ollama.toggleFailed"));
+    }
+  };
+
+  const handleSetRole = async (modelName: string, role: ModelRole) => {
+    // Toggle off if already assigned
+    const newModel = config[role] === modelName ? "" : modelName;
+    try {
+      const res = await fetch("/api/models/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: newModel || config[role], role }),
+      });
+      const data = await res.json();
+      setConfig({ chat: data.chat ?? "", ocr: data.ocr ?? "", embedding: data.embedding ?? "" });
+      const roleLabel = t(`ollama.role.${role}`);
+      toast.success(
+        t("ollama.roleSet")
+          .replace("{{role}}", roleLabel)
+          .replace("{{name}}", newModel || modelName)
+      );
     } catch {
       toast.error(t("ollama.setActiveFailed"));
     }
@@ -124,9 +172,17 @@ export function OllamaModels() {
   }, []);
 
   useEffect(() => {
-    checkHealth().then(fetchModels);
-    fetchActiveModel();
-  }, [checkHealth, fetchModels, fetchActiveModel]);
+    fetchConfig().then(() => {
+      // health/models fetched after toggle or on mount when enabled
+    });
+  }, [fetchConfig]);
+
+  // Fetch health & models when enabled state is known and true
+  useEffect(() => {
+    if (enabled === true) {
+      checkHealth().then(fetchModels);
+    }
+  }, [enabled, checkHealth, fetchModels]);
 
   const handlePull = async (name: string) => {
     if (pulling) return;
@@ -213,6 +269,9 @@ export function OllamaModels() {
   const isInstalled = (name: string) =>
     models.some((m) => m.name === name || m.name.startsWith(`${name}:`));
 
+  const getModelRoles = (name: string): ModelRole[] =>
+    ROLES.map((r) => r.id).filter((role) => config[role] === name);
+
   const statusText = online === null
     ? t("ollama.checking")
     : online
@@ -223,87 +282,149 @@ export function OllamaModels() {
 
   return (
     <div className="space-y-4">
-      {/* Status */}
+      {/* Enable toggle */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {online === null ? (
-            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-          ) : online ? (
-            <CheckCircle2 className="size-3.5 text-green-500" />
-          ) : (
-            <XCircle className="size-3.5 text-destructive" />
-          )}
-          <span className="text-xs text-muted-foreground">{statusText}</span>
+          <span className="text-sm font-medium">{t("ollama.enableLabel")}</span>
+          <span className="text-xs text-muted-foreground">{t("ollama.enableDesc")}</span>
         </div>
         <button
-          onClick={() => {
-            checkHealth().then(fetchModels);
-          }}
-          className="text-muted-foreground hover:text-foreground"
+          role="switch"
+          aria-checked={enabled === true}
+          onClick={() => handleToggleEnabled(!enabled)}
+          className={cn(
+            "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+            enabled ? "bg-primary" : "bg-muted"
+          )}
         >
-          <RefreshCw className="size-3.5" />
+          <span
+            className={cn(
+              "pointer-events-none block size-4 rounded-full bg-background shadow-sm ring-0 transition-transform",
+              enabled ? "translate-x-4" : "translate-x-0"
+            )}
+          />
         </button>
       </div>
 
+      {/* Status — only when enabled */}
+      {enabled && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {online === null ? (
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+            ) : online ? (
+              <CheckCircle2 className="size-3.5 text-green-500" />
+            ) : (
+              <XCircle className="size-3.5 text-destructive" />
+            )}
+            <span className="text-xs text-muted-foreground">{statusText}</span>
+          </div>
+          <button
+            onClick={() => {
+              checkHealth().then(fetchModels);
+            }}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <RefreshCw className="size-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Everything below requires Ollama to be enabled */}
+      {!enabled && (
+        <div className="rounded-lg border border-dashed border-muted-foreground/30 p-3">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("ollama.disabledHelp")}
+          </p>
+        </div>
+      )}
+
       {/* Installed models */}
-      {models.length > 0 && (
+      {enabled && models.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-xs font-medium text-muted-foreground">
             {t("ollama.installedModels")}
           </h4>
           <div className="space-y-1.5">
             {models.map((model) => {
-              const isActive = activeModel === model.name;
+              const assignedRoles = getModelRoles(model.name);
               return (
                 <div
                   key={model.digest}
                   className={cn(
-                    "flex items-center justify-between rounded-lg border px-3 py-2 cursor-pointer transition-colors",
-                    isActive
+                    "rounded-lg border px-3 py-2 transition-colors",
+                    assignedRoles.length > 0
                       ? "border-primary/40 bg-primary/5"
-                      : "border-border hover:border-primary/30"
+                      : "border-border"
                   )}
-                  onClick={() => handleSetActive(model.name)}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    {isActive ? (
-                      <CheckCircle2 className="size-3.5 text-primary shrink-0" />
-                    ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
                       <HardDrive className="size-3.5 text-muted-foreground shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {model.name}
-                        {isActive && (
-                          <span className="ml-2 text-[10px] text-primary font-normal">
-                            {t("ollama.active")}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {formatSize(model.size)}
-                        {model.details?.parameter_size &&
-                          ` · ${model.details.parameter_size}`}
-                        {` · ${formatDate(model.modified_at)}`}
-                      </p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium truncate">{model.name}</p>
+                          {assignedRoles.map((role) => {
+                            const r = ROLES.find((x) => x.id === role)!;
+                            return (
+                              <span
+                                key={role}
+                                className={cn(
+                                  "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border",
+                                  r.color
+                                )}
+                              >
+                                <r.icon className="size-2.5" />
+                                {t(`ollama.role.${role}`)}
+                              </span>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {formatSize(model.size)}
+                          {model.details?.parameter_size &&
+                            ` · ${model.details.parameter_size}`}
+                          {` · ${formatDate(model.modified_at)}`}
+                        </p>
+                      </div>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => handleDelete(model.name)}
+                      disabled={deleting === model.name}
+                    >
+                      {deleting === model.name ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-3.5" />
+                      )}
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 text-muted-foreground hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(model.name);
-                    }}
-                    disabled={deleting === model.name}
-                  >
-                    {deleting === model.name ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-3.5" />
-                    )}
-                  </Button>
+
+                  {/* Role assignment buttons */}
+                  <div className="flex gap-1.5 mt-2">
+                    {ROLES.map((role) => {
+                      const isAssigned = config[role.id] === model.name;
+                      return (
+                        <button
+                          key={role.id}
+                          onClick={() => handleSetRole(model.name, role.id)}
+                          className={cn(
+                            "flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors",
+                            isAssigned
+                              ? role.color
+                              : "text-muted-foreground border-border hover:border-muted-foreground/50"
+                          )}
+                        >
+                          <role.icon className="size-3" />
+                          {t(`ollama.role.${role.id}`)}
+                          {isAssigned && <CheckCircle2 className="size-2.5" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
@@ -312,7 +433,7 @@ export function OllamaModels() {
       )}
 
       {/* Download progress */}
-      {pulling && pullProgress && (
+      {enabled && pulling && pullProgress && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
           <div className="flex items-center gap-2">
             <Loader2 className="size-3.5 animate-spin text-primary" />
@@ -334,7 +455,7 @@ export function OllamaModels() {
       )}
 
       {/* Popular models */}
-      {online && (
+      {enabled && online && (
         <div className="space-y-2">
           <h4 className="text-xs font-medium text-muted-foreground">
             {t("ollama.downloadModels")}
@@ -342,6 +463,7 @@ export function OllamaModels() {
           <div className="grid grid-cols-2 gap-1.5">
             {popularModels.map((pm) => {
               const installed = isInstalled(pm.name);
+              const roleInfo = ROLES.find((r) => r.id === pm.role)!;
               return (
                 <button
                   key={pm.name}
@@ -363,10 +485,15 @@ export function OllamaModels() {
                     )}
                   />
                   <div className="min-w-0">
-                    <p className="text-xs font-medium truncate">
-                      {pm.name}
-                      {installed && " ✓"}
-                    </p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-xs font-medium truncate">
+                        {pm.name}
+                        {installed && " ✓"}
+                      </p>
+                      <span className={cn("px-1 rounded text-[9px] font-medium border", roleInfo.color)}>
+                        {t(`ollama.role.${pm.role}`)}
+                      </span>
+                    </div>
                     <p className="text-[10px] text-muted-foreground truncate">
                       {pm.desc}
                     </p>
@@ -379,7 +506,7 @@ export function OllamaModels() {
       )}
 
       {/* Custom model input */}
-      {online && (
+      {enabled && online && (
         <div className="flex gap-2">
           <Input
             placeholder={t("ollama.customModelPlaceholder")}
@@ -412,7 +539,7 @@ export function OllamaModels() {
       )}
 
       {/* Offline help */}
-      {online === false && (
+      {enabled && online === false && (
         <div className="rounded-lg border border-dashed border-muted-foreground/30 p-3">
           <p className="text-xs text-muted-foreground leading-relaxed">
             {t("ollama.installHelp")}

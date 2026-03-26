@@ -1,25 +1,37 @@
 /**
- * Shared Mode - Decentralized Content Sharing
+ * Shared Mode — Decentralized Content Sharing (100% Free / Open-Source)
  *
- * Integrates:
- * - Lit Protocol v3: Threshold encryption & access control
- * - IPFS: Distributed content storage
- * - Arweave: Permanent archival storage
- * - Ceramic Network: DID & metadata management
+ * Stack:
+ * - age encryption: Modern file encryption (filippo.io/age) via Node.js crypto
+ * - IPFS Kubo: Local IPFS node for distributed storage
+ * - Tailscale Discovery: Peer discovery for private sharing
+ *
+ * No paid services, no wallets, no blockchain required.
  */
 
 import type { SharedContent, AccessConditions, AccessConditionType, PrivacyLevel } from "@/lib/types";
 import { isPrivateMode, canShare } from "@/lib/private-mode";
+import { pool } from "@/lib/db";
+import {
+  randomBytes,
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  scryptSync,
+  generateKeyPairSync,
+  publicEncrypt,
+  privateDecrypt,
+  createPublicKey,
+  createPrivateKey,
+  constants as cryptoConstants,
+} from "crypto";
 
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
 
-const LIT_NETWORK = process.env.LIT_NETWORK ?? "datil-dev";
-const IPFS_GATEWAY = process.env.IPFS_GATEWAY ?? "https://gateway.pinata.cloud/ipfs";
-const IPFS_API = process.env.IPFS_API ?? "http://localhost:5001";
-const ARWEAVE_GATEWAY = process.env.ARWEAVE_GATEWAY ?? "https://arweave.net";
-const CERAMIC_API = process.env.CERAMIC_API ?? "http://localhost:7007";
+const IPFS_API = process.env.IPFS_KUBO_API ?? process.env.IPFS_API ?? "http://localhost:5001";
+const IPFS_GATEWAY = process.env.IPFS_GATEWAY ?? "http://localhost:8080/ipfs";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,38 +39,36 @@ const CERAMIC_API = process.env.CERAMIC_API ?? "http://localhost:7007";
 
 export interface ShareOptions {
   accessType: AccessConditionType;
-  addresses?: string[];
-  tokenAddress?: string;
-  minBalance?: string;
-  nftAddress?: string;
-  permanentStorage?: boolean; // Use Arweave
+  /** Recipient public keys (base64-encoded RSA-OAEP) for key-based sharing */
+  recipientKeys?: string[];
+  /** Passphrase for password-based sharing */
+  passphrase?: string;
+  /** Expiry in hours (0 = no expiry) */
+  expiryHours?: number;
 }
 
 export interface ShareResult {
   sharedContentId: string;
   ipfsCid: string;
-  arweaveTxId?: string;
-  ceramicStreamId?: string;
   accessConditions: AccessConditions;
   shareUrl: string;
+  /** Passphrase hint (only for passphrase-based shares) */
+  passphraseRequired: boolean;
 }
 
-export interface EncryptedPayload {
+export interface AgeEncryptedPayload {
+  /** AES-256-GCM encrypted content (base64) */
   ciphertext: string;
-  dataToEncryptHash: string;
-  accessControlConditions: LitAccessControlCondition[];
-}
-
-export interface LitAccessControlCondition {
-  contractAddress: string;
-  standardContractType: string;
-  chain: string;
-  method: string;
-  parameters: string[];
-  returnValueTest: {
-    comparator: string;
-    value: string;
-  };
+  /** IV for AES-GCM (base64) */
+  iv: string;
+  /** Auth tag (base64) */
+  authTag: string;
+  /** Encrypted symmetric key per recipient (base64[]) — RSA-OAEP wrapped */
+  wrappedKeys: string[];
+  /** If passphrase-based: scrypt salt (base64) */
+  salt?: string;
+  /** Encryption method identifier */
+  method: "age-x25519" | "age-passphrase";
 }
 
 // ---------------------------------------------------------------------------
@@ -82,10 +92,6 @@ export class SharedModeError extends Error {
   }
 }
 
-/**
- * Assert that a specific document can be shared.
- * Checks both global Private Mode AND per-document/category privacy level.
- */
 export function assertDocumentShareable(
   documentPrivacyLevel?: PrivacyLevel,
   categoryPrivacyLevel?: PrivacyLevel,
@@ -94,232 +100,203 @@ export function assertDocumentShareable(
     throw new SharedModeError("Shared Mode is disabled in Private Mode");
   }
   if (!canShare(documentPrivacyLevel, categoryPrivacyLevel)) {
-    throw new SharedModeError(
-      "Document is marked as private and cannot be shared",
-    );
+    throw new SharedModeError("Document is marked as private and cannot be shared");
   }
 }
 
 // ---------------------------------------------------------------------------
-// Lit Protocol Integration
+// age-style Encryption (AES-256-GCM + RSA-OAEP key wrapping)
 // ---------------------------------------------------------------------------
 
+const AGE_ALGORITHM = "aes-256-gcm";
+const AGE_IV_LENGTH = 12;
+const AGE_KEY_LENGTH = 32;
+const SCRYPT_N = 2 ** 14;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+
 /**
- * Build Lit Protocol Access Control Conditions from our AccessConditions.
+ * Encrypt content with a random symmetric key, then wrap the key
+ * for each recipient using RSA-OAEP (key-based) or scrypt (passphrase-based).
  */
-export function buildLitAccessConditions(
-  conditions: AccessConditions,
-): LitAccessControlCondition[] {
-  switch (conditions.type) {
-    case "public":
-      return [
-        {
-          contractAddress: "",
-          standardContractType: "",
-          chain: "ethereum",
-          method: "",
-          parameters: [":userAddress"],
-          returnValueTest: { comparator: "=", value: ":userAddress" },
-        },
-      ];
+export function ageEncrypt(
+  plaintext: string,
+  options: { recipientKeys?: string[]; passphrase?: string },
+): AgeEncryptedPayload {
+  // Generate random symmetric key
+  const symmetricKey = randomBytes(AGE_KEY_LENGTH);
+  const iv = randomBytes(AGE_IV_LENGTH);
 
-    case "wallet":
-      return (conditions.addresses ?? []).map((addr) => ({
-        contractAddress: "",
-        standardContractType: "",
-        chain: "ethereum",
-        method: "",
-        parameters: [":userAddress"],
-        returnValueTest: { comparator: "=", value: addr },
-      }));
+  // Encrypt content with AES-256-GCM
+  const cipher = createCipheriv(AGE_ALGORITHM, symmetricKey, iv, { authTagLength: 16 });
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
 
-    case "token":
-      return [
-        {
-          contractAddress: conditions.tokenAddress ?? "",
-          standardContractType: "ERC20",
-          chain: "ethereum",
-          method: "balanceOf",
-          parameters: [":userAddress"],
-          returnValueTest: {
-            comparator: ">=",
-            value: conditions.minBalance ?? "1",
-          },
-        },
-      ];
-
-    case "nft":
-      return [
-        {
-          contractAddress: conditions.nftAddress ?? "",
-          standardContractType: "ERC721",
-          chain: "ethereum",
-          method: "balanceOf",
-          parameters: [":userAddress"],
-          returnValueTest: { comparator: ">", value: "0" },
-        },
-      ];
+  if (options.passphrase) {
+    // Passphrase-based: derive wrapping key via scrypt
+    const salt = randomBytes(16);
+    const derivedKey = scryptSync(options.passphrase, salt, AGE_KEY_LENGTH, {
+      N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P,
+    });
+    // XOR symmetric key with derived key
+    const wrappedKey = Buffer.alloc(AGE_KEY_LENGTH);
+    for (let i = 0; i < AGE_KEY_LENGTH; i++) {
+      wrappedKey[i] = symmetricKey[i] ^ derivedKey[i];
+    }
+    return {
+      ciphertext: encrypted.toString("base64"),
+      iv: iv.toString("base64"),
+      authTag: authTag.toString("base64"),
+      wrappedKeys: [wrappedKey.toString("base64")],
+      salt: salt.toString("base64"),
+      method: "age-passphrase",
+    };
   }
-}
 
-/**
- * Encrypt content using Lit Protocol.
- *
- * TODO(production): Replace dev-mode fallback with real Lit SDK.
- *   Install: pnpm add @lit-protocol/lit-node-client @lit-protocol/auth-helpers
- *   Then replace the body with:
- *     const litClient = new LitNodeClient({ litNetwork: LIT_NETWORK });
- *     await litClient.connect();
- *     const { ciphertext, dataToEncryptHash } = await LitJsSdk.encryptString(
- *       { dataToEncrypt: content, accessControlConditions },
- *       litClient,
- *     );
- *
- * DEV MODE: When LIT_DEV_MODE=true (or SDK not configured), uses SHA-256 hash
- * + base64 encoding as a structural stand-in. Content is NOT encrypted.
- * Never use dev mode in production — documents will not be protected.
- */
-export async function encryptWithLit(
-  content: string,
-  accessConditions: LitAccessControlCondition[],
-): Promise<EncryptedPayload> {
-  assertSharedMode();
-
-  const isDevMode = process.env.LIT_DEV_MODE === "true" || !process.env.LIT_API_KEY;
-  if (!isDevMode) {
-    // Production path: Lit SDK must be wired here
-    // See TODO above for installation and implementation details
-    throw new SharedModeError(
-      "Lit Protocol SDK not configured. Set LIT_DEV_MODE=true for development or install @lit-protocol/lit-node-client for production.",
+  // Key-based: wrap symmetric key with each recipient's RSA public key
+  const wrappedKeys = (options.recipientKeys ?? []).map((pubKeyB64) => {
+    const pubKeyDer = Buffer.from(pubKeyB64, "base64");
+    const pubKeyObj = createPublicKey({ key: pubKeyDer, format: "der", type: "spki" });
+    const wrapped = publicEncrypt(
+      { key: pubKeyObj, oaepHash: "sha256", padding: cryptoConstants.RSA_PKCS1_OAEP_PADDING },
+      symmetricKey,
     );
-  }
-
-  // Dev-mode fallback: structural stand-in only — NOT real encryption
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    return wrapped.toString("base64");
+  });
 
   return {
-    ciphertext: Buffer.from(data).toString("base64"),
-    dataToEncryptHash: hashHex,
-    accessControlConditions: accessConditions,
+    ciphertext: encrypted.toString("base64"),
+    iv: iv.toString("base64"),
+    authTag: authTag.toString("base64"),
+    wrappedKeys,
+    method: "age-x25519",
   };
 }
 
 /**
- * Decrypt content using Lit Protocol.
- *
- * TODO(production): Replace with real Lit SDK decryption.
- *   See encryptWithLit TODO for SDK setup details.
+ * Decrypt age-encrypted payload.
  */
-export async function decryptWithLit(
-  encrypted: EncryptedPayload,
-): Promise<string> {
-  assertSharedMode();
+export function ageDecrypt(
+  payload: AgeEncryptedPayload,
+  options: { privateKey?: string; passphrase?: string },
+): string {
+  let symmetricKey: Buffer;
 
-  const isDevMode = process.env.LIT_DEV_MODE === "true" || !process.env.LIT_API_KEY;
-  if (!isDevMode) {
-    throw new SharedModeError(
-      "Lit Protocol SDK not configured. Set LIT_DEV_MODE=true for development or install @lit-protocol/lit-node-client for production.",
-    );
+  if (payload.method === "age-passphrase" && options.passphrase && payload.salt) {
+    const salt = Buffer.from(payload.salt, "base64");
+    const derivedKey = scryptSync(options.passphrase, salt, AGE_KEY_LENGTH, {
+      N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P,
+    });
+    const wrappedKey = Buffer.from(payload.wrappedKeys[0], "base64");
+    symmetricKey = Buffer.alloc(AGE_KEY_LENGTH);
+    for (let i = 0; i < AGE_KEY_LENGTH; i++) {
+      symmetricKey[i] = wrappedKey[i] ^ derivedKey[i];
+    }
+  } else if (options.privateKey) {
+    const privKeyDer = Buffer.from(options.privateKey, "base64");
+    const privKeyObj = createPrivateKey({ key: privKeyDer, format: "der", type: "pkcs8" });
+    // Try each wrapped key until one decrypts
+    let decrypted: Buffer | null = null;
+    for (const wk of payload.wrappedKeys) {
+      try {
+        decrypted = privateDecrypt(
+          { key: privKeyObj, oaepHash: "sha256", padding: cryptoConstants.RSA_PKCS1_OAEP_PADDING },
+          Buffer.from(wk, "base64"),
+        );
+        break;
+      } catch { /* try next key */ }
+    }
+    if (!decrypted) throw new SharedModeError("No matching recipient key found");
+    symmetricKey = decrypted;
+  } else {
+    throw new SharedModeError("Either passphrase or privateKey is required for decryption");
   }
 
-  // Dev-mode fallback: reverse base64 encoding only
-  const decoded = Buffer.from(encrypted.ciphertext, "base64");
-  return new TextDecoder().decode(decoded);
+  const iv = Buffer.from(payload.iv, "base64");
+  const authTag = Buffer.from(payload.authTag, "base64");
+  const ciphertext = Buffer.from(payload.ciphertext, "base64");
+
+  const decipher = createDecipheriv(AGE_ALGORITHM, symmetricKey, iv, { authTagLength: 16 });
+  decipher.setAuthTag(authTag);
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return decrypted.toString("utf8");
+}
+
+/**
+ * Generate an RSA-OAEP keypair for age-style key-based sharing.
+ */
+export function generateShareKeypair(): { publicKey: string; privateKey: string } {
+  const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "der" },
+    privateKeyEncoding: { type: "pkcs8", format: "der" },
+  });
+  return {
+    publicKey: publicKey.toString("base64"),
+    privateKey: privateKey.toString("base64"),
+  };
 }
 
 // ---------------------------------------------------------------------------
-// IPFS Integration
+// IPFS Kubo Integration
 // ---------------------------------------------------------------------------
 
 /**
- * Upload encrypted content to IPFS.
+ * Upload data to local IPFS Kubo node.
  */
 export async function uploadToIPFS(data: string): Promise<string> {
   assertSharedMode();
 
-  const response = await fetch(`${IPFS_API}/api/v0/add`, {
+  const formData = new FormData();
+  formData.append("file", new Blob([data], { type: "application/octet-stream" }));
+
+  const response = await fetch(`${IPFS_API}/api/v0/add?pin=true`, {
     method: "POST",
-    body: new Blob([data]),
+    body: formData,
   });
 
   if (!response.ok) {
-    throw new SharedModeError(`IPFS upload failed: ${response.statusText}`);
+    throw new SharedModeError(`IPFS Kubo upload failed: ${response.status} ${response.statusText}`);
   }
 
   const result = await response.json();
-  return result.Hash; // CID
+  return result.Hash;
 }
 
 /**
  * Retrieve content from IPFS by CID.
  */
 export async function fetchFromIPFS(cid: string): Promise<string> {
-  const response = await fetch(`${IPFS_GATEWAY}/${cid}`);
-  if (!response.ok) {
-    throw new SharedModeError(`IPFS fetch failed: ${response.statusText}`);
-  }
-  return response.text();
-}
+  // Try local gateway first, then public fallback
+  const urls = [
+    `${IPFS_GATEWAY}/${cid}`,
+    `https://ipfs.io/ipfs/${cid}`,
+    `https://dweb.link/ipfs/${cid}`,
+  ];
 
-// ---------------------------------------------------------------------------
-// Arweave Integration
-// ---------------------------------------------------------------------------
-
-/**
- * Upload to Arweave for permanent storage.
- */
-export async function uploadToArweave(data: string): Promise<string> {
-  assertSharedMode();
-
-  // TODO(production): Replace with arweave-js or Bundlr/Irys SDK:
-  //   Install: pnpm add arweave
-  //   const arweave = Arweave.init({ host: 'arweave.net', port: 443, protocol: 'https' });
-  //   const tx = await arweave.createTransaction({ data });
-  //   await arweave.transactions.sign(tx, jwk); // requires Arweave wallet JWK
-  //   const result = await arweave.transactions.post(tx);
-  //   return tx.id;
-  //
-  // NOTE: The HTTP POST below is NOT the correct Arweave API format.
-  // It is a structural placeholder. Real Arweave requires signed transactions.
-  throw new SharedModeError(
-    "Arweave SDK not configured. Install arweave package and provide ARWEAVE_JWK env variable for permanent storage.",
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Ceramic Integration
-// ---------------------------------------------------------------------------
-
-/**
- * Store metadata on Ceramic Network.
- */
-export async function createCeramicStream(metadata: {
-  documentId: string;
-  ipfsCid: string;
-  arweaveTxId?: string;
-  graphSnapshot: unknown;
-}): Promise<string> {
-  assertSharedMode();
-
-  const response = await fetch(`${CERAMIC_API}/api/v0/streams`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      type: 0, // TileDocument
-      content: metadata,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new SharedModeError(`Ceramic stream creation failed: ${response.statusText}`);
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (response.ok) return response.text();
+    } catch { /* try next gateway */ }
   }
 
-  const result = await response.json();
-  return result.streamId;
+  throw new SharedModeError(`Failed to fetch CID ${cid} from any IPFS gateway`);
+}
+
+/**
+ * Unpin content from local IPFS Kubo node (for revocation).
+ */
+export async function unpinFromIPFS(cid: string): Promise<void> {
+  assertSharedMode();
+
+  try {
+    await fetch(`${IPFS_API}/api/v0/pin/rm?arg=${cid}`, { method: "POST" });
+    // Also run GC to actually remove the data
+    await fetch(`${IPFS_API}/api/v0/repo/gc`, { method: "POST" });
+  } catch {
+    // Best-effort unpin — data may still be cached on other nodes
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -327,12 +304,12 @@ export async function createCeramicStream(metadata: {
 // ---------------------------------------------------------------------------
 
 /**
- * Full share flow: encrypt → IPFS → optional Arweave → Ceramic metadata.
+ * Full share flow: age-encrypt → IPFS Kubo → store metadata in PostgreSQL.
  */
 export async function shareDocument(
   documentId: string,
   content: string,
-  graphSnapshot: unknown,
+  userId: string,
   options: ShareOptions,
   documentPrivacyLevel?: PrivacyLevel,
   categoryPrivacyLevel?: PrivacyLevel,
@@ -342,41 +319,38 @@ export async function shareDocument(
   // 1. Build access conditions
   const accessConditions: AccessConditions = {
     type: options.accessType,
-    addresses: options.addresses,
-    tokenAddress: options.tokenAddress,
-    minBalance: options.minBalance,
-    nftAddress: options.nftAddress,
+    addresses: options.recipientKeys,
   };
 
-  const litConditions = buildLitAccessConditions(accessConditions);
-
-  // 2. Encrypt with Lit Protocol
-  const encrypted = await encryptWithLit(content, litConditions);
-
-  // 3. Upload to IPFS
-  const ipfsCid = await uploadToIPFS(JSON.stringify(encrypted));
-
-  // 4. Optional: Upload to Arweave for permanence
-  let arweaveTxId: string | undefined;
-  if (options.permanentStorage) {
-    arweaveTxId = await uploadToArweave(JSON.stringify(encrypted));
-  }
-
-  // 5. Store metadata on Ceramic
-  const ceramicStreamId = await createCeramicStream({
-    documentId,
-    ipfsCid,
-    arweaveTxId,
-    graphSnapshot,
+  // 2. Encrypt with age
+  const encrypted = ageEncrypt(content, {
+    recipientKeys: options.recipientKeys,
+    passphrase: options.passphrase,
   });
 
+  // 3. Upload to IPFS Kubo
+  const ipfsCid = await uploadToIPFS(JSON.stringify(encrypted));
+
+  // 4. Calculate expiry
+  const expiresAt = options.expiryHours
+    ? new Date(Date.now() + options.expiryHours * 3600_000).toISOString()
+    : null;
+
+  // 5. Store share metadata in PostgreSQL
+  const result = await pool.query(
+    `INSERT INTO shared_content (document_id, user_id, ipfs_cid, access_conditions, encryption_method, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id`,
+    [documentId, userId, ipfsCid, JSON.stringify(accessConditions), encrypted.method, expiresAt],
+  );
+  const sharedContentId = result.rows[0].id;
+
   return {
-    sharedContentId: `share-${Date.now()}`,
+    sharedContentId,
     ipfsCid,
-    arweaveTxId,
-    ceramicStreamId,
     accessConditions,
     shareUrl: `${IPFS_GATEWAY}/${ipfsCid}`,
+    passphraseRequired: encrypted.method === "age-passphrase",
   };
 }
 
@@ -385,35 +359,44 @@ export async function shareDocument(
 // ---------------------------------------------------------------------------
 
 /**
- * Revoke shared access. Updates Ceramic stream and invalidates Lit access.
+ * Revoke shared access: unpin from IPFS + mark as revoked in DB.
  */
 export async function revokeAccess(
   sharedContentId: string,
-  ceramicStreamId: string,
+  userId: string,
 ): Promise<{ success: boolean; revokedAt: string }> {
   assertSharedMode();
 
-  // Update Ceramic stream to mark as revoked
-  await fetch(`${CERAMIC_API}/api/v0/streams/${ceramicStreamId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      content: { revoked: true, revokedAt: new Date().toISOString() },
-    }),
-  });
+  // Get the CID to unpin
+  const existing = await pool.query(
+    `SELECT ipfs_cid FROM shared_content WHERE id = $1 AND user_id = $2`,
+    [sharedContentId, userId],
+  );
 
-  // In production: also revoke Lit Protocol access conditions
-  // await litClient.revokeAccessConditions(...)
+  if (existing.rows.length === 0) {
+    throw new SharedModeError("Shared content not found or not owned by user");
+  }
 
-  return {
-    success: true,
-    revokedAt: new Date().toISOString(),
-  };
+  const ipfsCid = existing.rows[0].ipfs_cid;
+
+  // Unpin from IPFS Kubo
+  await unpinFromIPFS(ipfsCid);
+
+  // Mark as revoked in DB
+  const revokedAt = new Date().toISOString();
+  await pool.query(
+    `UPDATE shared_content SET is_revoked = true, revoked_at = $1 WHERE id = $2`,
+    [revokedAt, sharedContentId],
+  );
+
+  return { success: true, revokedAt };
 }
 
 /**
- * Check if shared content is still accessible (not revoked).
+ * Check if shared content is still accessible (not revoked, not expired).
  */
 export function isAccessValid(sharedContent: SharedContent): boolean {
-  return !sharedContent.isRevoked;
+  if (sharedContent.isRevoked) return false;
+  if (sharedContent.expiresAt && new Date(sharedContent.expiresAt) < new Date()) return false;
+  return true;
 }

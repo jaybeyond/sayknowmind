@@ -5,11 +5,14 @@ import { cn } from "@/lib/utils";
 import { ProfileTab } from "./profile-tab";
 import { AppearanceTab } from "./appearance-tab";
 import { AITab } from "./ai-tab";
+import { ModelsTab } from "./models-tab";
 import { PrivacyTab } from "./privacy-tab";
 import { PromptEditor } from "./prompt-editor";
+import { IntegrationsTab } from "./integrations-tab";
+import { ServicesTab } from "./services-tab";
 import { useTranslation } from "@/lib/i18n";
 
-type TabId = "profile" | "appearance" | "ai" | "prompts" | "privacy";
+type TabId = "profile" | "appearance" | "ai" | "models" | "prompts" | "privacy" | "integrations" | "services";
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -19,8 +22,11 @@ export function SettingsPage() {
     { id: "profile" as TabId, label: t("settings.tabProfile") },
     { id: "appearance" as TabId, label: t("settings.tabAppearance") },
     { id: "ai" as TabId, label: t("settings.tabAi") },
+    { id: "models" as TabId, label: t("settings.tabModels") },
     { id: "prompts" as TabId, label: t("settings.tabPrompts") },
     { id: "privacy" as TabId, label: t("settings.tabPrivacy") },
+    { id: "integrations" as TabId, label: t("settings.tabIntegrations") },
+    { id: "services" as TabId, label: t("settings.tabServices") },
   ];
 
   return (
@@ -53,6 +59,7 @@ export function SettingsPage() {
         {activeTab === "profile" && <ProfileTab />}
         {activeTab === "appearance" && <AppearanceTab />}
         {activeTab === "ai" && <AITab />}
+        {activeTab === "models" && <ModelsTab />}
         {activeTab === "prompts" && (
           <div className="space-y-4">
             <div>
@@ -65,6 +72,8 @@ export function SettingsPage() {
           </div>
         )}
         {activeTab === "privacy" && <PrivacyTab />}
+        {activeTab === "integrations" && <IntegrationsTab />}
+        {activeTab === "services" && <ServicesTab />}
       </div>
     </main>
   );

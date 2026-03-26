@@ -1,51 +1,21 @@
 /**
- * Ollama client — uses OpenAI-compatible /v1 endpoint for stable streaming.
- * Pattern from pi-mono: Ollama's /v1/chat/completions returns proper SSE
- * instead of raw NDJSON, making streaming more reliable.
+ * Cloud provider streaming client — OpenAI-compatible /v1/chat/completions.
+ * Works with: OpenRouter, OpenAI, Anthropic (via proxy), Grok, Upstage,
+ * NVIDIA NIM, Cloudflare Workers AI, Venice, Z.AI, Google Gemini.
+ *
+ * Reuses the same SSE parsing + <think> filter pattern from ollama.ts.
  */
 
-import { getModelForRole } from "@/lib/model-config";
-
-const OLLAMA_URL =
-  process.env.OLLAMA_URL ??
-  `http://localhost:${process.env.OLLAMA_PORT ?? "11434"}`;
-
-function getChatModel(): string {
-  return process.env.OLLAMA_MODEL ?? getModelForRole("chat");
+export interface CloudProviderConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
 }
-/** Stream timeout — generous for cold-start, qwen3:1.7b loads fast once warm */
+
 const STREAM_TIMEOUT = 120_000;
-/** Non-stream timeout */
-const GENERATE_TIMEOUT = 60_000;
-/** Keep model loaded indefinitely (-1) to avoid cold-start on every request */
-const KEEP_ALIVE = -1;
 
-/** Non-streaming generation — returns full text response */
-export async function ollamaGenerate(
-  systemPrompt: string,
-  userMessage: string,
-): Promise<string> {
-  const res = await fetch(`${OLLAMA_URL}/v1/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: getChatModel(),
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      stream: false,
-      keep_alive: KEEP_ALIVE,
-    }),
-    signal: AbortSignal.timeout(GENERATE_TIMEOUT),
-  });
-  if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "";
-}
-
-/** Streaming chat via OpenAI-compatible SSE endpoint */
-export async function ollamaStreamChat(
+export async function cloudStreamChat(
+  config: CloudProviderConfig,
   systemPrompt: string,
   messages: { role: string; content: string }[],
   onToken: (token: string) => void,
@@ -55,33 +25,37 @@ export async function ollamaStreamChat(
   const timeout = setTimeout(() => controller.abort(), STREAM_TIMEOUT);
 
   try {
-    const res = await fetch(`${OLLAMA_URL}/v1/chat/completions`, {
+    const url = `${config.baseUrl.replace(/\/$/, "")}/v1/chat/completions`;
+
+    const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+      },
       body: JSON.stringify({
-        model: getChatModel(),
+        model: config.model,
         messages: [
           { role: "system", content: systemPrompt },
           ...messages.map((m) => ({ role: m.role, content: m.content })),
         ],
         stream: true,
-        keep_alive: KEEP_ALIVE,
       }),
       signal: controller.signal,
     });
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Ollama ${res.status}: ${body.slice(0, 200)}`);
+      throw new Error(`Cloud provider ${res.status}: ${body.slice(0, 300)}`);
     }
-    if (!res.body) throw new Error("Ollama returned no stream body");
+    if (!res.body) throw new Error("Cloud provider returned no stream body");
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
     let buffer = "";
     let reasoningBuffer = "";
-    let inThinkTag = false;  // Track <think> blocks to filter from content
+    let inThinkTag = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -102,7 +76,7 @@ export async function ollamaStreamChat(
           const delta = obj.choices?.[0]?.delta;
           if (!delta) continue;
 
-          // Reasoning tokens (qwen3 thinking) — buffer and emit complete lines
+          // Reasoning tokens (some providers support this)
           const reasoning = delta.reasoning_content ?? delta.reasoning ?? null;
           if (reasoning && onReasoning) {
             reasoningBuffer += reasoning;
@@ -113,15 +87,12 @@ export async function ollamaStreamChat(
             }
           }
 
-          // Content tokens — the actual answer
-          // Filter <think>...</think> blocks that qwen3 may embed in content
+          // Content tokens — filter <think> blocks
           let chunk = delta.content ?? "";
           if (chunk) {
-            // Handle <think> tags spanning multiple chunks
             if (inThinkTag) {
               const endIdx = chunk.indexOf("</think>");
               if (endIdx !== -1) {
-                // Route thinking text to reasoning callback
                 const thinkPart = chunk.slice(0, endIdx);
                 if (thinkPart.trim() && onReasoning) onReasoning(thinkPart.trim());
                 chunk = chunk.slice(endIdx + 8);
@@ -157,7 +128,6 @@ export async function ollamaStreamChat(
       }
     }
 
-    // Flush remaining reasoning buffer
     if (reasoningBuffer.trim() && onReasoning) {
       onReasoning(reasoningBuffer.trim());
     }
@@ -167,24 +137,3 @@ export async function ollamaStreamChat(
     clearTimeout(timeout);
   }
 }
-
-/** Preload model into memory so the first real request is fast */
-export function warmupOllama(): void {
-  fetch(`${OLLAMA_URL}/v1/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: getChatModel(),
-      messages: [{ role: "user", content: "hi" }],
-      stream: false,
-      max_tokens: 1,
-      keep_alive: KEEP_ALIVE,
-    }),
-    signal: AbortSignal.timeout(GENERATE_TIMEOUT),
-  }).catch(() => {
-    // Ollama not available yet — will load on first real request
-  });
-}
-
-// No auto-warmup — Ollama is only used as fallback when cloud returns 400/402/429.
-// Preloading models wastes RAM and can freeze the machine.

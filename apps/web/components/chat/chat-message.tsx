@@ -6,6 +6,14 @@ import { ChevronDown } from "lucide-react";
 import { ThinkingIndicator, type ThinkingPhase } from "./thinking-indicator";
 import { SourceCardRow, type SourceCardData } from "./source-card";
 
+/** Normalize LLM output: collapse excessive newlines, trim leading whitespace */
+function normalizeContent(text: string): string {
+  return text
+    .replace(/^\n+/, "")           // strip leading newlines
+    .replace(/\n{3,}/g, "\n\n")    // collapse 3+ newlines → paragraph break
+    .replace(/[ \t]+\n/g, "\n");   // strip trailing whitespace on lines
+}
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -129,7 +137,7 @@ export function ChatMessageBubble({ message }: ChatMessageProps) {
         {/* Answer text */}
         {hasAnswer && (
           <div className="text-sm whitespace-pre-wrap break-words mt-1">
-            {message.content}
+            {normalizeContent(message.content)}
             {message.isStreaming && currentPhase === "answering" && (
               <span className="inline-block w-[2px] h-4 ml-0.5 align-text-bottom bg-current animate-pulse" />
             )}

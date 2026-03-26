@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
+import { getSecurityHeaders } from "@/lib/security/headers";
 
 // Routes that bypass auth even if under a protected prefix
 const publicApiPaths = [
   "/api/documents/reprocess",
   "/api/knowledge/graph",
   "/api/knowledge/node",
+  "/api/integrations/telegram/webhook",
 ];
 
 // Routes that require authentication
@@ -22,6 +24,8 @@ const protectedPaths = [
   "/api/knowledge",
   "/api/documents",
   "/api/sync",
+  "/api/services",
+  "/api/integrations/telegram",
   "/knowledge",
   "/categories",
 ];
@@ -60,6 +64,16 @@ export function middleware(request: NextRequest) {
 
   const response = NextResponse.next();
   response.headers.set("x-request-id", crypto.randomUUID());
+
+  // Apply OWASP security headers
+  const securityHeaders = getSecurityHeaders({
+    allowInlineScripts: true,
+    connectSrcDomains: (process.env.TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
+  });
+  for (const [key, value] of Object.entries(securityHeaders)) {
+    response.headers.set(key, value);
+  }
+
   return response;
 }
 
@@ -87,6 +101,8 @@ export const config = {
     "/api/knowledge/:path*",
     "/api/documents/:path*",
     "/api/sync/:path*",
+    "/api/services/:path*",
+    "/api/integrations/:path*",
     // Auth pages (redirect if logged in)
     "/login",
     "/signup",

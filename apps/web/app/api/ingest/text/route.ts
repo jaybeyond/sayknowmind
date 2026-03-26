@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { checkAntiBot } from "@/lib/antibot";
 import { detectLanguage } from "@/lib/ingest/language-detect";
-import { insertDocument } from "@/lib/ingest/document-store";
+import { insertDocument, assignDocumentCategory } from "@/lib/ingest/document-store";
 import { createJob } from "@/lib/ingest/job-queue";
 import { ErrorCode } from "@/lib/types";
 
@@ -22,10 +22,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { title, content, tags } = body as {
+    const { title, content, tags, categoryId, locale } = body as {
       title?: string;
       content?: string;
       tags?: string[];
+      categoryId?: string;
+      locale?: string;
     };
 
     if (!content || typeof content !== "string" || content.trim().length === 0) {
@@ -35,8 +37,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Detect language
-    const language = detectLanguage(content);
+    // Use user locale if provided, otherwise detect from content
+    const validLocales = ["ko", "en", "ja", "zh"] as const;
+    const language = (locale && validLocales.includes(locale as typeof validLocales[number]))
+      ? (locale as typeof validLocales[number])
+      : detectLanguage(content);
 
     // Count words
     const cjk = content.match(/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g);
@@ -56,6 +61,11 @@ export async function POST(request: NextRequest) {
         tags,
       },
     });
+
+    // Assign to collection if specified
+    if (categoryId) {
+      await assignDocumentCategory(documentId, categoryId);
+    }
 
     // Create async processing job
     const jobId = await createJob(userId, documentId);

@@ -16,6 +16,7 @@ export interface ParsedContent {
     author?: string;
     language?: string;
     pageCount?: number;
+    fileSize?: number;
   };
 }
 
@@ -25,6 +26,15 @@ const SUPPORTED_MIME_TYPES: Record<string, string> = {
   "text/markdown": "md",
   "text/html": "html",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "image/png": "image",
+  "image/jpeg": "image",
+  "image/jpg": "image",
+  "image/webp": "image",
+  "image/gif": "image",
+  "image/svg+xml": "image",
+  "video/mp4": "video",
+  "video/webm": "video",
+  "video/quicktime": "video",
 };
 
 // Also match by file extension
@@ -36,6 +46,15 @@ const EXTENSION_MAP: Record<string, string> = {
   ".html": "html",
   ".htm": "html",
   ".docx": "docx",
+  ".png": "image",
+  ".jpg": "image",
+  ".jpeg": "image",
+  ".webp": "image",
+  ".gif": "image",
+  ".svg": "image",
+  ".mp4": "video",
+  ".webm": "video",
+  ".mov": "video",
 };
 
 function detectFileType(mimeType: string, fileName: string): string {
@@ -148,6 +167,28 @@ function parsePlainText(text: string, fileType: string): ParsedContent {
   };
 }
 
+function parseImage(buffer: Buffer, fileName: string): ParsedContent {
+  const title = fileName.replace(/\.[^.]+$/, "");
+  return {
+    title,
+    content: `[Image: ${fileName}] (${(buffer.length / 1024).toFixed(0)} KB)`,
+    wordCount: 0,
+    fileType: "image",
+    metadata: { fileSize: buffer.length },
+  };
+}
+
+function parseVideo(buffer: Buffer, fileName: string): ParsedContent {
+  const title = fileName.replace(/\.[^.]+$/, "");
+  return {
+    title,
+    content: `[Video: ${fileName}] (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`,
+    wordCount: 0,
+    fileType: "video",
+    metadata: { fileSize: buffer.length },
+  };
+}
+
 export async function parseFile(
   buffer: Buffer,
   mimeType: string,
@@ -165,6 +206,10 @@ export async function parseFile(
     case "txt":
     case "md":
       return parsePlainText(buffer.toString("utf-8"), fileType);
+    case "image":
+      return parseImage(buffer, fileName);
+    case "video":
+      return parseVideo(buffer, fileName);
     default:
       throw Object.assign(
         new Error(`Unsupported file format: ${fileType}`),

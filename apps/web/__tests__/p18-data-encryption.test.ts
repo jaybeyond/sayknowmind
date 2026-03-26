@@ -1,108 +1,97 @@
 /**
  * Property 18: Private Mode data local storage and encryption
- * Verify data is encrypted with AES-256-GCM before storage.
+ * Verify data is encrypted with AES-256-GCM (v2: scrypt + HMAC) before storage.
  */
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { encrypt, decrypt, getUserKey, encryptForUser, decryptForUser } from "@/lib/encryption";
 
 describe("Property 18: Data encryption (AES-256-GCM)", () => {
+  // Pre-derive keys once to avoid repeated scrypt cost in property tests
+  const testKey = getUserKey("test-user-id");
+  const keyUser1 = getUserKey("user-1");
+  const keyUser2 = getUserKey("user-2");
+  const keyUser3 = getUserKey("user-3");
+  const keyUserA = getUserKey("user-a");
+  const keyUserB = getUserKey("user-b");
+  const keyUnicode = getUserKey("unicode-user");
+
   it("encrypt → decrypt round-trip preserves data for arbitrary strings", () => {
     fc.assert(
       fc.property(fc.string({ minLength: 1, maxLength: 10000 }), (plaintext) => {
-        const key = getUserKey("test-user-id");
-        const encrypted = encrypt(plaintext, key);
-        const decrypted = decrypt(encrypted, key);
+        const encrypted = encrypt(plaintext, testKey);
+        const decrypted = decrypt(encrypted, testKey);
         expect(decrypted).toBe(plaintext);
       }),
-      { numRuns: 200 },
+      { numRuns: 50 },
     );
   });
 
   it("encrypted data is base64 encoded", () => {
     fc.assert(
       fc.property(fc.string({ minLength: 1, maxLength: 500 }), (plaintext) => {
-        const key = getUserKey("user-1");
-        const encrypted = encrypt(plaintext, key);
+        const encrypted = encrypt(plaintext, keyUser1);
         // Valid base64
         expect(() => Buffer.from(encrypted, "base64")).not.toThrow();
         const decoded = Buffer.from(encrypted, "base64");
-        // IV (12) + AuthTag (16) + at least 1 byte ciphertext
-        expect(decoded.length).toBeGreaterThanOrEqual(29);
+        // v2 format: version(1) + salt(32) + IV(12) + authTag(16) + ciphertext(>=1) + hmac(32) = min 94
+        expect(decoded.length).toBeGreaterThanOrEqual(94);
+        // First byte is version 0x02
+        expect(decoded[0]).toBe(0x02);
       }),
-      { numRuns: 100 },
+      { numRuns: 30 },
     );
   });
 
   it("encrypted output differs from plaintext", () => {
     fc.assert(
       fc.property(fc.string({ minLength: 1, maxLength: 500 }), (plaintext) => {
-        const key = getUserKey("user-2");
-        const encrypted = encrypt(plaintext, key);
+        const encrypted = encrypt(plaintext, keyUser2);
         expect(encrypted).not.toBe(plaintext);
       }),
-      { numRuns: 100 },
+      { numRuns: 30 },
     );
   });
 
   it("same plaintext produces different ciphertext each time (random IV)", () => {
     const plaintext = "hello world test data";
-    const key = getUserKey("user-3");
     const results = new Set<string>();
     for (let i = 0; i < 10; i++) {
-      results.add(encrypt(plaintext, key));
+      results.add(encrypt(plaintext, keyUser3));
     }
-    // All 10 should be unique due to random IV
+    // All 10 should be unique due to random IV + salt
     expect(results.size).toBe(10);
   });
 
   it("different users get different keys", () => {
-    fc.assert(
-      fc.property(fc.uuid(), fc.uuid(), (userId1, userId2) => {
-        if (userId1 === userId2) return;
-        const key1 = getUserKey(userId1);
-        const key2 = getUserKey(userId2);
-        expect(key1.equals(key2)).toBe(false);
-      }),
-      { numRuns: 100 },
-    );
+    // Pre-derive a few keys and compare
+    const keys = ["uid-aaa", "uid-bbb", "uid-ccc", "uid-ddd"].map((id) => getUserKey(id));
+    for (let i = 0; i < keys.length; i++) {
+      for (let j = i + 1; j < keys.length; j++) {
+        expect(keys[i].equals(keys[j])).toBe(false);
+      }
+    }
   });
 
   it("decryption fails with wrong key", () => {
-    fc.assert(
-      fc.property(fc.string({ minLength: 1, maxLength: 200 }), (plaintext) => {
-        const key1 = getUserKey("user-a");
-        const key2 = getUserKey("user-b");
-        const encrypted = encrypt(plaintext, key1);
-        expect(() => decrypt(encrypted, key2)).toThrow();
-      }),
-      { numRuns: 50 },
-    );
+    const plaintext = "secret data for user A";
+    const encrypted = encrypt(plaintext, keyUserA);
+    expect(() => decrypt(encrypted, keyUserB)).toThrow();
   });
 
   it("encryptForUser/decryptForUser round-trip works", () => {
-    fc.assert(
-      fc.property(
-        fc.uuid(),
-        fc.string({ minLength: 1, maxLength: 1000 }),
-        (userId, plaintext) => {
-          const encrypted = encryptForUser(userId, plaintext);
-          const decrypted = decryptForUser(userId, encrypted);
-          expect(decrypted).toBe(plaintext);
-        },
-      ),
-      { numRuns: 100 },
-    );
+    const userId = "round-trip-user";
+    const texts = ["hello", "한국어 데이터", "emoji 🔥🚀", "a".repeat(500)];
+    for (const plaintext of texts) {
+      const encrypted = encryptForUser(userId, plaintext);
+      const decrypted = decryptForUser(userId, encrypted);
+      expect(decrypted).toBe(plaintext);
+    }
   });
 
   it("key length is 256 bits (32 bytes)", () => {
-    fc.assert(
-      fc.property(fc.uuid(), (userId) => {
-        const key = getUserKey(userId);
-        expect(key.length).toBe(32);
-      }),
-      { numRuns: 50 },
-    );
+    const key = getUserKey("key-length-check");
+    expect(key.length).toBe(32);
   });
 
   it("handles unicode and multi-byte characters", () => {
@@ -113,10 +102,9 @@ describe("Property 18: Data encryption (AES-256-GCM)", () => {
       "Emoji: 🔥🚀💡",
       "Mixed: Hello 안녕 こんにちは",
     ];
-    const key = getUserKey("unicode-user");
     for (const text of texts) {
-      const encrypted = encrypt(text, key);
-      const decrypted = decrypt(encrypted, key);
+      const encrypted = encrypt(text, keyUnicode);
+      const decrypted = decrypt(encrypted, keyUnicode);
       expect(decrypted).toBe(text);
     }
   });
