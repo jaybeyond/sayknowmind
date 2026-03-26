@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
-import { getNotifications, getUnreadCount, markAsRead } from "@/lib/notifications";
+import { getNotifications, getUnreadCount, markAsRead, deleteNotifications } from "@/lib/notifications";
 
 /** GET /api/notifications — list notifications */
 export async function GET(request: NextRequest) {
@@ -27,5 +27,17 @@ export async function PATCH(request: NextRequest) {
   const ids = Array.isArray(body.ids) ? body.ids : undefined;
 
   await markAsRead(userId, ids);
+  return NextResponse.json({ ok: true });
+}
+
+/** DELETE /api/notifications — delete notification(s) */
+export async function DELETE(request: NextRequest) {
+  const userId = await getUserIdFromRequest();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await request.json().catch(() => ({}));
+  const ids = Array.isArray(body.ids) ? body.ids : undefined;
+
+  await deleteNotifications(userId, ids);
   return NextResponse.json({ ok: true });
 }

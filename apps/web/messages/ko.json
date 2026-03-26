@@ -492,6 +492,8 @@
     "title": "알림",
     "markAllRead": "모두 읽음",
     "markRead": "읽음 처리",
-    "empty": "알림이 없습니다"
+    "empty": "알림이 없습니다",
+    "delete": "삭제",
+    "deleteAll": "모두 삭제"
   }
 }

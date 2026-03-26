@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Bell, Check, CheckCheck } from "lucide-react";
+import { Bell, Check, CheckCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
@@ -106,6 +106,31 @@ export function NotificationBell() {
     } catch { /* ignore */ }
   };
 
+  const deleteOne = async (id: string) => {
+    try {
+      await fetch("/api/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [id] }),
+      });
+      const removed = notifications.find((n) => n.id === id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      if (removed && !removed.read) setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch { /* ignore */ }
+  };
+
+  const deleteAll = async () => {
+    try {
+      await fetch("/api/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setNotifications([]);
+      setUnreadCount(0);
+    } catch { /* ignore */ }
+  };
+
   const typeIcon = (type: string) => {
     switch (type) {
       case "job_complete": return "\u{1F4DD}";
@@ -133,65 +158,87 @@ export function NotificationBell() {
       </Button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full mt-2 w-80 max-h-96 overflow-auto rounded-xl border border-border bg-popover shadow-lg z-50">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="absolute left-0 top-full mt-2 w-80 max-h-96 flex flex-col rounded-xl border border-border bg-popover shadow-lg z-50">
+          {/* Sticky Header */}
+          <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b border-border bg-popover rounded-t-xl z-10">
             <h3 className="text-sm font-semibold">{t("notifications.title")}</h3>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllRead}
-                className="text-xs text-primary hover:underline flex items-center gap-1"
-              >
-                <CheckCheck className="size-3" />
-                {t("notifications.markAllRead")}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllRead}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  <CheckCheck className="size-3" />
+                  {t("notifications.markAllRead")}
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  onClick={deleteAll}
+                  className="text-xs text-destructive hover:underline flex items-center gap-1"
+                >
+                  <Trash2 className="size-3" />
+                  {t("notifications.deleteAll")}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* List */}
-          {notifications.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-              {t("notifications.empty")}
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {notifications.map((notif) => (
-                <div
-                  key={notif.id}
-                  className={cn(
-                    "flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors",
-                    !notif.read && "bg-primary/5"
-                  )}
-                >
-                  <span className="text-base mt-0.5 shrink-0">{typeIcon(notif.type)}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className={cn("text-sm leading-snug", !notif.read && "font-medium")}>
-                      {notif.title}
-                    </p>
-                    {notif.body && (
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                        {notif.body}
-                      </p>
+          <div className="overflow-auto flex-1">
+            {notifications.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                {t("notifications.empty")}
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {notifications.map((notif) => (
+                  <div
+                    key={notif.id}
+                    className={cn(
+                      "group/notif flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors",
+                      !notif.read && "bg-primary/5"
                     )}
-                    <span className="text-[10px] text-muted-foreground/60 mt-1 block">
-                      {new Date(notif.createdAt).toLocaleString(undefined, {
-                        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                      })}
-                    </span>
+                  >
+                    <span className="text-base mt-0.5 shrink-0">{typeIcon(notif.type)}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-sm leading-snug", !notif.read && "font-medium")}>
+                        {notif.title}
+                      </p>
+                      {notif.body && (
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {notif.body}
+                        </p>
+                      )}
+                      <span className="text-[10px] text-muted-foreground/60 mt-1 block">
+                        {new Date(notif.createdAt).toLocaleString(undefined, {
+                          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-0.5">
+                      {!notif.read && (
+                        <button
+                          onClick={() => markOneRead(notif.id)}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground"
+                          title={t("notifications.markRead")}
+                        >
+                          <Check className="size-3" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => deleteOne(notif.id)}
+                        className="p-1 rounded hover:bg-destructive/10 text-muted-foreground opacity-0 group-hover/notif:opacity-100 transition-opacity"
+                        title={t("notifications.delete")}
+                      >
+                        <Trash2 className="size-3" />
+                      </button>
+                    </div>
                   </div>
-                  {!notif.read && (
-                    <button
-                      onClick={() => markOneRead(notif.id)}
-                      className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground"
-                      title={t("notifications.markRead")}
-                    >
-                      <Check className="size-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

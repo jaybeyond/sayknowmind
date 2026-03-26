@@ -492,6 +492,8 @@
     "title": "通知",
     "markAllRead": "すべて既読",
     "markRead": "既読にする",
-    "empty": "通知はまだありません"
+    "empty": "通知はまだありません",
+    "delete": "削除",
+    "deleteAll": "すべて削除"
   }
 }

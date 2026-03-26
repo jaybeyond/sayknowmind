@@ -492,6 +492,8 @@
     "title": "Notifications",
     "markAllRead": "Mark all read",
     "markRead": "Mark as read",
-    "empty": "No notifications yet"
+    "empty": "No notifications yet",
+    "delete": "Delete",
+    "deleteAll": "Delete all"
   }
 }

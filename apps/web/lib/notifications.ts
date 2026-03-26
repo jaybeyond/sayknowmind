@@ -89,6 +89,22 @@ export async function markAsRead(userId: string, notificationIds?: string[]): Pr
   }
 }
 
+/** Delete notification(s) */
+export async function deleteNotifications(userId: string, notificationIds?: string[]): Promise<void> {
+  if (notificationIds?.length) {
+    await pool.query(
+      `DELETE FROM notifications WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+      [userId, notificationIds],
+    );
+  } else {
+    // Delete all
+    await pool.query(
+      `DELETE FROM notifications WHERE user_id = $1`,
+      [userId],
+    );
+  }
+}
+
 function rowToNotification(row: Record<string, unknown>): Notification {
   return {
     id: String(row.id),
