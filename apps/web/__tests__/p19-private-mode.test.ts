@@ -157,10 +157,10 @@ describe("Private Mode configuration", () => {
     }
   });
 
-  it("LLM endpoint points to Ollama in Private Mode", () => {
+  it("LLM endpoint routes through AI server", () => {
     process.env.PRIVATE_MODE = "true";
     const endpoint = getLLMEndpoint();
-    expect(endpoint).toContain("11434"); // Ollama port
+    expect(endpoint).toContain("4000"); // AI server port
   });
 
   it("LLM uses local model in Private Mode", () => {
