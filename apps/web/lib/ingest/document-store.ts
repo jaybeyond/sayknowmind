@@ -104,29 +104,29 @@ export async function getDocument(documentId: string): Promise<DocumentRow | nul
 export async function insertEntities(entities: InsertEntityParams[]): Promise<string[]> {
   if (entities.length === 0) return [];
 
-  const values: unknown[] = [];
-  const placeholders: string[] = [];
-  let idx = 1;
+  const ids: string[] = [];
 
   for (const entity of entities) {
-    placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
-    values.push(
-      entity.documentId,
-      entity.name,
-      entity.type,
-      entity.confidence,
-      JSON.stringify(entity.properties ?? {}),
+    const result = await pool.query(
+      `INSERT INTO entities (document_id, name, entity_type, type, confidence, metadata)
+       VALUES ($1, $2, $3, $3, $4, $5)
+       ON CONFLICT (tenant_id, workspace_id, name) DO UPDATE
+         SET document_id = COALESCE(entities.document_id, EXCLUDED.document_id),
+             confidence = GREATEST(entities.confidence, EXCLUDED.confidence),
+             metadata = entities.metadata || EXCLUDED.metadata
+       RETURNING id`,
+      [
+        entity.documentId,
+        entity.name,
+        entity.type,
+        entity.confidence,
+        JSON.stringify(entity.properties ?? {}),
+      ],
     );
+    if (result.rows[0]) ids.push(result.rows[0].id);
   }
 
-  const result = await pool.query(
-    `INSERT INTO entities (document_id, name, type, confidence, properties)
-     VALUES ${placeholders.join(", ")}
-     RETURNING id`,
-    values,
-  );
-
-  return result.rows.map((r: { id: string }) => r.id);
+  return ids;
 }
 
 // ── Duplicate Detection ───────────────────────────────────────
