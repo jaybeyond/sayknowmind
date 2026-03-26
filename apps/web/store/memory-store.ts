@@ -7,7 +7,9 @@ export type Memory = {
   description: string;
   favicon: string;
   collectionId: string;
-  tags: string[];
+  tags: string[]; // merged view (aiTags + userTags) for backward compat
+  aiTags: string[];
+  userTags: string[];
   createdAt: string;
   isFavorite: boolean;
   hasDarkIcon?: boolean;
@@ -30,9 +32,18 @@ type FilterType = "all" | "favorites" | "with-tags" | "without-tags";
 /** Map a DB document row to the Memory shape used by the UI */
 function documentToMemory(row: Record<string, unknown>): Memory {
   const metadata = (row.metadata ?? {}) as Record<string, unknown>;
-  const tags = (Array.isArray(metadata.tags) ? metadata.tags : []).filter(
+  const aiTags = (Array.isArray(metadata.aiTags) ? metadata.aiTags : []).filter(
     (t): t is string => typeof t === "string"
   );
+  const userTags = (Array.isArray(metadata.userTags) ? metadata.userTags : []).filter(
+    (t): t is string => typeof t === "string"
+  );
+  // Backward compat: old docs may still have metadata.tags (pre-migration)
+  const legacyTags = (Array.isArray(metadata.tags) ? metadata.tags : []).filter(
+    (t): t is string => typeof t === "string"
+  );
+  // Merge all tags for unified view (deduped)
+  const tags = [...new Set([...userTags, ...aiTags, ...legacyTags])];
   const categories = (row.categories ?? []) as Array<{ id: string; name: string }>;
 
   // Use DB source_type column (reliable) over metadata.doc_type
@@ -54,6 +65,8 @@ function documentToMemory(row: Record<string, unknown>): Memory {
       : "",
     collectionId: categories[0]?.id ?? "all",
     tags,
+    aiTags,
+    userTags,
     createdAt: String(row.created_at ?? new Date().toISOString()),
     isFavorite: metadata.isFavorite === true,
     summary: typeof metadata.summary === "string" ? metadata.summary : undefined,

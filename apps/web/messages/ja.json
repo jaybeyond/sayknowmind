@@ -139,6 +139,7 @@
     "summary": "要約",
     "whatItSolves": "解決する問題",
     "keyPoints": "重要ポイント",
+    "relatedDocs": "関連ドキュメント",
     "readingTime": "約 {{minutes}} 分で読める",
     "noSummary": "処理中...",
     "source": "ソース",
@@ -473,5 +474,17 @@
     "downloadOllama": "Ollama をダウンロード",
     "requiredModels": "必須モデル",
     "notSet": "未設定"
+  },
+  "insights": {
+    "title": "ナレッジベース",
+    "total": "合計",
+    "thisWeek": "今週",
+    "processing": "処理中"
+  },
+  "notifications": {
+    "title": "通知",
+    "markAllRead": "すべて既読",
+    "markRead": "既読にする",
+    "empty": "通知はまだありません"
   }
 }

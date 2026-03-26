@@ -48,6 +48,7 @@ import {
   Pencil,
   X,
 } from "lucide-react";
+import { NotificationBell } from "./notification-bell";
 import { Button } from "@/components/ui/button";
 import { Input as SidebarInput } from "@/components/ui/input";
 import { useMemoryStore } from "@/store/memory-store";
@@ -66,6 +67,58 @@ const toolNavItems = [
   { icon: MessageSquare, key: "sidebar.chat", href: "/chat" },
   { icon: Network, key: "sidebar.knowledge", href: "/knowledge" },
 ];
+
+function InsightsWidget() {
+  const { t } = useTranslation();
+  const [insights, setInsights] = React.useState<{
+    totalDocuments: number;
+    thisWeek: number;
+    topCategories: Array<{ name: string; count: number }>;
+    pendingJobs: number;
+  } | null>(null);
+
+  React.useEffect(() => {
+    fetch("/api/insights")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setInsights(data); })
+      .catch(() => {});
+  }, []);
+
+  if (!insights) return null;
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+      <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+        {t("insights.title")}
+      </h4>
+      <div className="grid grid-cols-2 gap-2 text-center">
+        <div className="rounded-md bg-background p-2">
+          <div className="text-lg font-bold">{insights.totalDocuments}</div>
+          <div className="text-[10px] text-muted-foreground">{t("insights.total")}</div>
+        </div>
+        <div className="rounded-md bg-background p-2">
+          <div className="text-lg font-bold text-primary">+{insights.thisWeek}</div>
+          <div className="text-[10px] text-muted-foreground">{t("insights.thisWeek")}</div>
+        </div>
+      </div>
+      {insights.topCategories.length > 0 && (
+        <div className="space-y-1">
+          {insights.topCategories.map((cat) => (
+            <div key={cat.name} className="flex items-center justify-between text-xs">
+              <span className="truncate text-muted-foreground">{cat.name}</span>
+              <span className="text-muted-foreground/60 shrink-0">{cat.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {insights.pendingJobs > 0 && (
+        <div className="text-[10px] text-muted-foreground/60 text-center">
+          {insights.pendingJobs} {t("insights.processing")}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function MemorySidebar({
   ...props
@@ -171,9 +224,12 @@ export function MemorySidebar({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Avatar className="size-6.5">
-            <AvatarFallback>{userInitials}</AvatarFallback>
-          </Avatar>
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <Avatar className="size-6.5">
+              <AvatarFallback>{userInitials}</AvatarFallback>
+            </Avatar>
+          </div>
         </div>
       </SidebarHeader>
 
@@ -475,7 +531,8 @@ export function MemorySidebar({
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="px-5 pb-5">
+      <SidebarFooter className="px-5 pb-5 space-y-3">
+        <InsightsWidget />
         <div className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md border border-border bg-background shadow-xs text-sm font-medium w-full text-muted-foreground">
           <Globe className="size-4" />
           {t("app.title")} v0.1.0

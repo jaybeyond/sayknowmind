@@ -139,6 +139,7 @@
     "summary": "摘要",
     "whatItSolves": "解决的问题",
     "keyPoints": "关键要点",
+    "relatedDocs": "相关文档",
     "readingTime": "阅读约 {{minutes}} 分钟",
     "noSummary": "处理中...",
     "source": "来源",
@@ -473,5 +474,17 @@
     "downloadOllama": "下载 Ollama",
     "requiredModels": "必需模型",
     "notSet": "未设置"
+  },
+  "insights": {
+    "title": "知识库",
+    "total": "总计",
+    "thisWeek": "本周",
+    "processing": "处理中"
+  },
+  "notifications": {
+    "title": "通知",
+    "markAllRead": "全部已读",
+    "markRead": "标记已读",
+    "empty": "暂无通知"
   }
 }

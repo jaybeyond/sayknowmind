@@ -139,6 +139,7 @@
     "summary": "요약",
     "whatItSolves": "해결하는 문제",
     "keyPoints": "핵심 포인트",
+    "relatedDocs": "관련 문서",
     "readingTime": "{{minutes}}분 읽기",
     "noSummary": "처리 중...",
     "source": "출처",
@@ -473,5 +474,17 @@
     "downloadOllama": "Ollama 다운로드",
     "requiredModels": "필수 모델",
     "notSet": "설정 안 됨"
+  },
+  "insights": {
+    "title": "지식 창고",
+    "total": "전체",
+    "thisWeek": "이번 주",
+    "processing": "처리 중"
+  },
+  "notifications": {
+    "title": "알림",
+    "markAllRead": "모두 읽음",
+    "markRead": "읽음 처리",
+    "empty": "알림이 없습니다"
   }
 }

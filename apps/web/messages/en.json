@@ -139,6 +139,7 @@
     "summary": "Summary",
     "whatItSolves": "What it solves",
     "keyPoints": "Key Points",
+    "relatedDocs": "Related Documents",
     "readingTime": "{{minutes}} min read",
     "noSummary": "Processing...",
     "source": "Source",
@@ -473,5 +474,17 @@
     "downloadOllama": "Download Ollama",
     "requiredModels": "Required Models",
     "notSet": "Not set"
+  },
+  "insights": {
+    "title": "Knowledge Vault",
+    "total": "Total",
+    "thisWeek": "This Week",
+    "processing": "processing"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "markRead": "Mark as read",
+    "empty": "No notifications yet"
   }
 }

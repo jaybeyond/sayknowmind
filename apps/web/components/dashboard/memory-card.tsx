@@ -78,6 +78,7 @@ export function MemoryCard({
     useMemoryStore();
   const { t } = useTranslation();
   const memoryTags = [...new Set(memory.tags)];
+  const aiTagSet = new Set(memory.aiTags);
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(memory.url);
@@ -139,7 +140,12 @@ export function MemoryCard({
                 {memoryTags.slice(0, 2).map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
+                    className={cn(
+                      "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+                      aiTagSet.has(tag) && !memory.userTags.includes(tag)
+                        ? "bg-primary/10 text-primary"
+                        : "bg-muted text-muted-foreground"
+                    )}
                   >
                     {tag}
                   </span>
@@ -381,7 +387,12 @@ export function MemoryCard({
               {memoryTags.slice(0, 3).map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
+                  className={cn(
+                    "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+                    aiTagSet.has(tag) && !memory.userTags.includes(tag)
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  )}
                 >
                   {tag}
                 </span>

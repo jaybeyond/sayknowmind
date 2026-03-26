@@ -132,7 +132,7 @@ export interface StructuredMetadata {
   summary: string;
   what_it_solves: string;
   key_points: string[];
-  tags: string[];
+  aiTags: string[];
   reading_time_minutes: number;
 }
 
@@ -176,7 +176,7 @@ Output ONLY the JSON object, no markdown fences or explanation.`,
       key_points: Array.isArray(parsed.key_points)
         ? parsed.key_points.filter((k: unknown): k is string => typeof k === "string").slice(0, 7)
         : [],
-      tags: Array.isArray(parsed.tags)
+      aiTags: Array.isArray(parsed.tags)
         ? parsed.tags.filter((t: unknown): t is string => typeof t === "string").slice(0, 10)
         : [],
       reading_time_minutes: typeof parsed.reading_time_minutes === "number"
@@ -190,7 +190,7 @@ Output ONLY the JSON object, no markdown fences or explanation.`,
       summary: "",
       what_it_solves: "",
       key_points: [],
-      tags: [],
+      aiTags: [],
       reading_time_minutes: Math.max(1, Math.round(wordCount / 200)),
     };
   }

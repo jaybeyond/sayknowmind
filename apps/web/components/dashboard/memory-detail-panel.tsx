@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { type Memory } from "@/store/memory-store";
 import {
@@ -14,6 +15,7 @@ import {
   Download,
   ImageIcon,
   Video,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
@@ -23,8 +25,26 @@ interface MemoryDetailPanelProps {
   onClose: () => void;
 }
 
+interface RelatedDoc {
+  id: string;
+  title: string;
+  score: number;
+}
+
 export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
   const { t } = useTranslation();
+  const [relatedDocs, setRelatedDocs] = useState<RelatedDoc[]>([]);
+
+  useEffect(() => {
+    if (!memory) { setRelatedDocs([]); return; }
+    let cancelled = false;
+    fetch(`/api/documents/${memory.id}/related`)
+      .then((r) => r.ok ? r.json() : { relations: [] })
+      .then((data) => { if (!cancelled) setRelatedDocs(data.relations ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [memory?.id]);
+
   if (!memory) return null;
 
   return (
@@ -179,21 +199,66 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
           </section>
         )}
 
-        {/* Tags */}
-        {memory.tags.length > 0 && (
+        {/* User Tags */}
+        {memory.userTags.length > 0 && (
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <Tag className="size-3" />
               {t("sidebar.tags")}
             </h3>
             <div className="flex flex-wrap gap-1.5">
-              {[...new Set(memory.tags)].map((tag) => (
+              {[...new Set(memory.userTags)].map((tag) => (
                 <span
                   key={tag}
                   className="px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground"
                 >
                   {tag}
                 </span>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* AI Tags */}
+        {memory.aiTags.length > 0 && (
+          <section className="space-y-2">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Tag className="size-3" />
+              AI {t("sidebar.tags")}
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {[...new Set(memory.aiTags)].map((tag) => (
+                <span
+                  key={tag}
+                  className="px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Related Documents */}
+        {relatedDocs.length > 0 && (
+          <section className="space-y-2">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Link2 className="size-3" />
+              {t("document.relatedDocs")}
+            </h3>
+            <div className="space-y-1.5">
+              {relatedDocs.map((doc) => (
+                <button
+                  key={doc.id}
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                  onClick={() => window.open(`/api/documents/${doc.id}`, "_blank")}
+                >
+                  <FileText className="size-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate flex-1">{doc.title}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    {Math.round(doc.score * 100)}%
+                  </span>
+                </button>
               ))}
             </div>
           </section>

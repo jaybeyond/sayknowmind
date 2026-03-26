@@ -2,7 +2,8 @@ import { pool } from "@/lib/db";
 import type { IngestStatus, IngestStatusResponse } from "@/lib/types";
 import { getDocument, updateDocument, insertEntities, assignDocumentCategory } from "./document-store";
 import { generateSummary, extractEntities, suggestCategories, generateStructuredMetadata, describeImage, describeVideoFrame, type StructuredMetadata } from "./ai-processor";
-import { indexDocument } from "@/lib/edgequake/client";
+import { indexDocument, queryEdgeQuake } from "@/lib/edgequake/client";
+import { createNotification } from "@/lib/notifications";
 import { detectLanguage } from "./language-detect";
 
 interface JobRow {
@@ -166,7 +167,7 @@ async function processJob(job: JobRow): Promise<void> {
 
     // Step 1: Generate structured metadata via AI (20% → 50%)
     let structuredMeta: StructuredMetadata = {
-      title: "", summary: "", what_it_solves: "", key_points: [], tags: [], reading_time_minutes: 1,
+      title: "", summary: "", what_it_solves: "", key_points: [], aiTags: [], reading_time_minutes: 1,
     };
     try {
       const wordCount = doc.content ? doc.content.split(/\s+/).length : 0;
@@ -179,7 +180,7 @@ async function processJob(job: JobRow): Promise<void> {
           summary: structuredMeta.summary,
           what_it_solves: structuredMeta.what_it_solves,
           key_points: structuredMeta.key_points,
-          tags: structuredMeta.tags,
+          aiTags: structuredMeta.aiTags,
           reading_time_minutes: structuredMeta.reading_time_minutes,
           language,
         },
@@ -280,6 +281,42 @@ async function processJob(job: JobRow): Promise<void> {
       // Non-fatal: RAG won't work but document is still saved
     }
 
+    // Step 5: Find and link related documents (90% → 95%)
+    try {
+      const searchText = [doc.title, structuredMeta.summary].filter(Boolean).join(" ");
+      if (searchText.trim()) {
+        const similar = await queryEdgeQuake({
+          query: searchText,
+          mode: "naive",
+          max_results: 6,
+          include_references: true,
+        });
+
+        const relatedDocs = similar.sources
+          .filter((s) => s.document_id && s.document_id !== documentId && s.score > 0.7)
+          .slice(0, 5);
+
+        for (const rel of relatedDocs) {
+          await pool.query(
+            `INSERT INTO document_relations (document_id, related_document_id, score, relation_type)
+             VALUES ($1, $2, $3, 'similar')
+             ON CONFLICT (document_id, related_document_id) DO UPDATE SET score = $3`,
+            [documentId, rel.document_id, rel.score],
+          );
+        }
+
+        if (relatedDocs.length > 0) {
+          await createNotification(userId, "related_found", doc.title ?? "Document", `${relatedDocs.length} related documents found`, { documentId, relatedCount: relatedDocs.length }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.error(`[job-queue] Related document linking failed for job ${jobId}:`, err);
+    }
+    await updateJobProgress(jobId, 95);
+
+    // Notify: processing complete
+    await createNotification(userId, "job_complete", doc.title ?? "Document", structuredMeta.summary || undefined, { documentId }).catch(() => {});
+
     // Done
     await completeJob(jobId);
   } catch (err) {
@@ -304,6 +341,7 @@ async function processJob(job: JobRow): Promise<void> {
       }, delay);
     } else {
       await failJob(jobId, errorMessage);
+      await createNotification(userId, "job_failed", "Document processing failed", errorMessage, { documentId }).catch(() => {});
     }
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
 import { createJob } from "@/lib/ingest/job-queue";
+import { runReprocessor } from "@/lib/ingest/reprocessor";
 import { ErrorCode } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,16 @@ async function reprocess(request: NextRequest) {
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
     );
+  }
+
+  // Auto mode: find stale docs automatically
+  const auto = request.nextUrl.searchParams.get("auto") === "1";
+  if (auto) {
+    const result = await runReprocessor({ limit: 20 });
+    return NextResponse.json({
+      message: `Auto-reprocessor queued ${result.queued} document(s)`,
+      ...result,
+    });
   }
 
   // Parse optional params
