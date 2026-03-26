@@ -20,7 +20,7 @@ async function getHandler() {
   }
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest, context: { params: Promise<{ all: string[] }> }) {
   const { handler, error } = await getHandler();
   if (!handler) {
     return NextResponse.json(
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     );
   }
   try {
-    return await handler.GET(req);
+    return await handler.GET(req, context);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message + "\n" + e.stack : String(e);
     return NextResponse.json(
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, context: { params: Promise<{ all: string[] }> }) {
   const { handler, error } = await getHandler();
   if (!handler) {
     return NextResponse.json(
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     );
   }
   try {
-    return await handler.POST(req);
+    return await handler.POST(req, context);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message + "\n" + e.stack : String(e);
     return NextResponse.json(
