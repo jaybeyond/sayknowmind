@@ -133,7 +133,7 @@ export function NotificationBell() {
       </Button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-auto rounded-xl border border-border bg-popover shadow-lg z-50">
+        <div className="absolute left-0 top-full mt-2 w-80 max-h-96 overflow-auto rounded-xl border border-border bg-popover shadow-lg z-50">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <h3 className="text-sm font-semibold">{t("notifications.title")}</h3>
