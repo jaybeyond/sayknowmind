@@ -139,6 +139,12 @@ async function processJob(job: JobRow): Promise<void> {
     const fileType = typeof meta.fileType === "string" ? meta.fileType : "";
     const fileBase64 = typeof meta.fileBase64 === "string" ? meta.fileBase64 : "";
     if ((fileType === "image" || fileType === "video") && fileBase64) {
+      // Keep base64 for preview if small enough (< 2MB base64 ≈ 1.5MB original)
+      const keepBase64 = fileBase64.length < 2 * 1024 * 1024;
+      const clearMeta = keepBase64
+        ? { visionAnalyzed: true }
+        : { visionAnalyzed: true, fileBase64: null };
+
       try {
         const result = fileType === "image"
           ? await describeImage(fileBase64, language)
@@ -149,18 +155,17 @@ async function processJob(job: JobRow): Promise<void> {
           await updateDocument(documentId, {
             title: result.title || doc.title,
             content: result.content,
-            metadata: { visionAnalyzed: true, fileBase64: null },
+            metadata: clearMeta,
           });
           doc.content = result.content;
           doc.title = result.title || doc.title;
         } else {
           console.warn(`[job-queue] Vision returned empty for job ${jobId} — keeping original content`);
-          await updateDocument(documentId, { metadata: { visionAnalyzed: true, fileBase64: null } });
+          await updateDocument(documentId, { metadata: clearMeta });
         }
       } catch (err) {
         console.warn(`[job-queue] Vision analysis failed for job ${jobId}, continuing with original content:`, err);
-        // Clear base64 even on failure to free space
-        await updateDocument(documentId, { metadata: { fileBase64: null } });
+        await updateDocument(documentId, { metadata: clearMeta });
       }
       await updateJobProgress(jobId, 20);
     }

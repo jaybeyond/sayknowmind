@@ -45,27 +45,41 @@ export async function GET(
   const meta = (doc.metadata ?? {}) as Record<string, unknown>;
   const filePath = typeof meta.filePath === "string" ? meta.filePath : null;
   const fileName = typeof meta.fileName === "string" ? meta.fileName : "file";
-
-  if (!filePath) {
-    return NextResponse.json({ message: "No file attached" }, { status: 404 });
-  }
-
-  const file = await getFile(filePath);
-  if (!file) {
-    return NextResponse.json({ message: "File not found on disk" }, { status: 404 });
-  }
-
   const mimeType = getMimeType(fileName);
   const isDownload = _request.nextUrl.searchParams.get("download") === "1";
 
-  return new NextResponse(new Uint8Array(file.buffer), {
-    headers: {
-      "Content-Type": mimeType,
-      "Content-Length": String(file.size),
-      ...(isDownload
-        ? { "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"` }
-        : { "Content-Disposition": "inline" }),
-      "Cache-Control": "private, max-age=3600",
-    },
-  });
+  // Try disk first
+  if (filePath) {
+    const file = await getFile(filePath);
+    if (file) {
+      return new NextResponse(new Uint8Array(file.buffer), {
+        headers: {
+          "Content-Type": mimeType,
+          "Content-Length": String(file.size),
+          ...(isDownload
+            ? { "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"` }
+            : { "Content-Disposition": "inline" }),
+          "Cache-Control": "private, max-age=3600",
+        },
+      });
+    }
+  }
+
+  // Fallback: serve from DB base64 (ephemeral filesystem / Railway)
+  const fileBase64 = typeof meta.fileBase64 === "string" ? meta.fileBase64 : null;
+  if (fileBase64) {
+    const buffer = Buffer.from(fileBase64, "base64");
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": mimeType,
+        "Content-Length": String(buffer.length),
+        ...(isDownload
+          ? { "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"` }
+          : { "Content-Disposition": "inline" }),
+        "Cache-Control": "private, max-age=3600",
+      },
+    });
+  }
+
+  return NextResponse.json({ message: "File not available" }, { status: 404 });
 }
