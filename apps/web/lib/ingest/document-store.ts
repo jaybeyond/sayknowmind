@@ -109,7 +109,7 @@ export async function insertEntities(entities: InsertEntityParams[]): Promise<st
   for (const entity of entities) {
     const result = await pool.query(
       `INSERT INTO entities (document_id, name, entity_type, type, confidence, metadata)
-       VALUES ($1, $2, $3, $3, $4, $5)
+       VALUES ($1, $2, $3, $4::varchar(50), $5, $6)
        ON CONFLICT (tenant_id, workspace_id, name) DO UPDATE
          SET document_id = COALESCE(entities.document_id, EXCLUDED.document_id),
              confidence = GREATEST(entities.confidence, EXCLUDED.confidence),
@@ -118,6 +118,7 @@ export async function insertEntities(entities: InsertEntityParams[]): Promise<st
       [
         entity.documentId,
         entity.name,
+        entity.type,
         entity.type,
         entity.confidence,
         JSON.stringify(entity.properties ?? {}),
