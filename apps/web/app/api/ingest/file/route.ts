@@ -81,8 +81,11 @@ export async function POST(request: NextRequest) {
       : detectLanguage(parsed.content);
 
     // For images/videos: store base64 in metadata for async vision analysis
+    // Cap at 10 MB to avoid bloating the JSONB column on hosted DBs
     const isMedia = parsed.fileType === "image" || parsed.fileType === "video";
-    const mediaBase64 = isMedia ? buffer.toString("base64") : undefined;
+    const mediaBase64 = isMedia && buffer.length <= 10 * 1024 * 1024
+      ? buffer.toString("base64")
+      : undefined;
 
     // Rename if force-saving a duplicate
     let savedFileName = file.name;
@@ -110,12 +113,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Save file to disk for preview/download
-    const filePath = await saveFile(documentId, savedFileName, buffer);
-    // Store filePath in metadata (merge)
-    await import("@/lib/ingest/document-store").then(({ updateDocument }) =>
-      updateDocument(documentId, { metadata: { filePath } }),
-    );
+    // Save file to disk for preview/download (non-fatal on ephemeral filesystems)
+    try {
+      const filePath = await saveFile(documentId, savedFileName, buffer);
+      await import("@/lib/ingest/document-store").then(({ updateDocument }) =>
+        updateDocument(documentId, { metadata: { filePath } }),
+      );
+    } catch (err) {
+      console.warn("[ingest/file] File storage failed (ephemeral FS?):", (err as Error).message);
+    }
 
     // Assign to collection if specified
     if (categoryId) {
