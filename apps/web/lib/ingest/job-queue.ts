@@ -270,6 +270,7 @@ async function processJob(job: JobRow): Promise<void> {
     await updateJobProgress(jobId, 90);
 
     // Step 4: Index in EdgeQuake for RAG search (90% → 100%)
+    let edgeQuakeAvailable = false;
     try {
       if (doc.content) {
         await indexDocument({
@@ -277,12 +278,14 @@ async function processJob(job: JobRow): Promise<void> {
           title: doc.title ?? undefined,
           document_id: documentId,
           metadata: { language, user_id: userId },
+          async_processing: false,
         });
         // Mark document as indexed in PostgreSQL
         await pool.query(
           `UPDATE documents SET indexed_at = NOW() WHERE id = $1`,
           [documentId],
         );
+        edgeQuakeAvailable = true;
       }
     } catch (err) {
       console.error(`[job-queue] EdgeQuake indexing failed for job ${jobId}:`, err);
@@ -290,35 +293,38 @@ async function processJob(job: JobRow): Promise<void> {
     }
 
     // Step 5: Find and link related documents (90% → 95%)
-    try {
-      const searchText = [doc.title, structuredMeta.summary].filter(Boolean).join(" ");
-      if (searchText.trim()) {
-        const similar = await queryEdgeQuake({
-          query: searchText,
-          mode: "naive",
-          max_results: 6,
-          include_references: true,
-        });
+    // Only attempt if EdgeQuake is reachable (Step 4 succeeded)
+    if (edgeQuakeAvailable) {
+      try {
+        const searchText = [doc.title, structuredMeta.summary].filter(Boolean).join(" ");
+        if (searchText.trim()) {
+          const similar = await queryEdgeQuake({
+            query: searchText,
+            mode: "naive",
+            max_results: 6,
+            include_references: true,
+          });
 
-        const relatedDocs = similar.sources
-          .filter((s) => s.document_id && s.document_id !== documentId && s.score > 0.7)
-          .slice(0, 5);
+          const relatedDocs = similar.sources
+            .filter((s) => s.document_id && s.document_id !== documentId && s.score > 0.7)
+            .slice(0, 5);
 
-        for (const rel of relatedDocs) {
-          await pool.query(
-            `INSERT INTO document_relations (document_id, related_document_id, score, relation_type)
-             VALUES ($1, $2, $3, 'similar')
-             ON CONFLICT (document_id, related_document_id) DO UPDATE SET score = $3`,
-            [documentId, rel.document_id, rel.score],
-          );
+          for (const rel of relatedDocs) {
+            await pool.query(
+              `INSERT INTO document_relations (document_id, related_document_id, score, relation_type)
+               VALUES ($1, $2, $3, 'similar')
+               ON CONFLICT (document_id, related_document_id) DO UPDATE SET score = $3`,
+              [documentId, rel.document_id, rel.score],
+            );
+          }
+
+          if (relatedDocs.length > 0) {
+            await createNotification(userId, "related_found", doc.title ?? "Document", `${relatedDocs.length} related documents found`, { documentId, relatedCount: relatedDocs.length }).catch(() => {});
+          }
         }
-
-        if (relatedDocs.length > 0) {
-          await createNotification(userId, "related_found", doc.title ?? "Document", `${relatedDocs.length} related documents found`, { documentId, relatedCount: relatedDocs.length }).catch(() => {});
-        }
+      } catch (err) {
+        console.error(`[job-queue] Related document linking failed for job ${jobId}:`, err);
       }
-    } catch (err) {
-      console.error(`[job-queue] Related document linking failed for job ${jobId}:`, err);
     }
     await updateJobProgress(jobId, 95);
 
