@@ -488,9 +488,88 @@ async function searchKnowledge(userId: string, query: string): Promise<string> {
 
 // ── Main Handler ─────────────────────────────────────────────
 
+export async function GET(request: NextRequest) {
+  const token = await getBotToken();
+  if (!token) {
+    return NextResponse.json({ ok: false, status: "no_token", message: "No bot token configured" });
+  }
+  try {
+    // Verify token first
+    const meRes = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+    const meData = await meRes.json();
+    if (!meData.ok) {
+      return NextResponse.json({ ok: false, status: "invalid_token", message: meData.description ?? "Token is invalid" });
+    }
+
+    // Check webhook info
+    const res = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+    const data = await res.json();
+    const masked = token.slice(0, 6) + "..." + token.slice(-4);
+    const webhookUrl = data.ok ? data.result.url : "";
+
+    // Auto-register webhook if missing or pointing to wrong URL
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const expectedUrl = `${appUrl}/api/integrations/telegram/webhook`;
+    let autoRegistered = false;
+
+    if (data.ok && (!webhookUrl || webhookUrl !== expectedUrl)) {
+      const setupPayload: Record<string, unknown> = {
+        url: expectedUrl,
+        allowed_updates: ["message", "callback_query"],
+      };
+      if (process.env.TELEGRAM_WEBHOOK_SECRET) {
+        setupPayload.secret_token = process.env.TELEGRAM_WEBHOOK_SECRET;
+      }
+      const setupRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(setupPayload),
+      });
+      const setupData = await setupRes.json();
+      autoRegistered = setupData.ok === true;
+      console.log("[telegram/webhook] Auto-registered webhook:", expectedUrl, "result:", setupData.ok);
+    }
+
+    // Auto-setup: if ?setup=1 param is passed, force re-register
+    const forceSetup = request.nextUrl.searchParams.get("setup") === "1";
+    if (forceSetup && !autoRegistered) {
+      const setupPayload: Record<string, unknown> = {
+        url: expectedUrl,
+        allowed_updates: ["message", "callback_query"],
+      };
+      if (process.env.TELEGRAM_WEBHOOK_SECRET) {
+        setupPayload.secret_token = process.env.TELEGRAM_WEBHOOK_SECRET;
+      }
+      const setupRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(setupPayload),
+      });
+      const setupData = await setupRes.json();
+      autoRegistered = setupData.ok === true;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      bot: { name: meData.result.first_name, username: meData.result.username },
+      tokenMasked: masked,
+      webhook: data.ok ? {
+        url: webhookUrl || null,
+        expectedUrl,
+        pending: data.result.pending_update_count,
+        lastError: data.result.last_error_message || null,
+      } : null,
+      autoRegistered,
+    });
+  } catch (err) {
+    return NextResponse.json({ ok: false, status: "api_error", message: (err as Error).message });
+  }
+}
+
 export async function POST(request: NextRequest) {
   const fallbackToken = await getBotToken();
   if (!fallbackToken) {
+    console.error("[telegram/webhook] No bot token configured");
     return NextResponse.json({ ok: false, error: "No bot token configured" }, { status: 503 });
   }
 

@@ -50,7 +50,7 @@ export async function verifyTelegramToken(token: string): Promise<TokenVerifyRes
 }
 
 export async function setupTelegramWebhook(token: string, webhookUrl: string): Promise<boolean> {
-  const payload: Record<string, unknown> = { url: webhookUrl, allowed_updates: ["message"] };
+  const payload: Record<string, unknown> = { url: webhookUrl, allowed_updates: ["message", "callback_query"] };
   // Pass secret_token so Telegram includes it in webhook requests
   if (process.env.TELEGRAM_WEBHOOK_SECRET) {
     payload.secret_token = process.env.TELEGRAM_WEBHOOK_SECRET;
