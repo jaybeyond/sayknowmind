@@ -195,11 +195,6 @@ async function processJob(job: JobRow): Promise<void> {
     try {
       const entities = await extractEntities(doc.content, language);
       entityCount = entities.length;
-      // Debug: log entity extraction result to error_message for troubleshooting
-      await pool.query(
-        `UPDATE ingestion_jobs SET error_message = $1 WHERE id = $2`,
-        [`entities_extracted=${entities.length}${entities.length > 0 ? ` first=${entities[0].name}` : " (empty)"}`, jobId],
-      );
       if (entities.length > 0) {
         await insertEntities(
           entities.map((e) => ({
@@ -209,18 +204,9 @@ async function processJob(job: JobRow): Promise<void> {
             confidence: e.confidence,
           })),
         );
-        await pool.query(
-          `UPDATE ingestion_jobs SET error_message = $1 WHERE id = $2`,
-          [`entities_inserted=${entities.length}`, jobId],
-        );
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
       console.error(`[job-queue] Entity extraction failed for job ${jobId}:`, err);
-      await pool.query(
-        `UPDATE ingestion_jobs SET error_message = $1 WHERE id = $2`,
-        [`entity_error: ${msg.slice(0, 500)}`, jobId],
-      ).catch(() => {});
     }
     await updateJobProgress(jobId, 70);
 
@@ -257,7 +243,8 @@ async function processJob(job: JobRow): Promise<void> {
             categoryId = similar.id;
           } else {
             const insertResult = await pool.query(
-              `INSERT INTO categories (user_id, name) VALUES ($1, $2)
+              `INSERT INTO categories (user_id, name, depth, path)
+               VALUES ($1, $2, 0, $2)
                ON CONFLICT (user_id, name, COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'))
                DO UPDATE SET name = EXCLUDED.name
                RETURNING id`,
