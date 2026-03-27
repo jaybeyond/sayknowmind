@@ -249,11 +249,11 @@ async function processJob(job: JobRow): Promise<void> {
           } else {
             const insertResult = await pool.query(
               `INSERT INTO categories (user_id, name, depth, path)
-               VALUES ($1, $2, 0, $2)
+               VALUES ($1, $2, 0, $3::text)
                ON CONFLICT (user_id, name, COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'))
                DO UPDATE SET name = EXCLUDED.name
                RETURNING id`,
-              [userId, suggestion.categoryName],
+              [userId, suggestion.categoryName, suggestion.categoryName],
             );
             categoryId = insertResult.rows[0]?.id;
             newCategoryCreated = true;
