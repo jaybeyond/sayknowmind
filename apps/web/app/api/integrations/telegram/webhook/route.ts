@@ -595,8 +595,8 @@ export async function POST(request: NextRequest) {
     const cbChatId = cbq.message!.chat.id;
     const cbMessageId = cbq.message!.message_id;
     const cbTgUserId = String(cbq.from.id);
-    const { token: cbUserToken, lang: cbLang } = await getBotTokenForTelegramUser(cbTgUserId);
-    const cbBotToken = cbUserToken ?? fallbackToken;
+    const { lang: cbLang } = await getBotTokenForTelegramUser(cbTgUserId);
+    const cbBotToken = fallbackToken;
 
     const cbLinked = await pool.query(
       `SELECT user_id FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1`,
@@ -770,8 +770,10 @@ export async function POST(request: NextRequest) {
   const tgUserId = String(message.from.id);
   const text = message.text?.trim() ?? message.caption?.trim() ?? "";
   const { token: userToken, lang: userLang } = await getBotTokenForTelegramUser(tgUserId);
-  const botToken = userToken ?? fallbackToken;
+  // Always prefer fallbackToken (most recently verified) over per-user token which may be stale
+  const botToken = fallbackToken;
   const L = userLang;
+  console.log(`[telegram/webhook] msg from=${tgUserId} type=${msgType} userToken=${userToken ? "yes" : "no"} fallback=${fallbackToken ? "yes" : "no"}`);
 
   // Look up linked SayKnowMind user
   const linked = await pool.query(
