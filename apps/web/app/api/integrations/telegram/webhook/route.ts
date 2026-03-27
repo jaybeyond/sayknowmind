@@ -133,8 +133,9 @@ function buildDupKeyboard(dupId: string, lang: Lang): TelegramInlineKeyboardMark
 async function getBotToken(): Promise<string | null> {
   if (process.env.TELEGRAM_BOT_TOKEN) return process.env.TELEGRAM_BOT_TOKEN;
   try {
+    // Pick most recently updated token (not random LIMIT 1)
     const result = await pool.query(
-      `SELECT bot_token FROM channel_links WHERE channel = 'telegram' AND bot_token IS NOT NULL LIMIT 1`,
+      `SELECT bot_token FROM channel_links WHERE channel = 'telegram' AND bot_token IS NOT NULL ORDER BY updated_at DESC LIMIT 1`,
     );
     return (result.rows[0]?.bot_token as string) ?? null;
   } catch {

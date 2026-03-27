@@ -118,16 +118,24 @@ export async function POST(
     if (!token) {
       return NextResponse.json({ valid: false, error: "Token is required" }, { status: 400 });
     }
+    console.log(`[integrations/${channel}] verifyAndSave: token length=${token.length}, prefix=${token.slice(0, 6)}...`);
     const result = await verifyChannelToken(channel, token);
+    console.log(`[integrations/${channel}] verifyAndSave result:`, JSON.stringify(result));
     if (result.valid) {
       // Save token to user's channel config in DB
-      await pool.query(
-        `INSERT INTO channel_links (user_id, channel, bot_token, bot_name, bot_username)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (user_id, channel)
-         DO UPDATE SET bot_token = $3, bot_name = $4, bot_username = $5, updated_at = NOW()`,
-        [userId, channel, token, result.botName ?? null, result.botUsername ?? null],
-      );
+      try {
+        await pool.query(
+          `INSERT INTO channel_links (user_id, channel, bot_token, bot_name, bot_username)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (user_id, channel)
+           DO UPDATE SET bot_token = $3, bot_name = $4, bot_username = $5, updated_at = NOW()`,
+          [userId, channel, token, result.botName ?? null, result.botUsername ?? null],
+        );
+        console.log(`[integrations/${channel}] Token saved for user ${userId}`);
+      } catch (dbErr) {
+        console.error(`[integrations/${channel}] DB save failed:`, dbErr);
+        return NextResponse.json({ valid: true, saved: false, error: "Failed to save token to database" });
+      }
       return NextResponse.json({ ...result, saved: true });
     }
     return NextResponse.json(result);
