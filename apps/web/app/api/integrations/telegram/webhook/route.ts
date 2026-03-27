@@ -788,8 +788,16 @@ export async function POST(request: NextRequest) {
     // /start [linkCode]
     if (text.startsWith("/start")) {
       const linkCode = text.split(" ")[1];
-      if (linkCode && !userId) {
-        // Manual link with code from web settings
+      if (linkCode) {
+        // Link (or re-link) with code from web settings
+        // First, clear any existing link for this telegram user so we can re-link
+        if (userId) {
+          await pool.query(
+            `UPDATE channel_links SET channel_user_id = NULL, channel_username = NULL, linked_at = NULL
+             WHERE channel = 'telegram' AND channel_user_id = $1`,
+            [tgUserId],
+          ).catch(() => {});
+        }
         const linkResult = await pool.query(
           `UPDATE channel_links
            SET channel_user_id = $1, channel_username = $2, linked_at = NOW()
@@ -799,6 +807,7 @@ export async function POST(request: NextRequest) {
         ).catch(() => ({ rows: [] }));
 
         if (linkResult.rows.length > 0) {
+          userId = linkResult.rows[0].user_id;
           await sendMessage(botToken, chatId, msg("startLinked", L));
         } else {
           await sendMessage(botToken, chatId, msg("startBadCode", L));
