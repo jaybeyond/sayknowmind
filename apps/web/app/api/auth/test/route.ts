@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
 export function GET() {
-  return NextResponse.json({ ok: true, msg: "auth test route works" });
+  return NextResponse.json({
+    ok: true,
+    BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? "(not set)",
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "(not set)",
+    TRUSTED_ORIGINS: process.env.TRUSTED_ORIGINS ?? "(not set)",
+    BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ? "set" : "NOT SET",
+    DATABASE_URL: process.env.DATABASE_URL ? "set" : "NOT SET",
+  });
 }
 
 export async function POST() {
