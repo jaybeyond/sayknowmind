@@ -83,7 +83,16 @@
     "hidePassword": "パスワードを非表示",
     "forgotPassword": "パスワードをお忘れですか？",
     "noAccount": "アカウントをお持ちでないですか？",
-    "hasAccount": "すでにアカウントをお持ちですか？"
+    "hasAccount": "すでにアカウントをお持ちですか？",
+    "errors": {
+      "USER_ALREADY_EXISTS": "このメールアドレスは既に登録されています。ログインしてください。",
+      "INVALID_EMAIL_OR_PASSWORD": "メールアドレスまたはパスワードが正しくありません。",
+      "INVALID_EMAIL": "有効なメールアドレスを入力してください。",
+      "INVALID_PASSWORD": "パスワードは8文字以上必要です。",
+      "PASSWORD_TOO_LONG": "パスワードは128文字以下にしてください。",
+      "RATE_LIMIT_EXCEEDED": "試行回数が多すぎます。しばらくしてからお試しください。",
+      "UNKNOWN": "エラーが発生しました。もう一度お試しください。"
+    }
   },
   "chat": {
     "placeholder": "ナレッジについて何でも聞いてください...",

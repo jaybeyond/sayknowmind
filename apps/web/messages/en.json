@@ -83,7 +83,16 @@
     "hidePassword": "Hide password",
     "forgotPassword": "Forgot password?",
     "noAccount": "Don't have an account?",
-    "hasAccount": "Already have an account?"
+    "hasAccount": "Already have an account?",
+    "errors": {
+      "USER_ALREADY_EXISTS": "This email is already registered. Try logging in instead.",
+      "INVALID_EMAIL_OR_PASSWORD": "Incorrect email or password.",
+      "INVALID_EMAIL": "Please enter a valid email address.",
+      "INVALID_PASSWORD": "Password must be at least 8 characters.",
+      "PASSWORD_TOO_LONG": "Password must be less than 128 characters.",
+      "RATE_LIMIT_EXCEEDED": "Too many attempts. Please try again later.",
+      "UNKNOWN": "Something went wrong. Please try again."
+    }
   },
   "chat": {
     "placeholder": "Ask anything about your knowledge...",

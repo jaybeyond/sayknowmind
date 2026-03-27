@@ -83,7 +83,16 @@
     "hidePassword": "비밀번호 숨기기",
     "forgotPassword": "비밀번호를 잊으셨나요?",
     "noAccount": "계정이 없으신가요?",
-    "hasAccount": "이미 계정이 있으신가요?"
+    "hasAccount": "이미 계정이 있으신가요?",
+    "errors": {
+      "USER_ALREADY_EXISTS": "이미 등록된 이메일입니다. 로그인을 시도해 주세요.",
+      "INVALID_EMAIL_OR_PASSWORD": "이메일 또는 비밀번호가 올바르지 않습니다.",
+      "INVALID_EMAIL": "올바른 이메일 주소를 입력해 주세요.",
+      "INVALID_PASSWORD": "비밀번호는 8자 이상이어야 합니다.",
+      "PASSWORD_TOO_LONG": "비밀번호는 128자 이하여야 합니다.",
+      "RATE_LIMIT_EXCEEDED": "시도 횟수가 초과되었습니다. 잠시 후 다시 시도해 주세요.",
+      "UNKNOWN": "문제가 발생했습니다. 다시 시도해 주세요."
+    }
   },
   "chat": {
     "placeholder": "지식에 대해 무엇이든 물어보세요...",

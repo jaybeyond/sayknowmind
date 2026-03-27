@@ -18,6 +18,15 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  function translateAuthError(code?: string, fallback?: string): string {
+    if (code) {
+      const key = `auth.errors.${code}`;
+      const translated = t(key);
+      if (translated !== key) return translated;
+    }
+    return fallback ?? t("auth.errors.UNKNOWN");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -27,7 +36,7 @@ export default function LoginPage() {
       { email, password, callbackURL: "/" },
       {
         onError: (ctx) => {
-          setError(ctx.error.message);
+          setError(translateAuthError(ctx.error.code, ctx.error.message));
         },
         onSuccess: () => {
           router.push("/");
@@ -36,7 +45,7 @@ export default function LoginPage() {
     );
 
     if (authError) {
-      setError(authError.message ?? t("common.error"));
+      setError(translateAuthError(authError.code, authError.message));
     }
     setLoading(false);
   }
