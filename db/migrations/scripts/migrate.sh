@@ -25,6 +25,26 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 SQL
 
+# Rename old filenames in schema_migrations to match new numbering
+# This handles databases that ran migrations before the renumber
+declare -A RENAMES=(
+  ["001-shared-content-add-columns.sql"]="026_shared_content_add_columns.sql"
+  ["002-telegram-links.sql"]="027_telegram_links.sql"
+  ["003-channel-links.sql"]="028_channel_links.sql"
+  ["026_add_bot_token_to_channel_links.sql"]="029_add_bot_token_to_channel_links.sql"
+  ["027_add_lang_to_channel_links.sql"]="030_add_lang_to_channel_links.sql"
+  ["027_conversations_simple.sql"]="031_conversations_simple.sql"
+  ["027_document_relations.sql"]="032_document_relations.sql"
+  ["028_categories_unique_index.sql"]="033_categories_unique_index.sql"
+  ["028_notifications.sql"]="034_notifications.sql"
+  ["026-admin-role.sql"]="035_admin_role.sql"
+)
+
+for old_name in "${!RENAMES[@]}"; do
+  new_name="${RENAMES[$old_name]}"
+  psql "$DB_URL" -q -c "UPDATE schema_migrations SET filename = '$new_name' WHERE filename = '$old_name'" 2>/dev/null || true
+done
+
 # Run each migration in order
 applied=0
 skipped=0

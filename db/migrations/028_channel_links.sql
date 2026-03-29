@@ -1,4 +1,4 @@
--- Migration: 003-channel-links.sql
+-- Migration: 028_channel_links.sql
 -- Generalize telegram_links to support multiple channels (Telegram, Slack, Discord, Email)
 
 CREATE TABLE IF NOT EXISTS channel_links (

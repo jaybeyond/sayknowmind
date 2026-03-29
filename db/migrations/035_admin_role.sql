@@ -1,0 +1,2 @@
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user';
+CREATE INDEX IF NOT EXISTS idx_user_role ON "user"(role);

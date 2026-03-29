@@ -1,4 +1,4 @@
--- Migration: 027_conversations_simple.sql
+-- Migration: 031_conversations_simple.sql
 -- Description: Simple conversations + messages tables for better-auth users
 -- Replaces 010 (EdgeQuake multi-tenant version) for the web app
 -- The EdgeQuake version uses conversation_id/message_id + tenant/workspace refs
