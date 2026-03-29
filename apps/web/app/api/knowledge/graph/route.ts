@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
-import { getGraph } from "@/lib/edgequake/client";
 import { ErrorCode } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
@@ -29,36 +28,8 @@ export async function GET(request: NextRequest) {
   const typeFilter = request.nextUrl.searchParams.get("type") ?? undefined;
 
   try {
-    // Try EdgeQuake graph first (only if it returns actual data)
-    try {
-      const eqGraph = await getGraph({ search, limit: 200 });
-
-      if (eqGraph.nodes.length > 0) {
-        const nodes = eqGraph.nodes.map((n) => ({
-          id: n.id,
-          label: n.label,
-          type: "entity" as const,
-          x: 0,
-          y: 0,
-          size: 6,
-          color: "",
-        }));
-
-        const edges = eqGraph.edges.map((e) => ({
-          source: e.source,
-          target: e.target,
-          label: e.label,
-          weight: e.weight,
-        }));
-
-        return NextResponse.json({ nodes, edges });
-      }
-      // Empty result — fall through to PostgreSQL
-    } catch {
-      // EdgeQuake unavailable — build graph from PostgreSQL
-    }
-
-    // Fallback: build graph from documents + entities
+    // Always build from PostgreSQL for full document+entity+category graph
+    // EdgeQuake graph only has entities — incomplete for our needs
     const nodes: Array<{
       id: string;
       label: string;
@@ -156,6 +127,27 @@ export async function GET(request: NextRequest) {
           edges.push({ source: dc.document_id, target: dc.category_id, label: "belongs_to" });
         }
       }
+    }
+
+    // Document-document similarity edges (from document_relations)
+    if (docs.rows.length > 0) {
+      try {
+        const docIds = docs.rows.map((d: { id: string }) => d.id);
+        const relations = await pool.query(
+          `SELECT document_id, related_document_id, score, relation_type
+           FROM document_relations
+           WHERE document_id = ANY($1) AND related_document_id = ANY($1)
+           AND score > 0.5`,
+          [docIds],
+        );
+        for (const rel of relations.rows) {
+          edges.push({
+            source: rel.document_id,
+            target: rel.related_document_id,
+            label: rel.relation_type ?? "similar",
+          });
+        }
+      } catch { /* document_relations may not exist yet */ }
     }
 
     return NextResponse.json({ nodes, edges });

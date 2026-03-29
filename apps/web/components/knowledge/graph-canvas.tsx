@@ -1,9 +1,30 @@
 "use client";
 
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import ForceGraph2D, { type ForceGraphMethods } from "react-force-graph-2d";
 import { Network, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+
+/** Detect dark mode from Tailwind's .dark class or system preference */
+function useIsDark() {
+  const [isDark, setIsDark] = useState(true);
+  useEffect(() => {
+    const check = () => {
+      setIsDark(
+        document.documentElement.classList.contains("dark") ||
+        (!document.documentElement.classList.contains("light") &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
+      );
+    };
+    check();
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    mq.addEventListener("change", check);
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => { mq.removeEventListener("change", check); observer.disconnect(); };
+  }, []);
+  return isDark;
+}
 
 interface GraphNode {
   id: string;
@@ -64,10 +85,16 @@ export function GraphCanvas({
   selectedNodeId,
 }: GraphCanvasProps) {
   const { t } = useTranslation();
+  const isDark = useIsDark();
   const fgRef = useRef<ForceGraphMethods<FGNode, FGLink> | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [sizeMultiplier, setSizeMultiplier] = useState(1);
+
+  // Theme-aware colors
+  const labelColor = isDark ? "#ffffffcc" : "#1a1a2ecc";
+  const linkColorValue = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.15)";
+  const particleColor = isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.25)";
 
   // Resize observer
   useEffect(() => {
@@ -193,7 +220,7 @@ export function GraphCanvas({
           ctx.font = `500 ${fontSize}px Inter, system-ui, sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "top";
-          ctx.fillStyle = "#ffffffcc";
+          ctx.fillStyle = labelColor;
           const label = node.label.length > 22 ? node.label.slice(0, 20) + "..." : node.label;
           ctx.fillText(label, x, y + size + 3);
         }}
@@ -211,12 +238,12 @@ export function GraphCanvas({
           const el = containerRef.current;
           if (el) el.style.cursor = node ? "pointer" : "default";
         }}
-        linkColor={() => "rgba(255,255,255,0.12)"}
+        linkColor={() => linkColorValue}
         linkWidth={0.8}
         linkDirectionalParticles={1}
         linkDirectionalParticleWidth={1.5}
         linkDirectionalParticleSpeed={0.004}
-        linkDirectionalParticleColor={() => "rgba(255,255,255,0.3)"}
+        linkDirectionalParticleColor={() => particleColor}
         cooldownTicks={120}
         d3AlphaDecay={0.02}
         d3VelocityDecay={0.3}
