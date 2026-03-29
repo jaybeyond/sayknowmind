@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
 import { useCategoriesStore } from "@/store/categories-store";
 import { MemoryCard } from "./memory-card";
@@ -27,14 +27,37 @@ export function MemoryContent() {
     sortBy,
     getDerivedTags,
     isLoading,
+    isLoadingMore,
+    hasMore,
+    totalCount,
     searchQuery,
     fetchMemories,
+    loadMoreMemories,
   } = useMemoryStore();
   const { categories } = useCategoriesStore();
   const [globalDragOver, setGlobalDragOver] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
+
+  // Infinite scroll: trigger loadMore when sentinel enters viewport
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) return;
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+            loadMoreMemories();
+          }
+        },
+        { rootMargin: "200px" },
+      );
+      observer.observe(node);
+      return () => observer.disconnect();
+    },
+    [hasMore, isLoadingMore, loadMoreMemories],
+  );
 
   const filteredMemories = getFilteredMemories();
   const derivedTags = getDerivedTags();
@@ -69,10 +92,11 @@ export function MemoryContent() {
   const hasActiveFilters =
     selectedTags.length > 0 || filterType !== "all" || sortBy !== "date-newest";
 
+  const displayCount = totalCount > filteredMemories.length ? totalCount : filteredMemories.length;
   const memoryCountLabel =
-    filteredMemories.length === 1
-      ? t("content.memoryCountOne").replace("{{count}}", String(filteredMemories.length))
-      : t("content.memoryCountMany").replace("{{count}}", String(filteredMemories.length));
+    displayCount === 1
+      ? t("content.memoryCountOne").replace("{{count}}", String(displayCount))
+      : t("content.memoryCountMany").replace("{{count}}", String(displayCount));
 
   return (
     <>
@@ -229,6 +253,28 @@ export function MemoryContent() {
                   />
                 ))}
               </div>
+            )}
+
+            {/* Infinite scroll sentinel + load more indicator */}
+            {!isLoading && hasMore && filteredMemories.length > 0 && (
+              <div ref={loadMoreRef} className="flex justify-center py-6">
+                {isLoadingMore ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <RefreshCw className="size-4 animate-spin" />
+                    {t("content.loadingMore") ?? "Loading more..."}
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={loadMoreMemories}>
+                    {t("content.loadMore") ?? "Load more"}
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {!isLoading && !hasMore && filteredMemories.length > 0 && totalCount > 20 && (
+              <p className="text-center text-xs text-muted-foreground py-4">
+                {t("content.allLoaded")?.replace("{{count}}", String(totalCount)) ?? `All ${totalCount} memories loaded`}
+              </p>
             )}
 
             {!isLoading && filteredMemories.length === 0 && (

@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useMemoryStore } from "@/store/memory-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -89,9 +90,14 @@ function TrashedMemoryCard({ memory }: { memory: Memory }) {
 }
 
 export function TrashContent() {
-  const { getTrashedMemories, trashedMemories, isLoading } =
+  const { getTrashedMemories, fetchTrashedMemories, trashedMemories, isLoading } =
     useMemoryStore();
   const { t } = useTranslation();
+
+  React.useEffect(() => {
+    fetchTrashedMemories();
+  }, [fetchTrashedMemories]);
+
   const filteredTrash = getTrashedMemories();
 
   if (isLoading) {

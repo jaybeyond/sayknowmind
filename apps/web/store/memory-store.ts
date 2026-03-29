@@ -29,6 +29,8 @@ type ViewMode = "grid" | "list";
 type SortBy = "date-newest" | "date-oldest" | "alpha-az" | "alpha-za";
 type FilterType = "all" | "favorites" | "with-tags" | "without-tags";
 
+const PAGE_SIZE = 20;
+
 /** Map a DB document row to the Memory shape used by the UI */
 function documentToMemory(row: Record<string, unknown>): Memory {
   const metadata = (row.metadata ?? {}) as Record<string, unknown>;
@@ -90,9 +92,19 @@ export interface DerivedTag {
 }
 
 interface MemoryState {
+  // Data
   memories: Memory[];
   archivedMemories: Memory[];
   trashedMemories: Memory[];
+
+  // Pagination
+  page: number;
+  hasMore: boolean;
+  totalCount: number;
+  archivedLoaded: boolean;
+  trashedLoaded: boolean;
+
+  // UI state
   selectedCollection: string;
   selectedTags: string[];
   searchQuery: string;
@@ -100,7 +112,10 @@ interface MemoryState {
   sortBy: SortBy;
   filterType: FilterType;
   isLoading: boolean;
+  isLoadingMore: boolean;
   error: string | null;
+
+  // Actions
   setSelectedCollection: (collectionId: string) => void;
   toggleTag: (tagId: string) => void;
   clearTags: () => void;
@@ -115,6 +130,9 @@ interface MemoryState {
   restoreFromTrash: (memoryId: string) => void;
   permanentlyDelete: (memoryId: string) => void;
   fetchMemories: () => Promise<void>;
+  loadMoreMemories: () => Promise<void>;
+  fetchArchivedMemories: () => Promise<void>;
+  fetchTrashedMemories: () => Promise<void>;
   getFilteredMemories: () => Memory[];
   getFavoriteMemories: () => Memory[];
   getArchivedMemories: () => Memory[];
@@ -122,10 +140,36 @@ interface MemoryState {
   getDerivedTags: () => DerivedTag[];
 }
 
+/** Build query string for the /api/documents endpoint */
+function buildDocumentsUrl(params: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  q?: string;
+  categoryId?: string;
+  isFavorite?: boolean;
+}): string {
+  const sp = new URLSearchParams();
+  sp.set("page", String(params.page ?? 1));
+  sp.set("limit", String(params.limit ?? PAGE_SIZE));
+  if (params.status) sp.set("status", params.status);
+  if (params.q) sp.set("q", params.q);
+  if (params.categoryId) sp.set("categoryId", params.categoryId);
+  if (params.isFavorite) sp.set("isFavorite", "true");
+  return `/api/documents?${sp.toString()}`;
+}
+
 export const useMemoryStore = create<MemoryState>((set, get) => ({
   memories: [],
   archivedMemories: [],
   trashedMemories: [],
+
+  page: 1,
+  hasMore: true,
+  totalCount: 0,
+  archivedLoaded: false,
+  trashedLoaded: false,
+
   selectedCollection: "all",
   selectedTags: [],
   searchQuery: "",
@@ -133,6 +177,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   sortBy: "date-newest",
   filterType: "all",
   isLoading: true,
+  isLoadingMore: false,
   error: null,
 
   setSelectedCollection: (collectionId) => set({ selectedCollection: collectionId }),
@@ -146,7 +191,13 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
 
   clearTags: () => set({ selectedTags: [] }),
 
-  setSearchQuery: (query) => set({ searchQuery: query }),
+  setSearchQuery: (query) => {
+    set({ searchQuery: query });
+    // Debounced server-side search: reset and re-fetch
+    const store = get();
+    set({ memories: [], page: 1, hasMore: true });
+    store.fetchMemories();
+  },
 
   setViewMode: (mode) => set({ viewMode: mode }),
 
@@ -191,6 +242,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     set({
       memories: state.memories.filter((m) => m.id !== memoryId),
       archivedMemories: [...state.archivedMemories, memory],
+      totalCount: state.totalCount - 1,
     });
 
     fetch(`/api/documents/${memoryId}`, {
@@ -201,6 +253,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       set((s) => ({
         memories: [...s.memories, memory],
         archivedMemories: s.archivedMemories.filter((m) => m.id !== memoryId),
+        totalCount: s.totalCount + 1,
       }));
     });
   },
@@ -213,6 +266,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     set({
       archivedMemories: state.archivedMemories.filter((m) => m.id !== memoryId),
       memories: [...state.memories, memory],
+      totalCount: state.totalCount + 1,
     });
 
     fetch(`/api/documents/${memoryId}`, {
@@ -223,6 +277,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       set((s) => ({
         memories: s.memories.filter((m) => m.id !== memoryId),
         archivedMemories: [...s.archivedMemories, memory],
+        totalCount: s.totalCount - 1,
       }));
     });
   },
@@ -235,6 +290,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     set({
       memories: state.memories.filter((m) => m.id !== memoryId),
       trashedMemories: [...state.trashedMemories, memory],
+      totalCount: state.totalCount - 1,
     });
 
     fetch(`/api/documents/${memoryId}`, {
@@ -245,6 +301,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       set((s) => ({
         memories: [...s.memories, memory],
         trashedMemories: s.trashedMemories.filter((m) => m.id !== memoryId),
+        totalCount: s.totalCount + 1,
       }));
     });
   },
@@ -257,6 +314,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     set({
       trashedMemories: state.trashedMemories.filter((m) => m.id !== memoryId),
       memories: [...state.memories, memory],
+      totalCount: state.totalCount + 1,
     });
 
     fetch(`/api/documents/${memoryId}`, {
@@ -267,6 +325,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       set((s) => ({
         memories: s.memories.filter((m) => m.id !== memoryId),
         trashedMemories: [...s.trashedMemories, memory],
+        totalCount: s.totalCount - 1,
       }));
     });
   },
@@ -280,35 +339,104 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     fetch(`/api/documents/${memoryId}`, { method: "DELETE" }).catch(() => {});
   },
 
+  /** Fetch first page of active memories (resets pagination) */
   fetchMemories: async () => {
+    const { searchQuery } = get();
     set({ isLoading: true, error: null });
     try {
-      const [activeRes, archivedRes, trashedRes] = await Promise.all([
-        fetch("/api/documents?limit=100&status=active"),
-        fetch("/api/documents?limit=100&status=archived"),
-        fetch("/api/documents?limit=100&status=trashed"),
-      ]);
+      const url = buildDocumentsUrl({
+        page: 1,
+        limit: PAGE_SIZE,
+        status: "active",
+        q: searchQuery || undefined,
+      });
+      const res = await fetch(url);
 
-      if (!activeRes.ok) {
-        set({ isLoading: false, error: activeRes.status === 401 ? null : "Failed to load memories" });
+      if (!res.ok) {
+        set({ isLoading: false, error: res.status === 401 ? null : "Failed to load memories" });
         return;
       }
 
-      const [activeData, archivedData, trashedData] = await Promise.all([
-        activeRes.json(),
-        archivedRes.ok ? archivedRes.json() : { documents: [] },
-        trashedRes.ok ? trashedRes.json() : { documents: [] },
-      ]);
+      const data = await res.json();
+      const docs = Array.isArray(data.documents) ? data.documents.map(documentToMemory) : [];
+      const total = data.pagination?.total ?? docs.length;
 
       set({
-        memories: Array.isArray(activeData.documents) ? activeData.documents.map(documentToMemory) : [],
-        archivedMemories: Array.isArray(archivedData.documents) ? archivedData.documents.map(documentToMemory) : [],
-        trashedMemories: Array.isArray(trashedData.documents) ? trashedData.documents.map(documentToMemory) : [],
+        memories: docs,
+        page: 1,
+        hasMore: docs.length >= PAGE_SIZE && docs.length < total,
+        totalCount: total,
         isLoading: false,
       });
     } catch {
       set({ isLoading: false, error: "Network error" });
     }
+  },
+
+  /** Load next page and append to existing memories */
+  loadMoreMemories: async () => {
+    const { hasMore, isLoadingMore, page, searchQuery } = get();
+    if (!hasMore || isLoadingMore) return;
+
+    set({ isLoadingMore: true });
+    try {
+      const nextPage = page + 1;
+      const url = buildDocumentsUrl({
+        page: nextPage,
+        limit: PAGE_SIZE,
+        status: "active",
+        q: searchQuery || undefined,
+      });
+      const res = await fetch(url);
+      if (!res.ok) {
+        set({ isLoadingMore: false });
+        return;
+      }
+
+      const data = await res.json();
+      const docs = Array.isArray(data.documents) ? data.documents.map(documentToMemory) : [];
+      const total = data.pagination?.total ?? 0;
+
+      set((state) => {
+        const merged = [...state.memories, ...docs];
+        return {
+          memories: merged,
+          page: nextPage,
+          hasMore: merged.length < total,
+          isLoadingMore: false,
+        };
+      });
+    } catch {
+      set({ isLoadingMore: false });
+    }
+  },
+
+  /** Lazy-load archived memories (called only when /archive page is visited) */
+  fetchArchivedMemories: async () => {
+    if (get().archivedLoaded) return;
+    try {
+      const res = await fetch(buildDocumentsUrl({ page: 1, limit: 100, status: "archived" }));
+      if (!res.ok) return;
+      const data = await res.json();
+      set({
+        archivedMemories: Array.isArray(data.documents) ? data.documents.map(documentToMemory) : [],
+        archivedLoaded: true,
+      });
+    } catch { /* silent */ }
+  },
+
+  /** Lazy-load trashed memories (called only when /trash page is visited) */
+  fetchTrashedMemories: async () => {
+    if (get().trashedLoaded) return;
+    try {
+      const res = await fetch(buildDocumentsUrl({ page: 1, limit: 100, status: "trashed" }));
+      if (!res.ok) return;
+      const data = await res.json();
+      set({
+        trashedMemories: Array.isArray(data.documents) ? data.documents.map(documentToMemory) : [],
+        trashedLoaded: true,
+      });
+    } catch { /* silent */ }
   },
 
   getFilteredMemories: () => {
@@ -325,6 +453,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       );
     }
 
+    // Search is now server-side, but keep client filter for instant sub-filtering
     if (state.searchQuery) {
       const query = state.searchQuery.toLowerCase();
       filtered = filtered.filter(

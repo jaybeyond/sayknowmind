@@ -31,16 +31,33 @@ export async function GET(
       );
     }
 
+    const { searchParams } = _request.nextUrl;
+    const page = Math.max(1, Number(searchParams.get("page") ?? 1));
+    const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 20)));
+    const offset = (page - 1) * limit;
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM documents d
+       JOIN document_categories dc ON dc.document_id = d.id
+       WHERE dc.category_id = $1 AND d.user_id = $2`,
+      [id, userId],
+    );
+    const total = Number(countResult.rows[0].count);
+
     const result = await pool.query(
       `SELECT d.id, d.title, d.url, d.source_type, d.created_at
        FROM documents d
        JOIN document_categories dc ON dc.document_id = d.id
        WHERE dc.category_id = $1 AND d.user_id = $2
-       ORDER BY d.created_at DESC`,
-      [id, userId],
+       ORDER BY d.created_at DESC
+       LIMIT $3 OFFSET $4`,
+      [id, userId, limit, offset],
     );
 
-    return NextResponse.json({ documents: result.rows });
+    return NextResponse.json({
+      documents: result.rows,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   } catch (err) {
     console.error("[categories/documents] GET error:", err);
     return NextResponse.json(

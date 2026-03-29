@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useMemoryStore } from "@/store/memory-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -99,8 +100,13 @@ function ArchivedMemoryCard({ memory }: { memory: Memory }) {
 }
 
 export function ArchiveContent() {
-  const { getArchivedMemories, isLoading } = useMemoryStore();
+  const { getArchivedMemories, fetchArchivedMemories, isLoading } = useMemoryStore();
   const { t } = useTranslation();
+
+  React.useEffect(() => {
+    fetchArchivedMemories();
+  }, [fetchArchivedMemories]);
+
   const archivedMemories = getArchivedMemories();
 
   if (isLoading) {

@@ -55,6 +55,7 @@ import { useMemoryStore } from "@/store/memory-store";
 import { useCategoriesStore } from "@/store/categories-store";
 import { useSession, signOut } from "@/lib/auth-client";
 import { useTranslation } from "@/lib/i18n";
+import { useDocumentEvents } from "@/lib/use-document-events";
 import { toast } from "sonner";
 
 const navItemKeys = [
@@ -144,16 +145,27 @@ export function MemorySidebar({
   const { data: session } = useSession();
   const { t } = useTranslation();
 
+  // SSE: real-time document updates (replaces aggressive polling)
+  useDocumentEvents();
+
   React.useEffect(() => {
     fetchMemories();
     fetchCategories();
 
-    // Auto-refresh every 30s to pick up Telegram / external additions
-    const timer = setInterval(() => {
-      fetchMemories();
-      fetchCategories();
-    }, 30_000);
-    return () => clearInterval(timer);
+    // Refresh when tab becomes visible again (replaces aggressive 30s polling)
+    let lastFetch = Date.now();
+    const REFRESH_INTERVAL = 120_000; // 2 min minimum between refreshes
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastFetch > REFRESH_INTERVAL) {
+        lastFetch = Date.now();
+        fetchMemories();
+        fetchCategories();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [fetchMemories, fetchCategories]);
 
   const derivedTags = getDerivedTags();

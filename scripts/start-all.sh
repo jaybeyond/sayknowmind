@@ -122,7 +122,7 @@ start_service "web" 3000 \
 
 # ── Telegram Polling Bridge (no port — outbound only) ──
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
-  local pidfile="$PID_DIR/telegram-poll.pid"
+  pidfile="$PID_DIR/telegram-poll.pid"
   if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
     info "telegram-poll already running"
   else

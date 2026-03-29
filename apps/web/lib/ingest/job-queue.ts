@@ -5,6 +5,7 @@ import { generateSummary, extractEntities, suggestCategories, generateStructured
 import { indexDocument, queryEdgeQuake } from "@/lib/edgequake/client";
 import { createNotification } from "@/lib/notifications";
 import { detectLanguage } from "./language-detect";
+import { emitDocumentEvent } from "@/lib/events";
 
 interface JobRow {
   id: string;
@@ -25,6 +26,9 @@ export async function createJob(userId: string, documentId: string): Promise<str
     [userId, documentId],
   );
   const jobId = result.rows[0].id;
+
+  // Notify connected SSE clients about the new document
+  emitDocumentEvent({ type: "document:created", documentId, userId, jobId });
 
   // Start processing asynchronously (fire and forget)
   processJobById(jobId).catch((err) => {
@@ -289,7 +293,13 @@ async function processJob(job: JobRow): Promise<void> {
       }
     } catch (err) {
       console.error(`[job-queue] EdgeQuake indexing failed for job ${jobId}:`, err);
-      // Non-fatal: RAG won't work but document is still saved
+      // Flag for later sync — document is saved but needs EdgeQuake indexing
+      try {
+        await pool.query(
+          `UPDATE documents SET metadata = metadata || '{"edgequake_sync_failed": true}'::jsonb WHERE id = $1`,
+          [documentId],
+        );
+      } catch { /* best-effort flag */ }
     }
 
     // Step 5: Find and link related documents (90% → 95%)
@@ -331,7 +341,8 @@ async function processJob(job: JobRow): Promise<void> {
     // Notify: processing complete
     await createNotification(userId, "job_complete", doc.title ?? "Document", structuredMeta.summary || undefined, { documentId }).catch(() => {});
 
-    // Done
+    // Done — notify connected SSE clients
+    emitDocumentEvent({ type: "ingest:completed", documentId, userId, jobId, title: doc.title ?? undefined });
     await completeJob(jobId);
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -355,6 +366,7 @@ async function processJob(job: JobRow): Promise<void> {
       }, delay);
     } else {
       await failJob(jobId, errorMessage);
+      emitDocumentEvent({ type: "ingest:failed", documentId, userId, jobId, error: errorMessage });
       await createNotification(userId, "job_failed", "Document processing failed", errorMessage, { documentId }).catch(() => {});
     }
   }
