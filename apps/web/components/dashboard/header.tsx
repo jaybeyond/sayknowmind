@@ -25,6 +25,7 @@ import {
   Check,
 } from "lucide-react";
 import { useMemoryStore } from "@/store/memory-store";
+import { useCategoriesStore } from "@/store/categories-store";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -45,8 +46,33 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
     setSortBy,
     filterType,
     setFilterType,
+    selectedCollection,
+    selectedTab,
+    setSelectedCollection,
+    setSelectedTab,
   } = useMemoryStore();
+  const { categories } = useCategoriesStore();
   const { t } = useTranslation();
+
+  // Build breadcrumb segments for folder > tab navigation
+  const breadcrumb = React.useMemo(() => {
+    if (selectedCollection === "all") return null;
+    const segments: Array<{ id: string; name: string }> = [];
+    // Walk up parent chain
+    let current = categories.find((c) => c.id === selectedCollection);
+    while (current) {
+      segments.unshift({ id: current.id, name: current.name });
+      current = current.parent_id
+        ? categories.find((c) => c.id === current!.parent_id)
+        : undefined;
+    }
+    // Add tab if selected
+    if (selectedTab) {
+      const tab = categories.find((c) => c.id === selectedTab);
+      if (tab) segments.push({ id: tab.id, name: tab.name });
+    }
+    return segments.length > 0 ? segments : null;
+  }, [selectedCollection, selectedTab, categories]);
 
   const sortOptions = [
     { value: "date-newest", label: t("sort.dateNewest") },
@@ -73,7 +99,33 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
         <div className="flex items-center gap-3">
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-5" />
-          <h1 className="text-base font-semibold hidden sm:block">{title ?? t("header.memory")}</h1>
+          {breadcrumb ? (
+            <nav className="hidden sm:flex items-center gap-1 text-sm">
+              <button
+                onClick={() => { setSelectedCollection("all"); setSelectedTab(null); }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {title ?? t("header.memory")}
+              </button>
+              {breadcrumb.map((seg, i) => (
+                <React.Fragment key={seg.id}>
+                  <span className="text-muted-foreground/50">/</span>
+                  {i < breadcrumb.length - 1 ? (
+                    <button
+                      onClick={() => { setSelectedCollection(seg.id); setSelectedTab(null); }}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {seg.name}
+                    </button>
+                  ) : (
+                    <span className="font-semibold">{seg.name}</span>
+                  )}
+                </React.Fragment>
+              ))}
+            </nav>
+          ) : (
+            <h1 className="text-base font-semibold hidden sm:block">{title ?? t("header.memory")}</h1>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

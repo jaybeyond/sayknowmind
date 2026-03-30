@@ -52,7 +52,7 @@ export interface ShareResult {
   ipfsCid: string;
   accessConditions: AccessConditions;
   shareUrl: string;
-  /** Passphrase hint (only for passphrase-based shares) */
+  shareToken: string;
   passphraseRequired: boolean;
 }
 
@@ -322,35 +322,47 @@ export async function shareDocument(
     addresses: options.recipientKeys,
   };
 
-  // 2. Encrypt with age
-  const encrypted = ageEncrypt(content, {
-    recipientKeys: options.recipientKeys,
-    passphrase: options.passphrase,
-  });
+  // 2. Encrypt (or skip for public shares) and upload to IPFS
+  let ipfsCid: string;
+  let encryptionMethod: string | null = null;
+  let passphraseRequired = false;
 
-  // 3. Upload to IPFS Kubo
-  const ipfsCid = await uploadToIPFS(JSON.stringify(encrypted));
+  if (options.accessType === "public") {
+    // Public share: upload raw content without encryption
+    ipfsCid = await uploadToIPFS(content);
+  } else {
+    // Encrypted share: age-encrypt then upload
+    const encrypted = ageEncrypt(content, {
+      recipientKeys: options.recipientKeys,
+      passphrase: options.passphrase,
+    });
+    ipfsCid = await uploadToIPFS(JSON.stringify(encrypted));
+    encryptionMethod = encrypted.method;
+    passphraseRequired = encrypted.method === "age-passphrase";
+  }
 
-  // 4. Calculate expiry
+  // 3. Calculate expiry
   const expiresAt = options.expiryHours
     ? new Date(Date.now() + options.expiryHours * 3600_000).toISOString()
     : null;
 
-  // 5. Store share metadata in PostgreSQL
+  // 4. Store share metadata in PostgreSQL
   const result = await pool.query(
     `INSERT INTO shared_content (document_id, user_id, ipfs_cid, access_conditions, encryption_method, expires_at)
      VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id`,
-    [documentId, userId, ipfsCid, JSON.stringify(accessConditions), encrypted.method, expiresAt],
+     RETURNING id, share_token`,
+    [documentId, userId, ipfsCid, JSON.stringify(accessConditions), encryptionMethod, expiresAt],
   );
   const sharedContentId = result.rows[0].id;
+  const shareToken = result.rows[0].share_token;
 
   return {
     sharedContentId,
     ipfsCid,
     accessConditions,
     shareUrl: `${IPFS_GATEWAY}/${ipfsCid}`,
-    passphraseRequired: encrypted.method === "age-passphrase",
+    shareToken,
+    passphraseRequired,
   };
 }
 

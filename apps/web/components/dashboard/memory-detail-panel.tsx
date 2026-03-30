@@ -16,9 +16,11 @@ import {
   ImageIcon,
   Video,
   Link2,
+  Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
+import { ShareDialog } from "./share-dialog";
 
 interface MemoryDetailPanelProps {
   memory: Memory | null;
@@ -34,6 +36,7 @@ interface RelatedDoc {
 export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
   const { t } = useTranslation();
   const [relatedDocs, setRelatedDocs] = useState<RelatedDoc[]>([]);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const memoryId = memory?.id;
   useEffect(() => {
@@ -82,12 +85,22 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
             </a>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="shrink-0 p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
-        >
-          <X className="size-4" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setShareOpen(true)}
+            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+            title={t("memory.share")}
+          >
+            <Share2 className="size-4" />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
       </div>
 
       {/* Content */}

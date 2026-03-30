@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useCategoriesStore } from "./categories-store";
 
 export type Memory = {
   id: string;
@@ -7,6 +8,7 @@ export type Memory = {
   description: string;
   favicon: string;
   collectionId: string;
+  categoryIds: string[]; // all categories this memory belongs to
   tags: string[]; // merged view (aiTags + userTags) for backward compat
   aiTags: string[];
   userTags: string[];
@@ -66,6 +68,7 @@ function documentToMemory(row: Record<string, unknown>): Memory {
       ? `https://www.google.com/s2/favicons?domain=${new URL(String(row.url)).hostname}&sz=64`
       : "",
     collectionId: categories[0]?.id ?? "all",
+    categoryIds: categories.map((c) => c.id),
     tags,
     aiTags,
     userTags,
@@ -106,6 +109,7 @@ interface MemoryState {
 
   // UI state
   selectedCollection: string;
+  selectedTab: string | null;
   selectedTags: string[];
   searchQuery: string;
   viewMode: ViewMode;
@@ -117,12 +121,16 @@ interface MemoryState {
 
   // Actions
   setSelectedCollection: (collectionId: string) => void;
+  setSelectedTab: (tabId: string | null) => void;
   toggleTag: (tagId: string) => void;
   clearTags: () => void;
   setSearchQuery: (query: string) => void;
   setViewMode: (mode: ViewMode) => void;
   setSortBy: (sort: SortBy) => void;
   setFilterType: (filter: FilterType) => void;
+  addUserTag: (memoryId: string, tag: string) => void;
+  removeUserTag: (memoryId: string, tag: string) => void;
+  updateMemoryTitle: (memoryId: string, title: string) => void;
   toggleFavorite: (memoryId: string) => void;
   archiveMemory: (memoryId: string) => void;
   restoreFromArchive: (memoryId: string) => void;
@@ -171,6 +179,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   trashedLoaded: false,
 
   selectedCollection: "all",
+  selectedTab: null,
   selectedTags: [],
   searchQuery: "",
   viewMode: "grid",
@@ -180,7 +189,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   isLoadingMore: false,
   error: null,
 
-  setSelectedCollection: (collectionId) => set({ selectedCollection: collectionId }),
+  setSelectedCollection: (collectionId) => set({ selectedCollection: collectionId, selectedTab: null }),
+  setSelectedTab: (tabId) => set({ selectedTab: tabId }),
 
   toggleTag: (tagId) =>
     set((state) => ({
@@ -204,6 +214,53 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   setSortBy: (sort) => set({ sortBy: sort }),
 
   setFilterType: (filter) => set({ filterType: filter }),
+
+  addUserTag: (memoryId, tag) => {
+    const memory = get().memories.find((m) => m.id === memoryId);
+    if (!memory) return;
+    const newTags = [...new Set([...memory.userTags, tag])];
+    const allTags = [...new Set([...newTags, ...memory.aiTags])];
+    set((s) => ({
+      memories: s.memories.map((m) =>
+        m.id === memoryId ? { ...m, userTags: newTags, tags: allTags } : m
+      ),
+    }));
+    fetch(`/api/documents/${memoryId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metadata: { userTags: newTags } }),
+    }).catch(() => {});
+  },
+
+  removeUserTag: (memoryId, tag) => {
+    const memory = get().memories.find((m) => m.id === memoryId);
+    if (!memory) return;
+    const newTags = memory.userTags.filter((t) => t !== tag);
+    const allTags = [...new Set([...newTags, ...memory.aiTags])];
+    set((s) => ({
+      memories: s.memories.map((m) =>
+        m.id === memoryId ? { ...m, userTags: newTags, tags: allTags } : m
+      ),
+    }));
+    fetch(`/api/documents/${memoryId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metadata: { userTags: newTags } }),
+    }).catch(() => {});
+  },
+
+  updateMemoryTitle: (memoryId, title) => {
+    set((s) => ({
+      memories: s.memories.map((m) =>
+        m.id === memoryId ? { ...m, title } : m
+      ),
+    }));
+    fetch(`/api/documents/${memoryId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }).catch(() => {});
+  },
 
   toggleFavorite: (memoryId) => {
     const state = get();
@@ -444,7 +501,18 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     let filtered = [...state.memories];
 
     if (state.selectedCollection !== "all") {
-      filtered = filtered.filter((m) => m.collectionId === state.selectedCollection);
+      if (state.selectedTab) {
+        // Tab selected: filter to only that specific sub-category
+        filtered = filtered.filter((m) => m.categoryIds.includes(state.selectedTab!));
+      } else {
+        // Folder selected: include memories in folder or any descendant
+        const { getDescendantIds } = useCategoriesStore.getState();
+        const descendantIds = getDescendantIds(state.selectedCollection);
+        const validIds = new Set([state.selectedCollection, ...descendantIds]);
+        filtered = filtered.filter((m) =>
+          m.categoryIds.some((cid) => validIds.has(cid))
+        );
+      }
     }
 
     if (state.selectedTags.length > 0) {
@@ -561,10 +629,11 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   },
 
   getDerivedTags: () => {
-    const { memories } = get();
+    // Scope tags to current filtered view (folder/tab context)
+    const filtered = get().getFilteredMemories();
     // Count case-insensitively to avoid duplicate tag ids
     const counts = new Map<string, { name: string; count: number }>();
-    for (const m of memories) {
+    for (const m of filtered) {
       for (const tag of m.tags) {
         const key = tag.toLowerCase();
         const existing = counts.get(key);

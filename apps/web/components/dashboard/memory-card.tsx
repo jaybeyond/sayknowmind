@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,10 +31,14 @@ import {
   ImageIcon,
   Video,
   File,
+  Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
 import { useTranslation } from "@/lib/i18n";
+import { ShareDialog } from "./share-dialog";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
 
 interface MemoryCardProps {
   memory: Memory;
@@ -78,14 +83,29 @@ export function MemoryCard({
   context = "default",
   onSelect,
 }: MemoryCardProps) {
-  const { toggleFavorite, archiveMemory, trashMemory, restoreFromArchive, restoreFromTrash, permanentlyDelete } =
+  const { toggleFavorite, archiveMemory, trashMemory, restoreFromArchive, restoreFromTrash, permanentlyDelete, addUserTag } =
     useMemoryStore();
   const { t } = useTranslation();
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [tagInputOpen, setTagInputOpen] = React.useState(false);
+  const [tagValue, setTagValue] = React.useState("");
   const memoryTags = [...new Set(memory.tags)];
   const aiTagSet = new Set(memory.aiTags);
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(memory.url);
+    toast.success(t("memory.urlCopied") ?? "URL copied");
+  };
+
+  const handleAddTag = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = tagValue.trim();
+    if (trimmed) {
+      addUserTag(memory.id, trimmed);
+      toast.success(t("memory.tagAdded") ?? "Tag added");
+    }
+    setTagValue("");
+    setTagInputOpen(false);
   };
 
   const isFile = memory.docType === "file";
@@ -209,14 +229,20 @@ export function MemoryCard({
                 <Copy className="size-4 mr-2" />
                 {t("memory.copyUrl")}
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onSelect?.(memory)}>
                 <Pencil className="size-4 mr-2" />
                 {t("common.edit")}
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTagInputOpen(true)}>
                 <Tag className="size-4 mr-2" />
                 {t("memory.addTags")}
               </DropdownMenuItem>
+              {context === "default" && (
+                <DropdownMenuItem onClick={() => setShareOpen(true)}>
+                  <Share2 className="size-4 mr-2" />
+                  {t("memory.share")}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               {context === "trash" ? (
                 <>
@@ -226,7 +252,14 @@ export function MemoryCard({
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-destructive"
-                    onClick={() => { if (confirm(t("trash.confirmDelete"))) permanentlyDelete(memory.id); }}
+                    onClick={() => {
+                      toast(t("trash.confirmDelete"), {
+                        action: { label: t("common.delete"), onClick: () => permanentlyDelete(memory.id) },
+                        cancel: { label: t("common.cancel"), onClick: () => {} },
+                        actionButtonStyle: { backgroundColor: "hsl(var(--destructive))", color: "hsl(var(--destructive-foreground))", marginLeft: "4px" },
+                        duration: 8000,
+                      });
+                    }}
                   >
                     <XCircle className="size-4 mr-2" />
                     {t("trash.deleteForever")}
@@ -257,6 +290,20 @@ export function MemoryCard({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        {tagInputOpen && (
+          <form onSubmit={handleAddTag} className="absolute top-1 right-14 z-20 flex items-center gap-1 bg-popover border rounded-lg p-1.5 shadow-lg">
+            <Input
+              value={tagValue}
+              onChange={(e) => setTagValue(e.target.value)}
+              placeholder={t("memory.tagPlaceholder") ?? "Tag name"}
+              className="h-7 w-32 text-xs"
+              autoFocus
+              onBlur={() => { setTagInputOpen(false); setTagValue(""); }}
+              onKeyDown={(e) => { if (e.key === "Escape") { setTagInputOpen(false); setTagValue(""); } }}
+            />
+          </form>
+        )}
+        <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
       </div>
     );
   }
@@ -306,14 +353,20 @@ export function MemoryCard({
                 </a>
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSelect?.(memory)}>
               <Pencil className="size-4 mr-2" />
               {t("common.edit")}
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTagInputOpen(true)}>
               <Tag className="size-4 mr-2" />
               {t("memory.addTags")}
             </DropdownMenuItem>
+            {context === "default" && (
+              <DropdownMenuItem onClick={() => setShareOpen(true)}>
+                <Share2 className="size-4 mr-2" />
+                {t("memory.share")}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             {context === "trash" ? (
               <>
@@ -323,7 +376,14 @@ export function MemoryCard({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-destructive"
-                  onClick={() => { if (confirm(t("trash.confirmDelete"))) permanentlyDelete(memory.id); }}
+                  onClick={() => {
+                    toast(t("trash.confirmDelete"), {
+                      action: { label: t("common.delete"), onClick: () => permanentlyDelete(memory.id) },
+                      cancel: { label: t("common.cancel"), onClick: () => {} },
+                      actionButtonStyle: { backgroundColor: "hsl(var(--destructive))", color: "hsl(var(--destructive-foreground))", marginLeft: "4px" },
+                      duration: 8000,
+                    });
+                  }}
                 >
                   <XCircle className="size-4 mr-2" />
                   {t("trash.deleteForever")}
@@ -354,6 +414,20 @@ export function MemoryCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {tagInputOpen && (
+        <form onSubmit={handleAddTag} className="absolute top-14 right-3 z-20 flex items-center gap-1 bg-popover border rounded-lg p-1.5 shadow-lg">
+          <Input
+            value={tagValue}
+            onChange={(e) => setTagValue(e.target.value)}
+            placeholder={t("memory.tagPlaceholder") ?? "Tag name"}
+            className="h-7 w-32 text-xs"
+            autoFocus
+            onBlur={() => { setTagInputOpen(false); setTagValue(""); }}
+            onKeyDown={(e) => { if (e.key === "Escape") { setTagInputOpen(false); setTagValue(""); } }}
+          />
+        </form>
+      )}
 
       <ProcessingBadge status={memory.jobStatus} />
 
@@ -465,6 +539,7 @@ export function MemoryCard({
           )}
         </div>
       </button>
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
     </div>
   );
 }

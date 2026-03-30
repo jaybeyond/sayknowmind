@@ -31,7 +31,15 @@
     "rename": "重命名",
     "newCategoryPlaceholder": "新合集...",
     "noTags": "暂无标签",
-    "tools": "工具"
+    "tools": "工具",
+    "published": "已发布",
+    "addSubfolder": "添加子文件夹",
+    "folder": "文件夹"
+  },
+  "tabs": {
+    "all": "全部",
+    "addTab": "添加标签页",
+    "deleteConfirm": "将被删除，确定吗？"
   },
   "header": {
     "memory": "记忆",
@@ -315,7 +323,11 @@
     "copyUrl": "复制链接",
     "openInNewTab": "在新标签页中打开",
     "addTags": "添加标签",
-    "moreTags": "+{{count}} 个更多"
+    "moreTags": "+{{count}} 个更多",
+    "share": "分享",
+    "urlCopied": "URL已复制",
+    "tagAdded": "标签已添加",
+    "tagPlaceholder": "标签名称"
   },
   "status": {
     "summarizing": "摘要生成中...",
@@ -339,7 +351,9 @@
     "loadingGraph": "加载图谱中...",
     "statsSlash": "{{nodes}} 个节点 / {{edges}} 条边",
     "properties": "属性",
-    "connectedDocuments": "关联文档（{{count}} 个）"
+    "connectedDocuments": "关联文档（{{count}} 个）",
+    "entities": "实体",
+    "openSource": "打开来源"
   },
   "offline": {
     "banner": "离线 — 仅显示本地数据。恢复连接后将自动同步。"
@@ -507,5 +521,54 @@
     "empty": "暂无通知",
     "delete": "删除",
     "deleteAll": "全部删除"
+  },
+  "share": {
+    "title": "分享记忆",
+    "description": "创建此记忆的分享链接",
+    "accessType": "访问类型",
+    "public": "公开链接",
+    "publicDesc": "任何拥有链接的人都可查看",
+    "passphrase": "密码保护",
+    "passphraseDesc": "查看需要输入密码",
+    "passphrasePlaceholder": "输入密码...",
+    "expiry": "链接有效期",
+    "expiry1h": "1小时",
+    "expiry24h": "24小时",
+    "expiry7d": "7天",
+    "expiry30d": "30天",
+    "expiryNone": "永不过期",
+    "createLink": "创建链接",
+    "creating": "创建中...",
+    "linkReady": "分享链接已就绪！",
+    "copyLink": "复制链接",
+    "copied": "已复制！",
+    "shareAnother": "再次分享",
+    "revoke": "撤销分享",
+    "revoking": "撤销中...",
+    "revoked": "分享已撤销",
+    "revokeFailed": "撤销失败",
+    "failed": "创建分享失败",
+    "privateModeWarning": "隐私模式下分享功能已禁用",
+    "enterPassphrase": "输入密码以查看",
+    "unlock": "解锁",
+    "wrongPassphrase": "密码不正确",
+    "notFound": "未找到分享",
+    "expired": "此分享已过期",
+    "revokedStatus": "此分享已被撤销",
+    "sharedVia": "通过 SayKnowMind 分享"
+  },
+  "published": {
+    "title": "已发布",
+    "countOne": "{{count}} 条已发布记忆",
+    "countMany": "{{count}} 条已发布记忆",
+    "active": "有效",
+    "revokedLabel": "已撤销",
+    "expiredLabel": "已过期",
+    "noExpiry": "永不过期",
+    "expiresAt": "{{date}} 过期",
+    "copyLink": "复制链接",
+    "revokeShare": "撤销分享",
+    "empty": "暂无已发布的记忆",
+    "emptyCta": "分享记忆后将显示在此处"
   }
 }

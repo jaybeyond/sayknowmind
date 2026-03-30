@@ -10,6 +10,7 @@ import { StatsCards } from "./stats-cards";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { X, FileUp, BookOpen, Plus, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
@@ -18,6 +19,8 @@ export function MemoryContent() {
   const { t } = useTranslation();
   const {
     selectedCollection,
+    selectedTab,
+    setSelectedTab,
     getFilteredMemories,
     viewMode,
     selectedTags,
@@ -34,11 +37,13 @@ export function MemoryContent() {
     fetchMemories,
     loadMoreMemories,
   } = useMemoryStore();
-  const { categories } = useCategoriesStore();
+  const { categories, getChildren, hasChildren, addCategory, deleteCategory } = useCategoriesStore();
   const [globalDragOver, setGlobalDragOver] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
+  const [addingTab, setAddingTab] = useState(false);
+  const [newTabName, setNewTabName] = useState("");
 
   // Infinite scroll: trigger loadMore when sentinel enters viewport
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -174,14 +179,114 @@ export function MemoryContent() {
 
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  {currentCollection?.name || t("sidebar.allMemories")}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {memoryCountLabel}
-                  {hasActiveFilters && ` ${t("content.filtered")}`}
-                </p>
+              <div className="flex items-center gap-6 min-w-0">
+                <div className="shrink-0">
+                  <h2 className="text-lg font-semibold">
+                    {currentCollection?.name || t("sidebar.allMemories")}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {memoryCountLabel}
+                    {hasActiveFilters && ` ${t("content.filtered")}`}
+                  </p>
+                </div>
+                {selectedCollection !== "all" && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto">
+                    <button
+                      onClick={() => setSelectedTab(null)}
+                      className={cn(
+                        "shrink-0 px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
+                        !selectedTab
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {t("tabs.all")}
+                    </button>
+                    {getChildren(selectedCollection).map((child) => (
+                      <span
+                        key={child.id}
+                        className={cn(
+                          "group/tab shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer",
+                          selectedTab === child.id
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:text-foreground"
+                        )}
+                        onClick={() => setSelectedTab(child.id)}
+                      >
+                        {child.name}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toast(`"${child.name}" ${t("tabs.deleteConfirm")}`, {
+                              action: {
+                                label: t("common.delete"),
+                                onClick: async () => {
+                                  const ok = await deleteCategory(child.id);
+                                  if (ok && selectedTab === child.id) setSelectedTab(null);
+                                },
+                              },
+                              cancel: {
+                                label: t("common.cancel"),
+                                onClick: () => {},
+                              },
+                              actionButtonStyle: {
+                                backgroundColor: "hsl(var(--destructive))",
+                                color: "hsl(var(--destructive-foreground))",
+                                marginLeft: "4px",
+                              },
+                              cancelButtonStyle: {
+                                marginLeft: "auto",
+                              },
+                              duration: 8000,
+                            });
+                          }}
+                          className={cn(
+                            "opacity-0 group-hover/tab:opacity-100 rounded-full p-0.5 transition-opacity",
+                            selectedTab === child.id
+                              ? "hover:bg-primary-foreground/20"
+                              : "hover:bg-foreground/10"
+                          )}
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </span>
+                    ))}
+                    {addingTab ? (
+                      <form
+                        className="shrink-0"
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const trimmed = newTabName.trim();
+                          if (trimmed) {
+                            const newId = await addCategory(trimmed, selectedCollection);
+                            if (newId) setSelectedTab(newId);
+                            else toast.error(t("sidebar.createFailed"));
+                          }
+                          setNewTabName("");
+                          setAddingTab(false);
+                        }}
+                      >
+                        <Input
+                          value={newTabName}
+                          onChange={(e) => setNewTabName(e.target.value)}
+                          placeholder={t("tabs.addTab")}
+                          className="h-6 w-24 text-xs"
+                          autoFocus
+                          onBlur={() => { setAddingTab(false); setNewTabName(""); }}
+                          onKeyDown={(e) => { if (e.key === "Escape") { setAddingTab(false); setNewTabName(""); } }}
+                        />
+                      </form>
+                    ) : (
+                      <button
+                        onClick={() => setAddingTab(true)}
+                        className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        title={t("tabs.addTab")}
+                      >
+                        <Plus className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {(activeTagsData.length > 0 || filterType !== "all") && (

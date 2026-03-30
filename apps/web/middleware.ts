@@ -9,6 +9,7 @@ const publicApiPaths = [
   "/api/knowledge/graph",
   "/api/knowledge/node",
   "/api/integrations/telegram/webhook",
+  "/api/share/view",
 ];
 
 // Routes that require authentication
@@ -28,8 +29,10 @@ const protectedPaths = [
   "/api/services",
   "/api/integrations/telegram",
   "/api/admin",
+  "/api/share",
   "/knowledge",
   "/categories",
+  "/published",
 ];
 
 // Routes that should redirect to home if already authenticated
@@ -133,6 +136,8 @@ export const config = {
     "/api/services/:path*",
     "/api/integrations/:path*",
     "/api/admin/:path*",
+    "/api/share/:path*",
+    "/published",
     // Auth pages (redirect if logged in)
     "/login",
     "/signup",

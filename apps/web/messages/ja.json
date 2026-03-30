@@ -31,7 +31,15 @@
     "rename": "名前を変更",
     "newCategoryPlaceholder": "新しいコレクション...",
     "noTags": "タグはまだありません",
-    "tools": "ツール"
+    "tools": "ツール",
+    "published": "公開済み",
+    "addSubfolder": "サブフォルダを追加",
+    "folder": "フォルダ"
+  },
+  "tabs": {
+    "all": "すべて",
+    "addTab": "タブを追加",
+    "deleteConfirm": "を削除しますか？"
   },
   "header": {
     "memory": "メモリ",
@@ -315,7 +323,11 @@
     "copyUrl": "URLをコピー",
     "openInNewTab": "新しいタブで開く",
     "addTags": "タグを追加",
-    "moreTags": "+{{count}} 件"
+    "moreTags": "+{{count}} 件",
+    "share": "共有",
+    "urlCopied": "URLをコピーしました",
+    "tagAdded": "タグを追加しました",
+    "tagPlaceholder": "タグ名"
   },
   "status": {
     "summarizing": "要約中...",
@@ -339,7 +351,9 @@
     "loadingGraph": "グラフを読み込み中...",
     "statsSlash": "{{nodes}} ノード / {{edges}} エッジ",
     "properties": "プロパティ",
-    "connectedDocuments": "関連ドキュメント（{{count}} 件）"
+    "connectedDocuments": "関連ドキュメント（{{count}} 件）",
+    "entities": "エンティティ",
+    "openSource": "ソースを開く"
   },
   "offline": {
     "banner": "オフライン — ローカルデータのみ表示。接続が回復すると自動的に同期されます。"
@@ -507,5 +521,54 @@
     "empty": "通知はまだありません",
     "delete": "削除",
     "deleteAll": "すべて削除"
+  },
+  "share": {
+    "title": "メモリを共有",
+    "description": "このメモリの共有リンクを作成します",
+    "accessType": "アクセスタイプ",
+    "public": "公開リンク",
+    "publicDesc": "リンクを持つ誰でも閲覧可能",
+    "passphrase": "パスフレーズ保護",
+    "passphraseDesc": "閲覧にパスフレーズが必要",
+    "passphrasePlaceholder": "パスフレーズを入力...",
+    "expiry": "リンクの有効期限",
+    "expiry1h": "1時間",
+    "expiry24h": "24時間",
+    "expiry7d": "7日間",
+    "expiry30d": "30日間",
+    "expiryNone": "無期限",
+    "createLink": "リンクを作成",
+    "creating": "作成中...",
+    "linkReady": "共有リンクが準備できました！",
+    "copyLink": "リンクをコピー",
+    "copied": "コピーしました！",
+    "shareAnother": "別の共有を作成",
+    "revoke": "共有を取り消す",
+    "revoking": "取り消し中...",
+    "revoked": "共有を取り消しました",
+    "revokeFailed": "共有の取り消しに失敗しました",
+    "failed": "共有の作成に失敗しました",
+    "privateModeWarning": "プライベートモードでは共有が無効です",
+    "enterPassphrase": "パスフレーズを入力して閲覧",
+    "unlock": "ロック解除",
+    "wrongPassphrase": "パスフレーズが正しくありません",
+    "notFound": "共有が見つかりません",
+    "expired": "この共有は期限切れです",
+    "revokedStatus": "この共有は取り消されました",
+    "sharedVia": "SayKnowMind で共有"
+  },
+  "published": {
+    "title": "公開済み",
+    "countOne": "{{count}} 件の公開メモリ",
+    "countMany": "{{count}} 件の公開メモリ",
+    "active": "有効",
+    "revokedLabel": "取り消し済み",
+    "expiredLabel": "期限切れ",
+    "noExpiry": "無期限",
+    "expiresAt": "{{date}} に期限切れ",
+    "copyLink": "リンクをコピー",
+    "revokeShare": "共有を取り消す",
+    "empty": "公開されたメモリはありません",
+    "emptyCta": "メモリを共有するとここに表示されます"
   }
 }

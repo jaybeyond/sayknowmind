@@ -31,7 +31,15 @@
     "rename": "Rename",
     "newCategoryPlaceholder": "New collection...",
     "noTags": "No tags yet",
-    "tools": "TOOLS"
+    "tools": "TOOLS",
+    "published": "Published",
+    "addSubfolder": "Add subfolder",
+    "folder": "Folder"
+  },
+  "tabs": {
+    "all": "All",
+    "addTab": "Add tab",
+    "deleteConfirm": "will be deleted. Are you sure?"
   },
   "header": {
     "memory": "Memory",
@@ -315,7 +323,11 @@
     "copyUrl": "Copy URL",
     "openInNewTab": "Open in new tab",
     "addTags": "Add Tags",
-    "moreTags": "+{{count}} more"
+    "moreTags": "+{{count}} more",
+    "share": "Share",
+    "urlCopied": "URL copied",
+    "tagAdded": "Tag added",
+    "tagPlaceholder": "Tag name"
   },
   "status": {
     "summarizing": "Summarizing...",
@@ -339,7 +351,9 @@
     "loadingGraph": "Loading graph...",
     "statsSlash": "{{nodes}} nodes / {{edges}} edges",
     "properties": "Properties",
-    "connectedDocuments": "Connected Documents ({{count}})"
+    "connectedDocuments": "Connected Documents ({{count}})",
+    "entities": "Entities",
+    "openSource": "Open source"
   },
   "offline": {
     "banner": "Offline — showing local data only. Will sync automatically when reconnected."
@@ -507,5 +521,54 @@
     "empty": "No notifications yet",
     "delete": "Delete",
     "deleteAll": "Delete all"
+  },
+  "share": {
+    "title": "Share Memory",
+    "description": "Create a shareable link to this memory",
+    "accessType": "Access Type",
+    "public": "Public Link",
+    "publicDesc": "Anyone with the link can view",
+    "passphrase": "Passphrase Protected",
+    "passphraseDesc": "Requires a passphrase to view",
+    "passphrasePlaceholder": "Enter a passphrase...",
+    "expiry": "Link Expiry",
+    "expiry1h": "1 hour",
+    "expiry24h": "24 hours",
+    "expiry7d": "7 days",
+    "expiry30d": "30 days",
+    "expiryNone": "No expiry",
+    "createLink": "Create Link",
+    "creating": "Creating...",
+    "linkReady": "Share link is ready!",
+    "copyLink": "Copy Link",
+    "copied": "Copied!",
+    "shareAnother": "Share Another",
+    "revoke": "Revoke",
+    "revoking": "Revoking...",
+    "revoked": "Share revoked",
+    "revokeFailed": "Failed to revoke",
+    "failed": "Failed to create share",
+    "privateModeWarning": "Sharing is disabled in Private Mode",
+    "enterPassphrase": "Enter passphrase to view",
+    "unlock": "Unlock",
+    "wrongPassphrase": "Incorrect passphrase",
+    "notFound": "Share not found",
+    "expired": "This share has expired",
+    "revokedStatus": "This share has been revoked",
+    "sharedVia": "Shared via SayKnowMind"
+  },
+  "published": {
+    "title": "Published",
+    "countOne": "{{count}} published memory",
+    "countMany": "{{count}} published memories",
+    "active": "Active",
+    "revokedLabel": "Revoked",
+    "expiredLabel": "Expired",
+    "noExpiry": "No expiry",
+    "expiresAt": "Expires {{date}}",
+    "copyLink": "Copy link",
+    "revokeShare": "Revoke share",
+    "empty": "No published memories",
+    "emptyCta": "Share a memory to see it here"
   }
 }

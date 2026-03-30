@@ -36,7 +36,6 @@ import { cn } from "@/lib/utils";
 import {
   Brain,
   ChevronDown,
-  ChevronRight,
   Search,
   Settings,
   Globe,
@@ -53,12 +52,13 @@ import {
   MoreHorizontal,
   Pencil,
   X,
+  Share2,
 } from "lucide-react";
 import { NotificationBell } from "./notification-bell";
 import { Button } from "@/components/ui/button";
 import { Input as SidebarInput } from "@/components/ui/input";
 import { useMemoryStore } from "@/store/memory-store";
-import { useCategoriesStore } from "@/store/categories-store";
+import { useCategoriesStore, type CategoryItem } from "@/store/categories-store";
 import { useSession, signOut } from "@/lib/auth-client";
 import { useTranslation } from "@/lib/i18n";
 import { useDocumentEvents } from "@/lib/use-document-events";
@@ -70,6 +70,7 @@ const navItemKeys = [
   { icon: Trash2, key: "sidebar.trash", href: "/trash" },
   { icon: MessageSquare, key: "sidebar.chat", href: "/chat" },
   { icon: Network, key: "sidebar.knowledge", href: "/knowledge" },
+  { icon: Share2, key: "sidebar.published", href: "/published" },
   { icon: Settings, key: "sidebar.settings", href: "/settings" },
 ];
 
@@ -125,6 +126,126 @@ function InsightsWidget() {
   );
 }
 
+interface FolderItemProps {
+  category: CategoryItem;
+  isHomePage: boolean;
+  selectedCollection: string;
+  setSelectedCollection: (id: string) => void;
+  clearTags: () => void;
+  renamingId: string | null;
+  setRenamingId: (id: string | null) => void;
+  renameValue: string;
+  setRenameValue: (v: string) => void;
+  renameCategory: (id: string, name: string) => Promise<boolean>;
+  deleteCategory: (id: string) => Promise<boolean>;
+  t: (key: string) => string;
+}
+
+function FolderItem({
+  category,
+  isHomePage,
+  selectedCollection,
+  setSelectedCollection,
+  clearTags,
+  renamingId,
+  setRenamingId,
+  renameValue,
+  setRenameValue,
+  renameCategory,
+  deleteCategory,
+  t,
+}: FolderItemProps) {
+  const isActive = isHomePage && selectedCollection === category.id;
+  const isRenaming = renamingId === category.id;
+
+  if (isRenaming) {
+    return (
+      <SidebarMenuItem>
+        <form
+          className="flex items-center gap-1 px-2 py-1"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const trimmed = renameValue.trim();
+            if (trimmed && trimmed !== category.name) {
+              const ok = await renameCategory(category.id, trimmed);
+              if (ok) toast.success(t("sidebar.renamed"));
+              else toast.error(t("sidebar.renameFailed"));
+            }
+            setRenamingId(null);
+          }}
+        >
+          <Folder className="size-4 shrink-0 text-muted-foreground" />
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            className="h-7 text-sm"
+            autoFocus
+            onBlur={() => setRenamingId(null)}
+            onKeyDown={(e) => { if (e.key === "Escape") setRenamingId(null); }}
+          />
+        </form>
+      </SidebarMenuItem>
+    );
+  }
+
+  return (
+    <SidebarMenuItem className="group/cat">
+      <SidebarMenuButton
+        asChild
+        isActive={isActive}
+        className="h-[38px]"
+      >
+        <Link
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            setSelectedCollection(category.id);
+            clearTags();
+            if (!isHomePage) window.location.href = "/";
+          }}
+        >
+          <Folder className="size-5" />
+          <span className="flex-1 truncate">{category.name}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+              <button className="opacity-0 group-hover/cat:opacity-100 p-0.5 rounded hover:bg-muted transition-opacity shrink-0">
+                <MoreHorizontal className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => {
+                setRenamingId(category.id);
+                setRenameValue(category.name);
+              }}>
+                <Pencil className="size-3.5 mr-2" />
+                {t("sidebar.rename")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={async () => {
+                  const ok = await deleteCategory(category.id);
+                  if (ok) {
+                    toast.success(t("sidebar.deleted"));
+                    if (selectedCollection === category.id) {
+                      setSelectedCollection("all");
+                    }
+                  } else {
+                    toast.error(t("sidebar.deleteFailed"));
+                  }
+                }}
+              >
+                <Trash2 className="size-3.5 mr-2" />
+                {t("common.delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
 export function MemorySidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
@@ -142,7 +263,14 @@ export function MemorySidebar({
     getDerivedTags,
     fetchMemories,
   } = useMemoryStore();
-  const { categories, fetchCategories, addCategory, renameCategory, deleteCategory } = useCategoriesStore();
+  const {
+    categories,
+    fetchCategories,
+    addCategory,
+    renameCategory,
+    deleteCategory,
+    getRootCategories,
+  } = useCategoriesStore();
   const [addingCategory, setAddingCategory] = React.useState(false);
   const [newCategoryName, setNewCategoryName] = React.useState("");
   const [renamingId, setRenamingId] = React.useState<string | null>(null);
@@ -175,10 +303,7 @@ export function MemorySidebar({
 
   const derivedTags = getDerivedTags();
 
-  const collectionList = React.useMemo(() => [
-    { id: "all", name: t("sidebar.allMemories") || "All Memories", count: null },
-    ...categories.map((c) => ({ id: c.id, name: c.name, count: null })),
-  ], [categories, t]);
+  const rootCategories = getRootCategories();
 
   const userName = session?.user?.name ?? session?.user?.email ?? "";
   const userInitials = userName.slice(0, 2).toUpperCase() || "??";
@@ -297,107 +422,46 @@ export function MemorySidebar({
           {collectionsOpen && (
             <SidebarGroupContent>
               <SidebarMenu className="mt-2">
-                {collectionList.map((collection) => {
-                  const isActive =
-                    isHomePage && selectedCollection === collection.id;
-                  const IconComponent = collection.id === "all" ? Brain : Folder;
-                  const isRenaming = renamingId === collection.id;
+                {/* All Memories */}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isHomePage && selectedCollection === "all"}
+                    className="h-[38px]"
+                  >
+                    <Link
+                      href="/"
+                      onClick={() => {
+                        setSelectedCollection("all");
+                        clearTags();
+                      }}
+                    >
+                      <Brain className="size-5" />
+                      <span className="flex-1">{t("sidebar.allMemories")}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
 
-                  if (isRenaming) {
-                    return (
-                      <SidebarMenuItem key={collection.id}>
-                        <form
-                          className="flex items-center gap-1 px-2 py-1"
-                          onSubmit={async (e) => {
-                            e.preventDefault();
-                            const trimmed = renameValue.trim();
-                            if (trimmed && trimmed !== collection.name) {
-                              const ok = await renameCategory(collection.id, trimmed);
-                              if (ok) toast.success(t("sidebar.renamed"));
-                              else toast.error(t("sidebar.renameFailed"));
-                            }
-                            setRenamingId(null);
-                          }}
-                        >
-                          <Folder className="size-4 shrink-0 text-muted-foreground" />
-                          <SidebarInput
-                            value={renameValue}
-                            onChange={(e) => setRenameValue(e.target.value)}
-                            className="h-7 text-sm"
-                            autoFocus
-                            onBlur={() => setRenamingId(null)}
-                            onKeyDown={(e) => { if (e.key === "Escape") setRenamingId(null); }}
-                          />
-                        </form>
-                      </SidebarMenuItem>
-                    );
-                  }
+                {/* Recursive folder tree */}
+                {rootCategories.map((cat) => (
+                  <FolderItem
+                    key={cat.id}
+                    category={cat}
+                    isHomePage={isHomePage}
+                    selectedCollection={selectedCollection}
+                    setSelectedCollection={setSelectedCollection}
+                    clearTags={clearTags}
+                    renamingId={renamingId}
+                    setRenamingId={setRenamingId}
+                    renameValue={renameValue}
+                    setRenameValue={setRenameValue}
+                    renameCategory={renameCategory}
+                    deleteCategory={deleteCategory}
+                    t={t}
+                  />
+                ))}
 
-                  return (
-                    <SidebarMenuItem key={collection.id} className="group/cat">
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        className="h-[38px]"
-                      >
-                        <Link
-                          href="/"
-                          onClick={() => {
-                            setSelectedCollection(collection.id);
-                            clearTags();
-                          }}
-                        >
-                          <IconComponent className="size-5" />
-                          <span className="flex-1">{collection.name}</span>
-                          {collection.id !== "all" && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger
-                                asChild
-                                onClick={(e) => e.preventDefault()}
-                              >
-                                <button className="opacity-0 group-hover/cat:opacity-100 p-0.5 rounded hover:bg-muted transition-opacity">
-                                  <MoreHorizontal className="size-3.5" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-36">
-                                <DropdownMenuItem onClick={(e) => {
-                                  e.preventDefault();
-                                  setRenamingId(collection.id);
-                                  setRenameValue(collection.name);
-                                }}>
-                                  <Pencil className="size-3.5 mr-2" />
-                                  {t("sidebar.rename")}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={async (e) => {
-                                    e.preventDefault();
-                                    const ok = await deleteCategory(collection.id);
-                                    if (ok) {
-                                      toast.success(t("sidebar.deleted"));
-                                      if (selectedCollection === collection.id) {
-                                        setSelectedCollection("all");
-                                      }
-                                    } else {
-                                      toast.error(t("sidebar.deleteFailed"));
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="size-3.5 mr-2" />
-                                  {t("common.delete")}
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                          {isActive && collection.id === "all" && (
-                            <ChevronRight className="size-4 text-muted-foreground opacity-60" />
-                          )}
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
+                {/* Add root folder */}
                 {addingCategory && (
                   <SidebarMenuItem>
                     <form

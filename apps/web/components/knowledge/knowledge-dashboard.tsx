@@ -40,6 +40,7 @@ interface NodeDetail {
   type: string;
   properties?: Record<string, unknown>;
   connectedDocuments?: Array<{ id: string; title: string; url?: string }>;
+  connectedEntities?: Array<{ id: string; name: string; type: string; confidence?: number }>;
 }
 
 export function KnowledgeDashboard() {
@@ -77,6 +78,18 @@ export function KnowledgeDashboard() {
     fetchGraph();
   }, [fetchGraph]);
 
+  const fetchNodeDetail = async (nodeId: string) => {
+    try {
+      const res = await fetch(`/api/knowledge/node/${nodeId}`);
+      if (res.ok) {
+        const detail = await res.json();
+        setSelectedNode(detail);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const handleNodeClick = async (node: GraphNode) => {
     try {
       const res = await fetch(`/api/knowledge/node/${node.id}`);
@@ -97,6 +110,10 @@ export function KnowledgeDashboard() {
         type: node.type,
       });
     }
+  };
+
+  const handleDrillDown = (nodeId: string) => {
+    fetchNodeDetail(nodeId);
   };
 
   return (
@@ -168,6 +185,7 @@ export function KnowledgeDashboard() {
         <NodeDetailPanel
           node={selectedNode}
           onClose={() => setSelectedNode(null)}
+          onDrillDown={handleDrillDown}
         />
       </div>
     </div>

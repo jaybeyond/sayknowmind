@@ -31,7 +31,15 @@
     "rename": "이름 변경",
     "newCategoryPlaceholder": "새 컬렉션...",
     "noTags": "태그 없음",
-    "tools": "도구"
+    "tools": "도구",
+    "published": "퍼블리시",
+    "addSubfolder": "하위 폴더 추가",
+    "folder": "폴더"
+  },
+  "tabs": {
+    "all": "전체",
+    "addTab": "탭 추가",
+    "deleteConfirm": "을(를) 삭제하시겠습니까?"
   },
   "header": {
     "memory": "메모리",
@@ -315,7 +323,11 @@
     "copyUrl": "URL 복사",
     "openInNewTab": "새 탭에서 열기",
     "addTags": "태그 추가",
-    "moreTags": "+{{count}}개 더"
+    "moreTags": "+{{count}}개 더",
+    "share": "공유",
+    "urlCopied": "URL 복사됨",
+    "tagAdded": "태그 추가됨",
+    "tagPlaceholder": "태그 이름"
   },
   "status": {
     "summarizing": "요약 중...",
@@ -339,7 +351,9 @@
     "loadingGraph": "그래프 로딩 중...",
     "statsSlash": "{{nodes}}개 노드 / {{edges}}개 엣지",
     "properties": "속성",
-    "connectedDocuments": "연결된 문서 ({{count}}개)"
+    "connectedDocuments": "연결된 문서 ({{count}}개)",
+    "entities": "엔티티",
+    "openSource": "원본 열기"
   },
   "offline": {
     "banner": "오프라인 — 로컬 데이터만 표시됩니다. 연결 복구 시 자동 동기화됩니다."
@@ -507,5 +521,54 @@
     "empty": "알림이 없습니다",
     "delete": "삭제",
     "deleteAll": "모두 삭제"
+  },
+  "share": {
+    "title": "메모리 공유",
+    "description": "이 메모리의 공유 링크를 생성합니다",
+    "accessType": "접근 유형",
+    "public": "공개 링크",
+    "publicDesc": "링크가 있는 누구나 볼 수 있습니다",
+    "passphrase": "비밀문구 보호",
+    "passphraseDesc": "보려면 비밀문구가 필요합니다",
+    "passphrasePlaceholder": "비밀문구를 입력하세요...",
+    "expiry": "링크 만료",
+    "expiry1h": "1시간",
+    "expiry24h": "24시간",
+    "expiry7d": "7일",
+    "expiry30d": "30일",
+    "expiryNone": "만료 없음",
+    "createLink": "링크 생성",
+    "creating": "생성 중...",
+    "linkReady": "공유 링크가 준비되었습니다!",
+    "copyLink": "링크 복사",
+    "copied": "복사됨!",
+    "shareAnother": "다른 공유 만들기",
+    "revoke": "공유 취소",
+    "revoking": "취소 중...",
+    "revoked": "공유가 취소되었습니다",
+    "revokeFailed": "공유 취소에 실패했습니다",
+    "failed": "공유 생성에 실패했습니다",
+    "privateModeWarning": "프라이빗 모드에서는 공유가 비활성화됩니다",
+    "enterPassphrase": "비밀문구를 입력하여 보기",
+    "unlock": "잠금 해제",
+    "wrongPassphrase": "비밀문구가 올바르지 않습니다",
+    "notFound": "공유를 찾을 수 없습니다",
+    "expired": "이 공유가 만료되었습니다",
+    "revokedStatus": "이 공유가 취소되었습니다",
+    "sharedVia": "SayKnowMind로 공유됨"
+  },
+  "published": {
+    "title": "퍼블리시",
+    "countOne": "{{count}}개 공개된 메모리",
+    "countMany": "{{count}}개 공개된 메모리",
+    "active": "활성",
+    "revokedLabel": "취소됨",
+    "expiredLabel": "만료됨",
+    "noExpiry": "만료 없음",
+    "expiresAt": "{{date}} 만료",
+    "copyLink": "링크 복사",
+    "revokeShare": "공유 취소",
+    "empty": "공개된 메모리가 없습니다",
+    "emptyCta": "메모리를 공유하면 여기에 표시됩니다"
   }
 }

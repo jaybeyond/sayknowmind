@@ -21,7 +21,7 @@ export type MessageRole = 'user' | 'assistant' | 'system';
 
 export type ChatMode = 'simple' | 'agentic';
 
-export type AccessConditionType = 'wallet' | 'token' | 'nft' | 'public';
+export type AccessConditionType = 'wallet' | 'token' | 'nft' | 'public' | 'passphrase';
 
 export type PrivacyLevel = 'private' | 'shared';
 
