@@ -31,9 +31,10 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 
 interface MemoryHeaderProps {
   title?: string;
+  showFilters?: boolean;
 }
 
-export function MemoryHeader({ title }: MemoryHeaderProps) {
+export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   const [addOpen, setAddOpen] = React.useState(false);
   const {
     viewMode,
@@ -76,109 +77,113 @@ export function MemoryHeader({ title }: MemoryHeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="relative hidden md:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              placeholder={t("header.searchPlaceholder")}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 w-64 h-9"
-            />
-          </div>
+          {showFilters && (
+            <>
+              <div className="relative hidden md:block">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input
+                  placeholder={t("header.searchPlaceholder")}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 w-64 h-9"
+                />
+              </div>
 
-          <div className="flex items-center border rounded-md p-0.5">
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={cn("rounded-sm", viewMode === "grid" && "bg-muted")}
-              onClick={() => setViewMode("grid")}
-            >
-              <LayoutGrid className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={cn("rounded-sm", viewMode === "list" && "bg-muted")}
-              onClick={() => setViewMode("list")}
-            >
-              <List className="size-4" />
-            </Button>
-          </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="hidden sm:flex">
-                <ArrowUpDown className="size-4" />
-                <span className="hidden lg:inline">{currentSort?.label.split(" ")[0]}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel className="text-xs text-muted-foreground">
-                {t("header.sortBy")}
-              </DropdownMenuLabel>
-              {sortOptions.map((option) => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onClick={() => setSortBy(option.value)}
-                  className="flex items-center justify-between"
+              <div className="flex items-center border rounded-md p-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className={cn("rounded-sm", viewMode === "grid" && "bg-muted")}
+                  onClick={() => setViewMode("grid")}
                 >
-                  {option.label}
-                  {sortBy === option.value && <Check className="size-4" />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "hidden sm:flex",
-                  filterType !== "all" && "border-primary text-primary"
-                )}
-              >
-                <SlidersHorizontal className="size-4" />
-                <span className="hidden lg:inline">
-                  {filterType !== "all" ? currentFilter?.label : t("header.filterBy")}
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel className="text-xs text-muted-foreground">
-                {t("header.filterBy")}
-              </DropdownMenuLabel>
-              {filterOptions.map((option) => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onClick={() => setFilterType(option.value)}
-                  className="flex items-center justify-between"
+                  <LayoutGrid className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className={cn("rounded-sm", viewMode === "list" && "bg-muted")}
+                  onClick={() => setViewMode("list")}
                 >
-                  {option.label}
-                  {filterType === option.value && <Check className="size-4" />}
-                </DropdownMenuItem>
-              ))}
-              {filterType !== "all" && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => setFilterType("all")}
-                    className="text-muted-foreground"
+                  <List className="size-4" />
+                </Button>
+              </div>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="hidden sm:flex">
+                    <ArrowUpDown className="size-4" />
+                    <span className="hidden lg:inline">{currentSort?.label.split(" ")[0]}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    {t("header.sortBy")}
+                  </DropdownMenuLabel>
+                  {sortOptions.map((option) => (
+                    <DropdownMenuItem
+                      key={option.value}
+                      onClick={() => setSortBy(option.value)}
+                      className="flex items-center justify-between"
+                    >
+                      {option.label}
+                      {sortBy === option.value && <Check className="size-4" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "hidden sm:flex",
+                      filterType !== "all" && "border-primary text-primary"
+                    )}
                   >
-                    {t("header.clearFilter")}
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                    <SlidersHorizontal className="size-4" />
+                    <span className="hidden lg:inline">
+                      {filterType !== "all" ? currentFilter?.label : t("header.filterBy")}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    {t("header.filterBy")}
+                  </DropdownMenuLabel>
+                  {filterOptions.map((option) => (
+                    <DropdownMenuItem
+                      key={option.value}
+                      onClick={() => setFilterType(option.value)}
+                      className="flex items-center justify-between"
+                    >
+                      {option.label}
+                      {filterType === option.value && <Check className="size-4" />}
+                    </DropdownMenuItem>
+                  ))}
+                  {filterType !== "all" && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setFilterType("all")}
+                        className="text-muted-foreground"
+                      >
+                        {t("header.clearFilter")}
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-          <Button size="sm" className="hidden sm:flex" onClick={() => setAddOpen(true)}>
-            <Plus className="size-4" />
-            {t("header.addMemory")}
-          </Button>
+              <Button size="sm" className="hidden sm:flex" onClick={() => setAddOpen(true)}>
+                <Plus className="size-4" />
+                {t("header.addMemory")}
+              </Button>
 
-          <Separator orientation="vertical" className="h-5 hidden sm:block" />
+              <Separator orientation="vertical" className="h-5 hidden sm:block" />
+            </>
+          )}
 
           <LanguageSwitcher />
           <ThemeToggle />

@@ -1,5 +1,6 @@
 import { pool } from "@/lib/db";
 import { createJob } from "./job-queue";
+import { syncUnindexedToEdgeQuake } from "@/lib/edgequake/client";
 
 interface StaleDoc {
   id: string;
@@ -68,9 +69,25 @@ export async function runReprocessor(opts?: { limit?: number }): Promise<{
     }
   }
 
-  // Queue jobs (skip if already has a pending/processing job)
+  // Separate: "not_indexed" docs only need EdgeQuake sync, not full reprocess
+  const needsFullReprocess = staleDocs.filter((d) => d.reason !== "not_indexed");
+  const needsEdgeQuakeOnly = staleDocs.filter((d) => d.reason === "not_indexed");
+
+  // EdgeQuake-only sync (lightweight — no AI re-processing)
+  if (needsEdgeQuakeOnly.length > 0) {
+    const userIds = [...new Set(needsEdgeQuakeOnly.map((d) => d.user_id))];
+    for (const uid of userIds) {
+      try {
+        await syncUnindexedToEdgeQuake(uid, needsEdgeQuakeOnly.length);
+      } catch (err) {
+        console.error(`[reprocessor] EdgeQuake sync failed for user ${uid}:`, err);
+      }
+    }
+  }
+
+  // Full reprocess for docs that need AI pipeline (no_summary, no_relations)
   const queued: StaleDoc[] = [];
-  for (const doc of staleDocs) {
+  for (const doc of needsFullReprocess) {
     const existing = await pool.query(
       `SELECT id FROM ingestion_jobs
        WHERE document_id = $1 AND status IN ('pending', 'processing')
@@ -84,7 +101,10 @@ export async function runReprocessor(opts?: { limit?: number }): Promise<{
   }
 
   return {
-    queued: queued.length,
-    documents: queued.map((d) => ({ id: d.id, title: d.title, reason: d.reason })),
+    queued: queued.length + needsEdgeQuakeOnly.length,
+    documents: [
+      ...queued.map((d) => ({ id: d.id, title: d.title, reason: d.reason })),
+      ...needsEdgeQuakeOnly.map((d) => ({ id: d.id, title: d.title, reason: "edgequake_synced" })),
+    ],
   };
 }

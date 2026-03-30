@@ -321,14 +321,18 @@ export function TenantGuard({ children }: TenantGuardProps) {
 
   const isLoading = isLoadingTenants || (selectedTenantId && isLoadingWorkspaces) || isSettingUpContext;
 
-  // Loading state (including context setup after tenant/workspace creation)
-  if (isLoading) {
+  // Non-blocking: If we already have cached tenant/workspace from a previous navigation,
+  // skip the loading spinner and render children immediately while background refetch happens.
+  const hasCachedContext = selectedTenantId && selectedWorkspaceId;
+
+  // Loading state (only block on truly first load or during context setup)
+  if (isLoading && !hasCachedContext) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
           <p className="text-sm text-muted-foreground">
-            {isSettingUpContext 
+            {isSettingUpContext
               ? t('tenant.settingUp', 'Setting up your workspace...')
               : t('tenant.loading', 'Loading workspace...')}
           </p>

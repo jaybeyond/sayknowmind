@@ -224,6 +224,65 @@ export async function updateEmbeddingProvider(
   }
 }
 
+// ── Sync: Push un-indexed documents to EdgeQuake ────────────
+
+export interface SyncResult {
+  synced: number;
+  failed: number;
+  errors: string[];
+}
+
+/**
+ * Find documents that were saved but never indexed in EdgeQuake,
+ * and push their content to EdgeQuake for vectorization + graph extraction.
+ * Skips AI re-processing — only does the EdgeQuake indexing step.
+ */
+export async function syncUnindexedToEdgeQuake(
+  userId: string,
+  limit = 50,
+): Promise<SyncResult> {
+  const { pool } = await import("@/lib/db");
+
+  const result = await pool.query(
+    `SELECT id, title, content, metadata FROM documents
+     WHERE user_id = $1
+       AND indexed_at IS NULL
+       AND content IS NOT NULL AND content != ''
+     ORDER BY created_at ASC LIMIT $2`,
+    [userId, limit],
+  );
+
+  let synced = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (const doc of result.rows) {
+    try {
+      await indexDocument({
+        content: doc.content,
+        title: doc.title ?? undefined,
+        document_id: doc.id,
+        metadata: {
+          language: doc.metadata?.language,
+          user_id: userId,
+          synced_at: new Date().toISOString(),
+        },
+        async_processing: true,
+      });
+      await pool.query(
+        `UPDATE documents SET indexed_at = NOW() WHERE id = $1`,
+        [doc.id],
+      );
+      synced++;
+    } catch (err) {
+      failed++;
+      errors.push(`${doc.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return { synced, failed, errors };
+}
+
 /** Test whether an embedding provider config is valid by pinging EdgeQuake */
 export async function testEmbeddingProvider(
   config: EmbeddingProviderConfig,

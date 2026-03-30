@@ -18,6 +18,8 @@ import {
   Trash2,
   Tag,
   Archive,
+  RotateCcw,
+  XCircle,
   FileText,
   FileType,
   Globe,
@@ -36,6 +38,7 @@ import { useTranslation } from "@/lib/i18n";
 interface MemoryCardProps {
   memory: Memory;
   variant?: "grid" | "list";
+  context?: "default" | "archive" | "trash";
   onSelect?: (memory: Memory) => void;
 }
 
@@ -72,9 +75,10 @@ const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text"; fileT
 export function MemoryCard({
   memory,
   variant = "grid",
+  context = "default",
   onSelect,
 }: MemoryCardProps) {
-  const { toggleFavorite, archiveMemory, trashMemory } =
+  const { toggleFavorite, archiveMemory, trashMemory, restoreFromArchive, restoreFromTrash, permanentlyDelete } =
     useMemoryStore();
   const { t } = useTranslation();
   const memoryTags = [...new Set(memory.tags)];
@@ -103,6 +107,10 @@ export function MemoryCard({
   if (variant === "list") {
     return (
       <div className="group flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+        <button
+          className="flex items-center gap-4 flex-1 min-w-0 text-left cursor-pointer"
+          onClick={handleClick}
+        >
         <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0">
           {isImage && fileUrl ? (
             <Image src={fileUrl} alt={memory.title} width={40} height={40} className="size-10 object-cover" unoptimized />
@@ -167,8 +175,9 @@ export function MemoryCard({
             </p>
           )}
         </div>
+        </button>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           <Button
             variant="ghost"
             size="icon-xs"
@@ -209,17 +218,42 @@ export function MemoryCard({
                 {t("memory.addTags")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => archiveMemory(memory.id)}>
-                <Archive className="size-4 mr-2" />
-                {t("sidebar.archive")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={() => trashMemory(memory.id)}
-              >
-                <Trash2 className="size-4 mr-2" />
-                {t("common.delete")}
-              </DropdownMenuItem>
+              {context === "trash" ? (
+                <>
+                  <DropdownMenuItem onClick={() => restoreFromTrash(memory.id)}>
+                    <RotateCcw className="size-4 mr-2" />
+                    {t("common.restore")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => { if (confirm(t("trash.confirmDelete"))) permanentlyDelete(memory.id); }}
+                  >
+                    <XCircle className="size-4 mr-2" />
+                    {t("trash.deleteForever")}
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <>
+                  {context === "archive" ? (
+                    <DropdownMenuItem onClick={() => restoreFromArchive(memory.id)}>
+                      <RotateCcw className="size-4 mr-2" />
+                      {t("common.restore")}
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => archiveMemory(memory.id)}>
+                      <Archive className="size-4 mr-2" />
+                      {t("sidebar.archive")}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => trashMemory(memory.id)}
+                  >
+                    <Trash2 className="size-4 mr-2" />
+                    {t("common.delete")}
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -281,17 +315,42 @@ export function MemoryCard({
               {t("memory.addTags")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => archiveMemory(memory.id)}>
-              <Archive className="size-4 mr-2" />
-              {t("sidebar.archive")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={() => trashMemory(memory.id)}
-            >
-              <Trash2 className="size-4 mr-2" />
-              {t("common.delete")}
-            </DropdownMenuItem>
+            {context === "trash" ? (
+              <>
+                <DropdownMenuItem onClick={() => restoreFromTrash(memory.id)}>
+                  <RotateCcw className="size-4 mr-2" />
+                  {t("common.restore")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => { if (confirm(t("trash.confirmDelete"))) permanentlyDelete(memory.id); }}
+                >
+                  <XCircle className="size-4 mr-2" />
+                  {t("trash.deleteForever")}
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <>
+                {context === "archive" ? (
+                  <DropdownMenuItem onClick={() => restoreFromArchive(memory.id)}>
+                    <RotateCcw className="size-4 mr-2" />
+                    {t("common.restore")}
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => archiveMemory(memory.id)}>
+                    <Archive className="size-4 mr-2" />
+                    {t("sidebar.archive")}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => trashMemory(memory.id)}
+                >
+                  <Trash2 className="size-4 mr-2" />
+                  {t("common.delete")}
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

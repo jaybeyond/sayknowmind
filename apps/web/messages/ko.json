@@ -179,7 +179,10 @@
     "filtered": "(필터됨)",
     "favoritesOnly": "즐겨찾기만",
     "withTags": "태그 있음",
-    "withoutTags": "태그 없음"
+    "withoutTags": "태그 없음",
+    "loadMore": "더 보기",
+    "loadingMore": "불러오는 중...",
+    "allLoaded": "총 {{count}}개 메모리 로드 완료"
   },
   "emptyState": {
     "allDocuments": "저장된 항목이 없습니다",

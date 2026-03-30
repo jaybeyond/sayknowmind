@@ -179,7 +179,10 @@
     "filtered": "（已过滤）",
     "favoritesOnly": "仅收藏",
     "withTags": "有标签",
-    "withoutTags": "无标签"
+    "withoutTags": "无标签",
+    "loadMore": "加载更多",
+    "loadingMore": "加载中...",
+    "allLoaded": "共 {{count}} 条已全部加载"
   },
   "emptyState": {
     "allDocuments": "暂无保存内容",

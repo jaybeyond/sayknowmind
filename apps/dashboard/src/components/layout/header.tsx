@@ -15,7 +15,6 @@
  */
 'use client';
 
-import { ClientOnly } from '@/components/client-only';
 import { LanguageSelector } from '@/components/shared/language-selector';
 import { Button } from '@/components/ui/button';
 import {
@@ -93,9 +92,7 @@ export function Header() {
         
         {/* Tenant/Workspace Selector - Desktop only */}
         <div className="hidden md:flex">
-          <ClientOnly fallback={null}>
-            <HeaderTenantSelector />
-          </ClientOnly>
+          <HeaderTenantSelector />
         </div>
       </div>
 
@@ -134,13 +131,10 @@ export function Header() {
         </TooltipProvider>
 
         {/* Language Selector */}
-        <ClientOnly fallback={null}>
-          <LanguageSelector />
-        </ClientOnly>
+        <LanguageSelector />
 
         {/* Theme Toggle */}
-        <ClientOnly fallback={<Button variant="ghost" size="icon" className="h-8 w-8"><Sun className="h-4 w-4" /></Button>}>
-          <DropdownMenu>
+        <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -163,11 +157,9 @@ export function Header() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </ClientOnly>
 
         {/* User Menu */}
-        <ClientOnly fallback={<Button variant="ghost" size="icon" className="h-8 w-8"><User className="h-4 w-4" /></Button>}>
-          <DropdownMenu>
+        <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <User className="h-4 w-4" />
@@ -199,7 +191,6 @@ export function Header() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-        </ClientOnly>
       </div>
     </header>
   );

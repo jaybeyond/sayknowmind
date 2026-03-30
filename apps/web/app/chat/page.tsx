@@ -1,14 +1,20 @@
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { MemorySidebar } from "@/components/dashboard/sidebar";
+import { MemoryHeader } from "@/components/dashboard/header";
 import { ChatPage } from "@/components/chat/chat-page";
 
 export const dynamic = "force-dynamic";
 
 export default function Chat() {
   return (
-    <SidebarProvider>
+    <SidebarProvider className="bg-sidebar">
       <MemorySidebar />
-      <ChatPage />
+      <div className="h-svh overflow-hidden lg:p-2 w-full">
+        <div className="lg:border lg:rounded-md overflow-hidden flex flex-col bg-container h-full w-full bg-background">
+          <MemoryHeader title="Chat" showFilters={false} />
+          <ChatPage />
+        </div>
+      </div>
     </SidebarProvider>
   );
 }

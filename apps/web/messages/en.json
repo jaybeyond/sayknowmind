@@ -179,7 +179,10 @@
     "filtered": "(filtered)",
     "favoritesOnly": "Favorites only",
     "withTags": "With tags",
-    "withoutTags": "Without tags"
+    "withoutTags": "Without tags",
+    "loadMore": "Load more",
+    "loadingMore": "Loading more...",
+    "allLoaded": "All {{count}} memories loaded"
   },
   "emptyState": {
     "allDocuments": "Nothing saved yet",

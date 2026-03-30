@@ -44,7 +44,7 @@ export function AppProviders({ children }: AppProvidersProps) {
       <ThemeProvider>
         <I18nProvider>
           <TenantProvider>
-            <WebSocketProvider>
+            <WebSocketProvider autoConnect={false}>
               <KeyboardShortcutsProvider>
                 {children}
                 <Toaster 

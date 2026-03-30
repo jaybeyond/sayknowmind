@@ -23,8 +23,15 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   Brain,
@@ -34,7 +41,6 @@ import {
   Settings,
   Globe,
   Plus,
-  Check,
   User,
   LogOut,
   Folder,
@@ -62,11 +68,9 @@ const navItemKeys = [
   { icon: Star, key: "sidebar.favorites", href: "/favorites" },
   { icon: Archive, key: "sidebar.archive", href: "/archive" },
   { icon: Trash2, key: "sidebar.trash", href: "/trash" },
-];
-
-const toolNavItems = [
   { icon: MessageSquare, key: "sidebar.chat", href: "/chat" },
   { icon: Network, key: "sidebar.knowledge", href: "/knowledge" },
+  { icon: Settings, key: "sidebar.settings", href: "/settings" },
 ];
 
 function InsightsWidget() {
@@ -127,7 +131,8 @@ export function MemorySidebar({
   const pathname = usePathname();
   const router = useRouter();
   const [collectionsOpen, setCollectionsOpen] = React.useState(true);
-  const [tagsOpen, setTagsOpen] = React.useState(true);
+  const [tagsOpen, setTagsOpen] = React.useState(false);
+  const [menuOpen, setMenuOpen] = React.useState(false);
   const {
     selectedCollection,
     setSelectedCollection,
@@ -184,58 +189,65 @@ export function MemorySidebar({
     <Sidebar collapsible="offcanvas" className="lg:border-r-0!" {...props}>
       <SidebarHeader className="p-5 pb-0">
         <div className="flex items-center justify-between">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 outline-none">
-              <div className="size-7 rounded-full overflow-hidden bg-linear-to-br from-blue-400 via-indigo-500 to-violet-500 flex items-center justify-center ring-1 ring-white/40 shadow-lg" />
-              <span className="font-medium text-muted-foreground">
-                {t("app.title")}
-              </span>
-              <ChevronDown className="size-3 text-muted-foreground" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="start" className="w-56">
-              <DropdownMenuItem>
-                <div className="size-5 rounded-full bg-linear-to-br from-blue-400 via-indigo-500 to-violet-500 mr-2" />
-                {userName || t("app.title")}
-                <Check className="size-4 ml-auto" />
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem
-                onClick={() => {
-                  setAddingCategory(true);
-                  setCollectionsOpen(true);
-                }}
-              >
-                <Plus className="size-4 mr-2" />
-                {t("categories.create")}
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem onClick={() => router.push("/settings")}>
-                <User className="size-4 mr-2" />
-                {t("sidebar.accountSettings")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push("/settings")}>
-                <Settings className="size-4 mr-2" />
-                {t("sidebar.settings")}
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={async () => {
-                  await signOut();
-                  router.push("/login");
-                }}
-              >
-                <LogOut className="size-4 mr-2" />
-                {t("sidebar.logOut")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
+            <DialogTrigger asChild>
+              <button className="flex items-center gap-2 outline-none cursor-pointer">
+                <div className="size-7 rounded-full overflow-hidden bg-linear-to-br from-blue-400 via-indigo-500 to-violet-500 flex items-center justify-center ring-1 ring-white/40 shadow-lg" />
+                <span className="font-medium text-muted-foreground">
+                  {t("app.title")}
+                </span>
+                <ChevronDown className="size-3 text-muted-foreground" />
+              </button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <div className="size-6 rounded-full bg-linear-to-br from-blue-400 via-indigo-500 to-violet-500 shrink-0" />
+                  {userName || t("app.title")}
+                </DialogTitle>
+                <DialogDescription>{t("app.subtitle")}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-1 pt-2">
+                <button
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setAddingCategory(true);
+                    setCollectionsOpen(true);
+                  }}
+                >
+                  <Plus className="size-4 text-muted-foreground" />
+                  {t("categories.create")}
+                </button>
+                <button
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left"
+                  onClick={() => { setMenuOpen(false); router.push("/settings"); }}
+                >
+                  <User className="size-4 text-muted-foreground" />
+                  {t("sidebar.accountSettings")}
+                </button>
+                <button
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left"
+                  onClick={() => { setMenuOpen(false); router.push("/settings"); }}
+                >
+                  <Settings className="size-4 text-muted-foreground" />
+                  {t("sidebar.settings")}
+                </button>
+                <div className="border-t my-2" />
+                <button
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left text-destructive"
+                  onClick={async () => {
+                    setMenuOpen(false);
+                    await signOut();
+                    router.push("/login");
+                  }}
+                >
+                  <LogOut className="size-4" />
+                  {t("sidebar.logOut")}
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
           <div className="flex items-center gap-1">
             <NotificationBell />
             <Avatar className="size-6.5">
@@ -486,58 +498,15 @@ export function MemorySidebar({
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.href}
-                    className="h-[38px]"
+                    className="h-8"
                   >
                     <Link href={item.href}>
-                      <item.icon className="size-5" />
-                      <span>{t(item.key)}</span>
+                      <item.icon className="size-4" />
+                      <span className="text-sm">{t(item.key)}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="p-0">
-          <SidebarGroupLabel className="px-0 text-[10px] font-semibold tracking-wider text-muted-foreground">
-            {t("sidebar.tools")}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="mt-1">
-              {toolNavItems.map((item) => (
-                <SidebarMenuItem key={item.key}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.href}
-                    className="h-[38px]"
-                  >
-                    <Link href={item.href}>
-                      <item.icon className="size-5" />
-                      <span>{t(item.key)}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="p-0">
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === "/settings"}
-                  className="h-[38px]"
-                >
-                  <Link href="/settings">
-                    <Settings className="size-5" />
-                    <span>{t("sidebar.settings")}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
