@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemoryStore } from "@/store/memory-store";
+import { useState } from "react";
+import { useMemoryStore, type Memory } from "@/store/memory-store";
 import { MemoryCard } from "./memory-card";
+import { MemoryDetailPanel } from "./memory-detail-panel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
@@ -9,6 +11,7 @@ import { useTranslation } from "@/lib/i18n";
 export function FavoritesContent() {
   const { getFavoriteMemories, viewMode, isLoading } = useMemoryStore();
   const { t } = useTranslation();
+  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const favoriteMemories = getFavoriteMemories();
 
   if (isLoading) {
@@ -54,7 +57,7 @@ export function FavoritesContent() {
         ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {favoriteMemories.map((memory) => (
-              <MemoryCard key={memory.id} memory={memory} />
+              <MemoryCard key={memory.id} memory={memory} onSelect={setSelectedMemory} />
             ))}
           </div>
         ) : (
@@ -64,11 +67,14 @@ export function FavoritesContent() {
                 key={memory.id}
                 memory={memory}
                 variant="list"
+                onSelect={setSelectedMemory}
               />
             ))}
           </div>
         )}
       </div>
+
+      <MemoryDetailPanel memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
     </div>
   );
 }
