@@ -3,19 +3,26 @@ import { pool } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), ms)
+    ),
+  ]);
+}
+
 export async function GET() {
   const checks: Record<string, string> = {};
 
-  // Check PostgreSQL (non-blocking — degraded is OK for healthcheck)
+  // Check PostgreSQL with a 3s timeout so healthcheck never hangs
   try {
-    const result = await pool.query("SELECT 1 AS ok");
+    const result = await withTimeout(pool.query("SELECT 1 AS ok"), 3000);
     checks.database = result.rows[0]?.ok === 1 ? "ok" : "degraded";
   } catch {
     checks.database = "unavailable";
   }
 
-  // App is healthy as long as the process is running
-  // DB issues are reported but don't block deployment
   return NextResponse.json(
     {
       status: "healthy",
