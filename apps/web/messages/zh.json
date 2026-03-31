@@ -5,6 +5,7 @@
     "description": "记住你说过的一切，永久管理你的知识。"
   },
   "sidebar": {
+    "gallery": "发现",
     "searchPlaceholder": "搜索记忆...",
     "collections": "收藏集",
     "tags": "标签",
@@ -570,5 +571,29 @@
     "revokeShare": "撤销分享",
     "empty": "暂无已发布的记忆",
     "emptyCta": "分享记忆后将显示在此处"
+  },
+  "gallery": {
+    "hero": "探索共享知识",
+    "heroSubtitle": "发现社区公开分享的记忆",
+    "sharedCount": "{{count}} 条共享记忆",
+    "noShares": "暂无共享内容",
+    "loginToSave": "登录开始保存您的知识"
+  },
+  "edit": {
+    "title": "编辑记忆",
+    "fieldTitle": "标题",
+    "summaryPlaceholder": "输入摘要...",
+    "whatItSolvesPlaceholder": "解决了什么问题？",
+    "keyPointPlaceholder": "要点...",
+    "addPoint": "添加要点",
+    "tagPlaceholder": "添加标签...",
+    "save": "保存",
+    "saved": "更改已保存",
+    "saveFailed": "保存失败",
+    "titleRequired": "标题为必填项",
+    "attachments": "附件",
+    "currentImage": "当前图片",
+    "addImage": "添加图片",
+    "addFile": "添加文件"
   }
 }

@@ -57,7 +57,10 @@ export function NodeDetailPanel({ node, onClose, onDrillDown }: NodeDetailPanelP
   const documents = node.connectedDocuments ?? [];
 
   return (
-    <div className="absolute right-0 top-0 bottom-0 w-80 bg-background/95 backdrop-blur-sm border-l border-border overflow-y-auto z-10 animate-in slide-in-from-right-4 duration-200">
+    <div
+      className="absolute right-0 top-0 bottom-0 w-80 bg-background/95 backdrop-blur-sm border-l border-border overflow-y-auto z-10 animate-in slide-in-from-right-4 duration-200"
+      onClick={(e) => e.stopPropagation()}
+    >
       {/* Header */}
       <div className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4">
         <div className="flex items-start justify-between gap-2">

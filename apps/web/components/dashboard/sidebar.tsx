@@ -557,6 +557,21 @@ export function MemorySidebar({
         <SidebarGroup className="p-0">
           <SidebarGroupContent>
             <SidebarMenu>
+              {/* Shared Gallery — inline in content area */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isHomePage && selectedCollection === "gallery"}
+                  className="h-8 cursor-pointer"
+                  onClick={() => {
+                    if (!isHomePage) router.push("/");
+                    setSelectedCollection("gallery");
+                    clearTags();
+                  }}
+                >
+                  <Globe className="size-4" />
+                  <span className="text-sm">{t("sidebar.gallery")}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               {navItemKeys.map((item) => (
                 <SidebarMenuItem key={item.key}>
                   <SidebarMenuButton

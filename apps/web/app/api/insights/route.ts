@@ -6,9 +6,11 @@ export const dynamic = "force-dynamic";
 
 /** GET /api/insights — knowledge vault stats */
 export async function GET() {
-  const userId = await getUserIdFromRequest();
+  let userId: string | null = null;
+  try { userId = await getUserIdFromRequest(); } catch { /* auth error */ }
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  try {
   const [totalRes, weekRes, topCatsRes, recentRelRes, pendingRes] = await Promise.all([
     // Total documents
     pool.query(
@@ -64,4 +66,9 @@ export async function GET() {
     })),
     pendingJobs: parseInt(pendingRes.rows[0].count, 10),
   });
+  } catch {
+    return NextResponse.json({
+      totalDocuments: 0, thisWeek: 0, topCategories: [], recentRelations: [], pendingJobs: 0,
+    });
+  }
 }

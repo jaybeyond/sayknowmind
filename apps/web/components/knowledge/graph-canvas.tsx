@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useEffect, useState, useMemo } from "react";
+import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import ForceGraph2D, { type ForceGraphMethods } from "react-force-graph-2d";
 import { Network, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
@@ -44,7 +44,9 @@ interface GraphCanvasProps {
   nodes: GraphNode[];
   edges: GraphEdge[];
   onNodeClick?: (node: GraphNode) => void;
+  onBackgroundClick?: () => void;
   selectedNodeId?: string | null;
+  focusNodeId?: string | null;
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -82,12 +84,16 @@ export function GraphCanvas({
   nodes,
   edges,
   onNodeClick,
+  onBackgroundClick,
   selectedNodeId,
+  focusNodeId,
 }: GraphCanvasProps) {
   const { t } = useTranslation();
   const isDark = useIsDark();
   const fgRef = useRef<ForceGraphMethods<FGNode, FGLink> | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
+  const nodeMapRef = useRef<Map<string, FGNode>>(new Map());
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [sizeMultiplier, setSizeMultiplier] = useState(1);
 
@@ -119,12 +125,13 @@ export function GraphCanvas({
     return () => observer.disconnect();
   }, []);
 
-  // Build graph data
-  const graphData = useCallback(() => {
-    const nodeMap = new Map<string, boolean>();
+  // Build graph data — useMemo keeps stable references so d3-force doesn't restart on re-render
+  const data = useMemo(() => {
+    const nodeIds = new Set<string>();
+    const fgNodeMap = new Map<string, FGNode>();
     const fgNodes: FGNode[] = nodes.map((n) => {
-      nodeMap.set(n.id, true);
-      return {
+      nodeIds.add(n.id);
+      const fgNode: FGNode = {
         id: n.id,
         label: n.label,
         type: n.type,
@@ -132,7 +139,10 @@ export function GraphCanvas({
         baseSize: BASE_SIZES[n.type] ?? 5,
         _original: n,
       };
+      fgNodeMap.set(n.id, fgNode);
+      return fgNode;
     });
+    nodeMapRef.current = fgNodeMap;
 
     const edgeSet = new Set<string>();
     const fgLinks: FGLink[] = [];
@@ -140,8 +150,8 @@ export function GraphCanvas({
       const key = `${edge.source}->${edge.target}`;
       if (
         edgeSet.has(key) ||
-        !nodeMap.has(edge.source) ||
-        !nodeMap.has(edge.target) ||
+        !nodeIds.has(edge.source) ||
+        !nodeIds.has(edge.target) ||
         edge.source === edge.target
       )
         continue;
@@ -164,9 +174,93 @@ export function GraphCanvas({
     return () => clearTimeout(timer);
   }, [nodes]);
 
+  // Center on focused node (drill-down from panel)
+  useEffect(() => {
+    if (!focusNodeId || !fgRef.current) return;
+    const fg = fgRef.current;
+    const target = nodeMapRef.current.get(focusNodeId);
+    if (target && target.x != null && target.y != null) {
+      fg.centerAt(target.x, target.y, 600);
+      fg.zoom(2.5, 600);
+    }
+  }, [focusNodeId]);
+
   const handleZoomIn = () => fgRef.current?.zoom(1.5, 300);
   const handleZoomOut = () => fgRef.current?.zoom(0.67, 300);
   const handleFit = () => fgRef.current?.zoomToFit(400, 60);
+
+  // Manual hit detection — bypasses ForceGraph2D's broken onNodeClick in React 19
+  const findNodeAtScreen = useCallback(
+    (clientX: number, clientY: number): FGNode | null => {
+      const fg = fgRef.current;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!fg || !rect) return null;
+
+      const canvasX = clientX - rect.left;
+      const canvasY = clientY - rect.top;
+
+      let closestNode: FGNode | null = null;
+      let closestDist = Infinity;
+
+      for (const node of nodeMapRef.current.values()) {
+        if (node.x == null || node.y == null) continue;
+        const sp = fg.graph2ScreenCoords(node.x, node.y);
+        const dx = sp.x - canvasX;
+        const dy = sp.y - canvasY;
+        const dist = dx * dx + dy * dy;
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestNode = node;
+        }
+      }
+
+      const HIT_RADIUS = 22; // px — generous for touch/click
+      if (closestNode && closestDist < HIT_RADIUS * HIT_RADIUS) {
+        return closestNode;
+      }
+      return null;
+    },
+    [],
+  );
+
+  const handleContainerPointerDown = useCallback((e: React.PointerEvent) => {
+    pointerDownRef.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
+  const handleContainerClick = useCallback(
+    (e: React.MouseEvent) => {
+      // Only handle clicks on canvas elements (not UI controls)
+      const target = e.target as HTMLElement;
+      if (target.tagName !== "CANVAS") return;
+
+      // Distinguish click from drag
+      const down = pointerDownRef.current;
+      if (down) {
+        const dx = e.clientX - down.x;
+        const dy = e.clientY - down.y;
+        if (dx * dx + dy * dy > 64) return; // >8px movement = drag
+      }
+
+      const hit = findNodeAtScreen(e.clientX, e.clientY);
+      if (hit) {
+        onNodeClick?.(hit._original);
+      } else {
+        onBackgroundClick?.();
+      }
+    },
+    [findNodeAtScreen, onNodeClick, onBackgroundClick],
+  );
+
+  const handleContainerMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName !== "CANVAS") return;
+      const hit = findNodeAtScreen(e.clientX, e.clientY);
+      const el = containerRef.current;
+      if (el) el.style.cursor = hit ? "pointer" : "default";
+    },
+    [findNodeAtScreen],
+  );
 
   if (nodes.length === 0) {
     return (
@@ -184,10 +278,14 @@ export function GraphCanvas({
     );
   }
 
-  const data = graphData();
-
   return (
-    <div ref={containerRef} className="flex-1 relative min-h-0 overflow-hidden">
+    <div
+      ref={containerRef}
+      className="flex-1 relative min-h-0 overflow-hidden"
+      onPointerDown={handleContainerPointerDown}
+      onClick={handleContainerClick}
+      onMouseMove={handleContainerMouseMove}
+    >
       <ForceGraph2D
         ref={fgRef}
         width={dimensions.width}
@@ -197,6 +295,8 @@ export function GraphCanvas({
         nodeLabel=""
         nodeCanvasObjectMode={() => "replace"}
         nodeCanvasObject={(node: FGNode, ctx, globalScale) => {
+          // Sync live d3-force positions into nodeMapRef for manual hit detection
+          nodeMapRef.current.set(node.id, node);
           const isSelected = node.id === selectedNodeId;
           const size = node.baseSize * sizeMultiplier * (isSelected ? 1.5 : 1);
           const color = isSelected ? "#ffffff" : node.color;
@@ -224,19 +324,10 @@ export function GraphCanvas({
           const label = node.label.length > 22 ? node.label.slice(0, 20) + "..." : node.label;
           ctx.fillText(label, x, y + size + 3);
         }}
-        nodePointerAreaPaint={(node: FGNode, color, ctx) => {
-          const size = node.baseSize * sizeMultiplier * 2;
-          ctx.beginPath();
-          ctx.arc(node.x ?? 0, node.y ?? 0, size, 0, 2 * Math.PI);
-          ctx.fillStyle = color;
-          ctx.fill();
-        }}
-        onNodeClick={(node: FGNode) => {
-          onNodeClick?.(node._original);
-        }}
-        onNodeHover={(node) => {
-          const el = containerRef.current;
-          if (el) el.style.cursor = node ? "pointer" : "default";
+        nodePointerAreaPaint={() => {
+          // Intentionally empty — disables ForceGraph2D's default shadow canvas hit detection.
+          // Without this, FG2D paints default circles on the shadow canvas and intercepts
+          // clicks via its broken onNodeClick (React 19), preventing bubbling to our container handler.
         }}
         linkColor={() => linkColorValue}
         linkWidth={0.8}

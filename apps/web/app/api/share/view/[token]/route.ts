@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const { token } = await context.params;
 
     const result = await pool.query(
-      `SELECT sc.*, d.title, d.summary
+      `SELECT sc.*, d.title, d.summary, d.content, d.url, d.source_type, d.metadata
        FROM shared_content sc
        JOIN documents d ON d.id = sc.document_id
        WHERE sc.share_token = $1`,
@@ -92,13 +92,27 @@ export async function GET(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ title: row.title, content: ipfsData, accessType });
       }
     } catch {
-      // IPFS unavailable — fall back to DB data
+      // IPFS unavailable — serve content directly from DB with full metadata
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      // For URL sources, raw content is scraped HTML — don't expose it
+      const includeRawContent = row.source_type === "text" || row.source_type === "file";
       return NextResponse.json({
         title: row.title,
         summary: row.summary,
-        content: null,
+        content: includeRawContent ? row.content : undefined,
+        url: row.url,
+        sourceType: row.source_type,
+        ogImage: typeof meta.ogImage === "string" ? meta.ogImage : undefined,
+        aiSummary: typeof meta.summary === "string" ? meta.summary : undefined,
+        whatItSolves: typeof meta.what_it_solves === "string" ? meta.what_it_solves : undefined,
+        keyPoints: Array.isArray(meta.key_points) ? meta.key_points : undefined,
+        readingTimeMinutes: typeof meta.reading_time_minutes === "number" ? meta.reading_time_minutes : undefined,
+        tags: [...new Set([
+          ...(Array.isArray(meta.aiTags) ? meta.aiTags : []),
+          ...(Array.isArray(meta.userTags) ? meta.userTags : []),
+          ...(Array.isArray(meta.tags) ? meta.tags : []),
+        ].filter((t): t is string => typeof t === "string"))],
         accessType,
-        fallback: true,
       });
     }
   } catch (error) {

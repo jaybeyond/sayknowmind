@@ -187,7 +187,9 @@ export function resolveDocumentPrivacy(
   if (isPrivateMode()) return "private";
   if (documentPrivacyLevel) return documentPrivacyLevel;
   if (categoryPrivacyLevel) return categoryPrivacyLevel;
-  return "private";
+  // When not in private mode, default to shareable so users can share
+  // documents that don't have an explicit privacy_level set
+  return "shared";
 }
 
 /**

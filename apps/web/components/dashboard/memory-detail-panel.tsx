@@ -17,10 +17,12 @@ import {
   Video,
   Link2,
   Share2,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { ShareDialog } from "./share-dialog";
+import { MemoryEditModal } from "./memory-edit-modal";
 
 interface MemoryDetailPanelProps {
   memory: Memory | null;
@@ -37,8 +39,17 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
   const { t } = useTranslation();
   const [relatedDocs, setRelatedDocs] = useState<RelatedDoc[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [currentMemory, setCurrentMemory] = useState<Memory | null>(memory);
 
-  const memoryId = memory?.id;
+  // Sync currentMemory when prop changes
+  useEffect(() => {
+    setCurrentMemory(memory);
+  }, [memory]);
+
+  const displayed = currentMemory ?? memory;
+  const memoryId = displayed?.id;
+
   useEffect(() => {
     if (!memoryId) return;
     let cancelled = false;
@@ -50,6 +61,9 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
   }, [memoryId]);
 
   if (!memory) return null;
+
+  // Use displayed (which may have local edits) for rendering
+  const m = displayed ?? memory;
 
   return (
     <div
@@ -63,11 +77,11 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
       <div className="flex items-start justify-between gap-3 p-5 border-b border-border">
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-semibold leading-tight line-clamp-2">
-            {memory.title}
+            {m.title}
           </h2>
-          {memory.url && (
+          {m.url && (
             <a
-              href={memory.url}
+              href={m.url}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 mt-1"
@@ -76,9 +90,9 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
               <span className="truncate">
                 {(() => {
                   try {
-                    return new URL(memory.url).hostname;
+                    return new URL(m.url).hostname;
                   } catch {
-                    return memory.url;
+                    return m.url;
                   }
                 })()}
               </span>
@@ -86,6 +100,13 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setEditOpen(true)}
+            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+            title={t("edit.title")}
+          >
+            <Pencil className="size-4" />
+          </button>
           <button
             onClick={() => setShareOpen(true)}
             className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -100,17 +121,17 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
             <X className="size-4" />
           </button>
         </div>
-        <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
+        <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={m} />
       </div>
 
       {/* Content */}
       <div className="overflow-auto h-[calc(100%-80px)] p-5 space-y-5">
         {/* File preview (images/videos) */}
-        {memory.docType === "file" && memory.fileType === "image" && memory.ogImage && (
+        {m.docType === "file" && m.fileType === "image" && m.ogImage && (
           <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted">
             <Image
-              src={memory.ogImage}
-              alt={memory.title}
+              src={m.ogImage}
+              alt={m.title}
               width={400}
               height={300}
               className="w-full h-auto object-contain max-h-64"
@@ -118,10 +139,10 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
             />
           </div>
         )}
-        {memory.docType === "file" && memory.fileType === "video" && (
+        {m.docType === "file" && m.fileType === "video" && (
           <div className="relative w-full rounded-lg overflow-hidden border border-border bg-black">
             <video
-              src={`/api/files/${memory.id}`}
+              src={`/api/files/${m.id}`}
               controls
               className="w-full max-h-64"
               preload="metadata"
@@ -130,16 +151,16 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
         )}
 
         {/* Download button for files */}
-        {memory.docType === "file" && (
+        {m.docType === "file" && (
           <a
-            href={`/api/files/${memory.id}?download=1`}
+            href={`/api/files/${m.id}?download=1`}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
           >
             <Download className="size-3.5" />
             {t("common.download")}
-            {memory.fileName && (
+            {m.fileName && (
               <span className="text-muted-foreground text-xs truncate max-w-48">
-                ({memory.fileName})
+                ({m.fileName})
               </span>
             )}
           </a>
@@ -149,56 +170,56 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <Clock className="size-3" />
-            {new Date(memory.createdAt).toLocaleDateString(undefined, {
+            {new Date(m.createdAt).toLocaleDateString(undefined, {
               year: "numeric",
               month: "short",
               day: "numeric",
             })}
           </span>
-          {memory.readingTimeMinutes && (
+          {m.readingTimeMinutes && (
             <span className="flex items-center gap-1">
               <FileText className="size-3" />
-              {memory.readingTimeMinutes}{t("document.minRead")}
+              {m.readingTimeMinutes}{t("document.minRead")}
             </span>
           )}
-          {memory.collectionId !== "all" && (
+          {m.collectionId !== "all" && (
             <span className="flex items-center gap-1">
               <Folder className="size-3" />
-              {memory.collectionId}
+              {m.collectionId}
             </span>
           )}
         </div>
 
         {/* Summary */}
-        {memory.summary && (
+        {m.summary && (
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {t("document.summary")}
             </h3>
-            <p className="text-sm leading-relaxed">{memory.summary}</p>
+            <p className="text-sm leading-relaxed">{m.summary}</p>
           </section>
         )}
 
         {/* What it solves */}
-        {memory.whatItSolves && (
+        {m.whatItSolves && (
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <Lightbulb className="size-3" />
               {t("document.whatItSolves")}
             </h3>
-            <p className="text-sm leading-relaxed">{memory.whatItSolves}</p>
+            <p className="text-sm leading-relaxed">{m.whatItSolves}</p>
           </section>
         )}
 
         {/* Key Points */}
-        {memory.keyPoints && memory.keyPoints.length > 0 && (
+        {m.keyPoints && m.keyPoints.length > 0 && (
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <ListChecks className="size-3" />
               {t("document.keyPoints")}
             </h3>
             <ul className="space-y-1.5">
-              {memory.keyPoints.map((point, i) => (
+              {m.keyPoints.map((point, i) => (
                 <li
                   key={i}
                   className="text-sm leading-relaxed flex gap-2"
@@ -214,14 +235,14 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
         )}
 
         {/* User Tags */}
-        {memory.userTags.length > 0 && (
+        {m.userTags.length > 0 && (
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <Tag className="size-3" />
               {t("sidebar.tags")}
             </h3>
             <div className="flex flex-wrap gap-1.5">
-              {[...new Set(memory.userTags)].map((tag) => (
+              {[...new Set(m.userTags)].map((tag) => (
                 <span
                   key={tag}
                   className="px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground"
@@ -234,14 +255,14 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
         )}
 
         {/* AI Tags */}
-        {memory.aiTags.length > 0 && (
+        {m.aiTags.length > 0 && (
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <Tag className="size-3" />
               AI {t("sidebar.tags")}
             </h3>
             <div className="flex flex-wrap gap-1.5">
-              {[...new Set(memory.aiTags)].map((tag) => (
+              {[...new Set(m.aiTags)].map((tag) => (
                 <span
                   key={tag}
                   className="px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary"
@@ -279,21 +300,21 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
         )}
 
         {/* Description (original) */}
-        {memory.description && memory.description !== memory.summary && (
+        {m.description && m.description !== m.summary && (
           <section className="space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {t("document.description")}
             </h3>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              {memory.description}
+              {m.description}
             </p>
           </section>
         )}
 
         {/* Open original */}
-        {memory.url && (
+        {m.url && (
           <a
-            href={memory.url}
+            href={m.url}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
@@ -302,18 +323,28 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
             {t("document.openOriginal")}
           </a>
         )}
-        {!memory.url && memory.docType === "file" && memory.ogImage && (
+        {!m.url && m.docType === "file" && m.ogImage && (
           <a
-            href={memory.ogImage}
+            href={m.ogImage}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
           >
-            {memory.fileType === "image" ? <ImageIcon className="size-3.5" /> : <Video className="size-3.5" />}
+            {m.fileType === "image" ? <ImageIcon className="size-3.5" /> : <Video className="size-3.5" />}
             {t("memory.openInNewTab")}
           </a>
         )}
       </div>
+
+      {/* Edit Modal */}
+      <MemoryEditModal
+        memory={m}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={(updated) => {
+          setCurrentMemory((prev) => prev ? { ...prev, ...updated } : prev);
+        }}
+      />
     </div>
   );
 }

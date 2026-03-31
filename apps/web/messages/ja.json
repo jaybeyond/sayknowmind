@@ -5,6 +5,7 @@
     "description": "あなたが言ったすべてを記憶し、永久に管理します。"
   },
   "sidebar": {
+    "gallery": "発見",
     "searchPlaceholder": "メモリを検索...",
     "collections": "コレクション",
     "tags": "タグ",
@@ -570,5 +571,29 @@
     "revokeShare": "共有を取り消す",
     "empty": "公開されたメモリはありません",
     "emptyCta": "メモリを共有するとここに表示されます"
+  },
+  "gallery": {
+    "hero": "共有ナレッジを探索",
+    "heroSubtitle": "コミュニティで公開された共有メモリを発見しよう",
+    "sharedCount": "共有メモリ {{count}}件",
+    "noShares": "共有コンテンツはまだありません",
+    "loginToSave": "ログインして知識の保存を始めよう"
+  },
+  "edit": {
+    "title": "メモリを編集",
+    "fieldTitle": "タイトル",
+    "summaryPlaceholder": "要約を入力...",
+    "whatItSolvesPlaceholder": "どんな問題を解決しますか？",
+    "keyPointPlaceholder": "要点...",
+    "addPoint": "要点を追加",
+    "tagPlaceholder": "タグを追加...",
+    "save": "保存",
+    "saved": "変更を保存しました",
+    "saveFailed": "保存に失敗しました",
+    "titleRequired": "タイトルは必須です",
+    "attachments": "添付ファイル",
+    "currentImage": "現在の画像",
+    "addImage": "画像を追加",
+    "addFile": "ファイルを追加"
   }
 }

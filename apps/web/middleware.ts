@@ -10,6 +10,7 @@ const publicApiPaths = [
   "/api/knowledge/node",
   "/api/integrations/telegram/webhook",
   "/api/share/view",
+  "/api/share/gallery",
 ];
 
 // Routes that require authentication
@@ -70,8 +71,7 @@ export function middleware(request: NextRequest) {
   const isPublicApi = publicApiPaths.some((path) => pathname.startsWith(path));
   const isProtected =
     !isPublicApi &&
-    (pathname === "/" ||
-    protectedPaths.some((path) => pathname.startsWith(path)));
+    protectedPaths.some((path) => pathname.startsWith(path));
   if (isProtected && !sessionCookie) {
     // API routes return 401, page routes redirect to login
     if (pathname.startsWith("/api/")) {
@@ -112,7 +112,6 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // Dashboard (require auth)
-    "/",
     "/favorites",
     "/archive",
     "/trash",

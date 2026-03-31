@@ -15,18 +15,25 @@ export function TelegramPoller() {
       window.location.hostname === "127.0.0.1";
     if (!isLocal) return;
 
+    // Remember across remounts/navigations — don't retry once we know it's down
+    if (sessionStorage.getItem("tg-poll-dead")) return;
+
     let stopped = false;
     let consecutiveErrors = 0;
+    let dead = false;
 
     const poll = async () => {
+      if (dead) return;
       try {
         const res = await fetch("/api/integrations/telegram/poll", {
           method: "POST",
           signal: AbortSignal.timeout(15_000),
         });
-        if (res.status === 401) {
-          // Not logged in — skip silently
-          consecutiveErrors = 0;
+        if (res.status === 401 || res.status === 400 || res.status === 502) {
+          // Not logged in, no bot token, or service down — stop completely
+          dead = true;
+          sessionStorage.setItem("tg-poll-dead", "1");
+          if (timerRef.current) clearInterval(timerRef.current);
           return;
         }
         if (res.ok) consecutiveErrors = 0;
@@ -35,17 +42,16 @@ export function TelegramPoller() {
         consecutiveErrors++;
       }
 
-      // Back off after repeated failures
-      if (consecutiveErrors > 10 && timerRef.current) {
+      // Stop completely after 3 consecutive failures
+      if (consecutiveErrors >= 3 && timerRef.current) {
+        dead = true;
+        sessionStorage.setItem("tg-poll-dead", "1");
         clearInterval(timerRef.current);
-        if (!stopped) {
-          timerRef.current = setInterval(poll, 30_000); // slow down to 30s
-        }
       }
     };
 
     poll();
-    timerRef.current = setInterval(poll, 3_000);
+    timerRef.current = setInterval(poll, 5_000);
 
     return () => {
       stopped = true;

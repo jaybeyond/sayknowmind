@@ -5,6 +5,7 @@
     "description": "Everything you say, we know, and mind forever."
   },
   "sidebar": {
+    "gallery": "Discover",
     "searchPlaceholder": "Search Memories...",
     "collections": "COLLECTIONS",
     "tags": "TAGS",
@@ -570,5 +571,29 @@
     "revokeShare": "Revoke share",
     "empty": "No published memories",
     "emptyCta": "Share a memory to see it here"
+  },
+  "gallery": {
+    "hero": "Explore Shared Knowledge",
+    "heroSubtitle": "Discover publicly shared memories from the community",
+    "sharedCount": "{{count}} shared memories",
+    "noShares": "No shared content yet",
+    "loginToSave": "Log in to start saving your own knowledge"
+  },
+  "edit": {
+    "title": "Edit Memory",
+    "fieldTitle": "Title",
+    "summaryPlaceholder": "Write a summary...",
+    "whatItSolvesPlaceholder": "What problem does this solve?",
+    "keyPointPlaceholder": "Key point...",
+    "addPoint": "Add point",
+    "tagPlaceholder": "Add a tag...",
+    "save": "Save",
+    "saved": "Changes saved",
+    "saveFailed": "Failed to save changes",
+    "titleRequired": "Title is required",
+    "attachments": "Attachments",
+    "currentImage": "Current image",
+    "addImage": "Add image",
+    "addFile": "Add file"
   }
 }

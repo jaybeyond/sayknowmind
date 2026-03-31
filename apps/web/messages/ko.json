@@ -5,6 +5,7 @@
     "description": "당신이 말하는 모든 것을 기억하고 관리합니다."
   },
   "sidebar": {
+    "gallery": "발견",
     "searchPlaceholder": "메모리 검색...",
     "collections": "컬렉션",
     "tags": "태그",
@@ -570,5 +571,29 @@
     "revokeShare": "공유 취소",
     "empty": "공개된 메모리가 없습니다",
     "emptyCta": "메모리를 공유하면 여기에 표시됩니다"
+  },
+  "gallery": {
+    "hero": "공유 지식 탐색",
+    "heroSubtitle": "커뮤니티에서 공유된 메모리를 발견하세요",
+    "sharedCount": "공유된 메모리 {{count}}개",
+    "noShares": "아직 공유된 콘텐츠가 없습니다",
+    "loginToSave": "로그인하여 나만의 지식을 저장하세요"
+  },
+  "edit": {
+    "title": "메모리 편집",
+    "fieldTitle": "제목",
+    "summaryPlaceholder": "요약을 작성하세요...",
+    "whatItSolvesPlaceholder": "어떤 문제를 해결하나요?",
+    "keyPointPlaceholder": "핵심 포인트...",
+    "addPoint": "포인트 추가",
+    "tagPlaceholder": "태그 추가...",
+    "save": "저장",
+    "saved": "변경 사항이 저장되었습니다",
+    "saveFailed": "저장에 실패했습니다",
+    "titleRequired": "제목은 필수입니다",
+    "attachments": "첨부파일",
+    "currentImage": "현재 이미지",
+    "addImage": "이미지 추가",
+    "addFile": "파일 추가"
   }
 }

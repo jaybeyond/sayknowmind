@@ -7,13 +7,186 @@ import { MemoryCard } from "./memory-card";
 import { MemoryDetailPanel } from "./memory-detail-panel";
 import { AddMemoryDialog } from "./add-memory-dialog";
 import { StatsCards } from "./stats-cards";
+import { GalleryCard, type GalleryItem } from "@/components/gallery/gallery-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { X, FileUp, BookOpen, Plus, RefreshCw } from "lucide-react";
+import { X, FileUp, BookOpen, Plus, RefreshCw, Globe } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
+
+// ---------------------------------------------------------------------------
+// Gallery View (shared public content, inline in content area)
+// ---------------------------------------------------------------------------
+
+function GalleryView() {
+  const { t } = useTranslation();
+  const { selectedTags, toggleTag, viewMode } = useMemoryStore();
+  const [items, setItems] = useState<GalleryItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/share/gallery?limit=24&offset=0")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          setItems(data.items);
+          setTotal(data.total);
+          setHasMore(data.hasMore);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/share/gallery?limit=24&offset=${items.length}`);
+      if (res.ok) {
+        const data = await res.json();
+        setItems((prev) => [...prev, ...data.items]);
+        setHasMore(data.hasMore);
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [items.length, hasMore, loadingMore]);
+
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) return;
+      const observer = new IntersectionObserver(
+        (entries) => { if (entries[0].isIntersecting) loadMore(); },
+        { rootMargin: "200px" },
+      );
+      observer.observe(node);
+      return () => observer.disconnect();
+    },
+    [loadMore],
+  );
+
+  // Derive tags from gallery items for filtering
+  const allTags = items.flatMap((i) => i.tags);
+  const tagCounts = new Map<string, number>();
+  for (const tag of allTags) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+  const derivedTags = [...tagCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({ id: name, name, count }));
+
+  // Filter by selected tags
+  const filtered =
+    selectedTags.length === 0
+      ? items
+      : items.filter((item) => selectedTags.some((t) => item.tags.includes(t)));
+
+  const activeTagsData = derivedTags.filter((tg) => selectedTags.includes(tg.id));
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold">{t("gallery.hero")}</h2>
+            <p className="text-sm text-muted-foreground">
+              {total > 0
+                ? t("gallery.sharedCount").replace("{{count}}", String(total))
+                : t("gallery.noShares")}
+            </p>
+          </div>
+          {activeTagsData.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {activeTagsData.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-primary text-primary-foreground"
+                >
+                  {tag.name}
+                  <button onClick={() => toggleTag(tag.id)} className="hover:bg-primary-foreground/20 rounded-full p-0.5">
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Tag pills for filtering */}
+        {derivedTags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {derivedTags.slice(0, 20).map((tag) => (
+              <button
+                key={tag.id}
+                onClick={() => toggleTag(tag.id)}
+                className={cn(
+                  "inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors",
+                  selectedTags.includes(tag.id)
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {tag.name}
+                <span className="opacity-60">{tag.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {loading ? (
+          <div className={cn(
+            "grid gap-4",
+            viewMode === "grid"
+              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              : "grid-cols-1"
+          )}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-xl border bg-card overflow-hidden animate-pulse">
+                <div className="h-32 bg-muted" />
+                <div className="p-4 space-y-2">
+                  <div className="h-4 w-3/4 rounded bg-muted" />
+                  <div className="h-3 w-full rounded bg-muted" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <Globe className="size-16 text-muted-foreground/20 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">{t("gallery.noShares")}</h3>
+          </div>
+        ) : (
+          <>
+            <div className={cn(
+              "grid gap-4",
+              viewMode === "grid"
+                ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                : "grid-cols-1"
+            )}>
+              {filtered.map((item) => (
+                <GalleryCard key={item.shareToken} item={item} />
+              ))}
+            </div>
+            {loadingMore && (
+              <div className="flex justify-center py-6">
+                <RefreshCw className="size-4 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {hasMore && <div ref={sentinelRef} className="h-1" />}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Memory Content
+// ---------------------------------------------------------------------------
 
 export function MemoryContent() {
   const { t } = useTranslation();
@@ -102,6 +275,11 @@ export function MemoryContent() {
     displayCount === 1
       ? t("content.memoryCountOne").replace("{{count}}", String(displayCount))
       : t("content.memoryCountMany").replace("{{count}}", String(displayCount));
+
+  // Show gallery view when "gallery" collection is selected
+  if (selectedCollection === "gallery") {
+    return <GalleryView />;
+  }
 
   return (
     <>

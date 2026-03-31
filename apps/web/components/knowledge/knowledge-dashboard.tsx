@@ -48,6 +48,7 @@ export function KnowledgeDashboard() {
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null);
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
@@ -113,6 +114,7 @@ export function KnowledgeDashboard() {
   };
 
   const handleDrillDown = (nodeId: string) => {
+    setFocusNodeId(nodeId);
     fetchNodeDetail(nodeId);
   };
 
@@ -177,7 +179,9 @@ export function KnowledgeDashboard() {
             nodes={nodes}
             edges={edges}
             onNodeClick={handleNodeClick}
+            onBackgroundClick={() => setSelectedNode(null)}
             selectedNodeId={selectedNode?.id}
+            focusNodeId={focusNodeId}
           />
         )}
 

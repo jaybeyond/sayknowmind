@@ -10,15 +10,19 @@ export async function GET(request: NextRequest) {
   try { userId = await getUserIdFromRequest(); } catch { /* auth error */ }
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const unreadOnly = request.nextUrl.searchParams.get("unread") === "true";
-  const limit = parseInt(request.nextUrl.searchParams.get("limit") ?? "50", 10);
+  try {
+    const unreadOnly = request.nextUrl.searchParams.get("unread") === "true";
+    const limit = parseInt(request.nextUrl.searchParams.get("limit") ?? "50", 10);
 
-  const [notifications, unreadCount] = await Promise.all([
-    getNotifications(userId, { unreadOnly, limit }),
-    getUnreadCount(userId),
-  ]);
+    const [notifications, unreadCount] = await Promise.all([
+      getNotifications(userId, { unreadOnly, limit }),
+      getUnreadCount(userId),
+    ]);
 
-  return NextResponse.json({ notifications, unreadCount });
+    return NextResponse.json({ notifications, unreadCount });
+  } catch {
+    return NextResponse.json({ notifications: [], unreadCount: 0 });
+  }
 }
 
 /** PATCH /api/notifications — mark as read */

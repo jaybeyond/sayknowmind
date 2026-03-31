@@ -443,7 +443,7 @@ export function MemoryCard({
               fill
               className="object-cover"
               unoptimized
-              priority
+              loading="lazy"
             />
           </div>
         ) : isVideo && fileUrl ? (

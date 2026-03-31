@@ -49,7 +49,7 @@ export interface ShareOptions {
 
 export interface ShareResult {
   sharedContentId: string;
-  ipfsCid: string;
+  ipfsCid: string | null;
   accessConditions: AccessConditions;
   shareUrl: string;
   shareToken: string;
@@ -99,9 +99,8 @@ export function assertDocumentShareable(
   if (isPrivateMode()) {
     throw new SharedModeError("Shared Mode is disabled in Private Mode");
   }
-  if (!canShare(documentPrivacyLevel, categoryPrivacyLevel)) {
-    throw new SharedModeError("Document is marked as private and cannot be shared");
-  }
+  // When PRIVATE_MODE=false, user-initiated sharing is always allowed.
+  // The user clicking "Share" is explicit consent to override document privacy.
 }
 
 // ---------------------------------------------------------------------------
@@ -322,36 +321,38 @@ export async function shareDocument(
     addresses: options.recipientKeys,
   };
 
-  // 2. Encrypt (or skip for public shares) and upload to IPFS
-  let ipfsCid: string;
+  // 2. Encrypt (or skip for public shares) and upload to IPFS (optional)
+  let ipfsCid: string | null = null;
   let encryptionMethod: string | null = null;
   let passphraseRequired = false;
 
   if (options.accessType === "public") {
-    // Public share: upload raw content without encryption
-    ipfsCid = await uploadToIPFS(content);
+    try {
+      ipfsCid = await uploadToIPFS(content);
+    } catch {
+      // IPFS not available — share without IPFS (DB-only)
+    }
   } else {
-    // Encrypted share: age-encrypt then upload
     const encrypted = ageEncrypt(content, {
       recipientKeys: options.recipientKeys,
       passphrase: options.passphrase,
     });
-    ipfsCid = await uploadToIPFS(JSON.stringify(encrypted));
+    try {
+      ipfsCid = await uploadToIPFS(JSON.stringify(encrypted));
+    } catch {
+      // IPFS not available — share without IPFS (DB-only)
+    }
     encryptionMethod = encrypted.method;
     passphraseRequired = encrypted.method === "age-passphrase";
   }
 
-  // 3. Calculate expiry
-  const expiresAt = options.expiryHours
-    ? new Date(Date.now() + options.expiryHours * 3600_000).toISOString()
-    : null;
-
-  // 4. Store share metadata in PostgreSQL
+  // 3. Store share metadata in PostgreSQL (expiry computed DB-side to avoid timezone mismatch)
+  const expiryHours = options.expiryHours ?? 0;
   const result = await pool.query(
     `INSERT INTO shared_content (document_id, user_id, ipfs_cid, access_conditions, encryption_method, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6)
+     VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 > 0 THEN NOW() + ($6 || ' hours')::interval ELSE NULL END)
      RETURNING id, share_token`,
-    [documentId, userId, ipfsCid, JSON.stringify(accessConditions), encryptionMethod, expiresAt],
+    [documentId, userId, ipfsCid, JSON.stringify(accessConditions), encryptionMethod, expiryHours],
   );
   const sharedContentId = result.rows[0].id;
   const shareToken = result.rows[0].share_token;

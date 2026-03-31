@@ -7,7 +7,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 /** GET /api/documents/:id/related — fetch related documents */
 export async function GET(_request: NextRequest, context: RouteContext) {
-  const userId = await getUserIdFromRequest();
+  let userId: string | null = null;
+  try { userId = await getUserIdFromRequest(); } catch { /* auth error */ }
   if (!userId) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
