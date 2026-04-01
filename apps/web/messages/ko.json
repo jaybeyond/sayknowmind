@@ -130,6 +130,11 @@
     "noResponse": "응답이 생성되지 않았습니다.",
     "stop": "중지"
   },
+  "usage": {
+    "remaining": "무료 {{limit}}회 중 {{count}}회 남음",
+    "exceeded": "일일 무료 한도 초과",
+    "addKey": "API 키 추가"
+  },
   "ingest": {
     "addUrl": "URL 추가",
     "uploadFile": "파일 업로드",

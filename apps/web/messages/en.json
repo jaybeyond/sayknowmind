@@ -130,6 +130,11 @@
     "noResponse": "No response generated.",
     "stop": "Stop"
   },
+  "usage": {
+    "remaining": "{{count}} of {{limit}} free calls remaining",
+    "exceeded": "Daily free limit reached",
+    "addKey": "Add API Key"
+  },
   "ingest": {
     "addUrl": "Add URL",
     "uploadFile": "Upload File",

@@ -350,6 +350,7 @@ export function MemoryEditModal({
                     src={memory.ogImage}
                     alt=""
                     className="w-full h-32 object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
                   />
                   <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] bg-background/80 text-muted-foreground backdrop-blur-sm">
                     {t("edit.currentImage")}

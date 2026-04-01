@@ -4,53 +4,68 @@ import { useEffect, useRef } from "react";
 import { useMemoryStore } from "@/store/memory-store";
 
 /**
- * Hook that subscribes to the SSE stream at /api/events/stream.
- * When a document is created or ingest completes, triggers a store refresh.
+ * Hook that subscribes to the SSE stream at /api/events/stream using fetch.
+ * Uses fetch (not EventSource) to avoid browser console ERR_HTTP2_PROTOCOL_ERROR spam.
  * Auto-reconnects on disconnect with exponential backoff.
  */
 export function useDocumentEvents() {
   const fetchMemories = useMemoryStore((s) => s.fetchMemories);
   const retryRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    let es: EventSource | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
 
-    function connect() {
-      es = new EventSource("/api/events/stream");
+    async function connect() {
+      if (stopped) return;
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-      es.onopen = () => {
+      try {
+        const res = await fetch("/api/events/stream", {
+          signal: controller.signal,
+          headers: { Accept: "text/event-stream" },
+        });
+        if (!res.ok || !res.body) throw new Error("SSE connect failed");
+
         retryRef.current = 0; // Reset backoff on successful connection
-      };
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-      // Refresh store when a new doc is created (shows as "processing")
-      es.addEventListener("document:created", () => {
-        fetchMemories();
-      });
+        while (!stopped) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
 
-      // Refresh store when ingest finishes (shows AI summary, tags, category)
-      es.addEventListener("ingest:completed", () => {
-        fetchMemories();
-      });
+          for (const line of lines) {
+            if (line.startsWith("event: document:created") ||
+                line.startsWith("event: ingest:completed") ||
+                line.startsWith("event: ingest:failed")) {
+              fetchMemories();
+            }
+          }
+        }
+      } catch {
+        // Silently handle — no console errors
+      }
 
-      // Also refresh on failure so the UI shows the failed status
-      es.addEventListener("ingest:failed", () => {
-        fetchMemories();
-      });
-
-      es.onerror = () => {
-        es?.close();
-        // Reconnect with exponential backoff (1s, 2s, 4s, 8s, max 30s)
-        const delay = Math.min(1000 * Math.pow(2, retryRef.current), 30_000);
+      // Reconnect with exponential backoff (2s, 4s, 8s, 16s, max 30s)
+      if (!stopped) {
+        const delay = Math.min(2000 * Math.pow(2, retryRef.current), 30_000);
         retryRef.current++;
         timer = setTimeout(connect, delay);
-      };
+      }
     }
 
     connect();
 
     return () => {
-      es?.close();
+      stopped = true;
+      abortRef.current?.abort();
       if (timer) clearTimeout(timer);
     };
   }, [fetchMemories]);

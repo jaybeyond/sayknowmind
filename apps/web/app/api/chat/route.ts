@@ -5,6 +5,8 @@ import { pool } from "@/lib/db";
 import { runPipeline } from "@/lib/agents/pipeline";
 import { StreamWriter } from "@/lib/agents/stream-writer";
 import { ErrorCode } from "@/lib/types";
+import { getUserProviders } from "@/lib/provider-db";
+import { checkAndIncrementUsage } from "@/lib/usage-limit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,17 +21,34 @@ export async function POST(request: NextRequest) {
     const blocked = checkAntiBot(request, userId);
     if (blocked) return blocked;
 
+    // Load provider configs from DB (AES-256-GCM encrypted, per-user)
+    let providers: Array<{ id: string; apiKey: string; model: string; baseUrl: string }> = [];
+    try {
+      providers = await getUserProviders(userId);
+    } catch (err) {
+      console.error("[chat] Failed to load user providers:", err);
+    }
+
+    // Daily usage limit: 10/day for free tier (no own API keys)
+    const usage = await checkAndIncrementUsage(userId);
+    if (!usage.allowed) {
+      return NextResponse.json(
+        {
+          code: "DAILY_LIMIT_EXCEEDED",
+          message: `Daily free limit reached (${usage.limit}/day). Add your own API key in Settings to get unlimited access.`,
+          used: usage.used,
+          limit: usage.limit,
+          timestamp: new Date().toISOString(),
+        },
+        { status: 429 },
+      );
+    }
+
     const body = await request.json();
-    const { message, conversationId: reqConvId, providers: rawProviders } = body as {
+    const { message, conversationId: reqConvId } = body as {
       message?: string;
       conversationId?: string;
-      providers?: Array<{ id?: string; apiKey?: string; model?: string; baseUrl?: string }>;
     };
-
-    // Validate provider configs — filter to only complete entries
-    const providers = (rawProviders ?? [])
-      .filter((p) => p.apiKey && p.model && p.baseUrl)
-      .map((p) => ({ id: p.id ?? "custom", apiKey: p.apiKey!, model: p.model!, baseUrl: p.baseUrl! }));
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
       return NextResponse.json(

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import { type Memory } from "@/store/memory-store";
 import {
   X,
@@ -129,13 +128,12 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
         {/* File preview (images/videos) */}
         {m.docType === "file" && m.fileType === "image" && m.ogImage && (
           <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted">
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={m.ogImage}
               alt={m.title}
-              width={400}
-              height={300}
               className="w-full h-auto object-contain max-h-64"
-              unoptimized
+              onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
             />
           </div>
         )}

@@ -166,9 +166,9 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
   zai: "https://open.bigmodel.cn/api/paas",
 };
 
-function getBaseUrl(provider: ProviderDef): string {
+function getBaseUrl(provider: ProviderDef, keyValues: Record<string, string>): string {
   if (provider.id === "cloudflare") {
-    const accountId = localStorage.getItem("sayknowmind-cloudflare-account-id") ?? "";
+    const accountId = keyValues["sayknowmind-cloudflare-account-id"] ?? "";
     return accountId
       ? `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai`
       : "";
@@ -261,7 +261,7 @@ function ProviderCard({
   const [loadingModels, setLoadingModels] = useState(false);
 
   const fetchModels = async (apiKey?: string) => {
-    const baseUrl = getBaseUrl(provider);
+    const baseUrl = getBaseUrl(provider, values);
     const key = apiKey ?? mainValue;
     if (!baseUrl || !key) return;
     setLoadingModels(true);
@@ -443,32 +443,40 @@ export function AITab() {
   ];
 
   useEffect(() => {
-    const syncFromStorage = () => {
-      setChatMode(localStorage.getItem("sayknowmind-chat-mode") ?? "simple");
-      setActiveProviderId(localStorage.getItem("sayknowmind-active-provider") ?? "");
+    // Load chat mode from localStorage (UI preference, not a secret)
+    setChatMode(localStorage.getItem("sayknowmind-chat-mode") ?? "simple");
+    setEmbeddingProvider(localStorage.getItem("sayknowmind-embedding-provider") ?? "openai");
+    setEmbeddingModel(localStorage.getItem("sayknowmind-embedding-model") ?? "text-embedding-3-small");
 
-      // Load all stored keys
-      const loaded: Record<string, string> = {};
-      const models: Record<string, string> = {};
-      for (const p of providers) {
-        const v = localStorage.getItem(p.keyStorageId);
-        if (v) loaded[p.keyStorageId] = v;
-        for (const f of p.extraFields ?? []) {
-          const fv = localStorage.getItem(f.storageId);
-          if (fv) loaded[f.storageId] = fv;
+    // Load provider configs from server DB (keys are masked)
+    fetch("/api/settings/providers")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data?.providers) return;
+        setActiveProviderId(data.activeProviderId ?? "");
+        const loaded: Record<string, string> = {};
+        const models: Record<string, string> = {};
+        for (const p of data.providers as Array<{ id: string; apiKey: string; model: string; baseUrl: string; extraFields?: Record<string, string> }>) {
+          const def = providers.find((d) => d.id === p.id);
+          if (def) {
+            loaded[def.keyStorageId] = p.apiKey; // masked value from server
+            if (p.model) models[p.id] = p.model;
+            // Load extra fields
+            if (p.extraFields && def.extraFields) {
+              for (const f of def.extraFields) {
+                const key = f.id.replace(`${p.id}-`, "").replace("-", "_");
+                const val = p.extraFields[key] ?? p.extraFields[f.id] ?? "";
+                if (val) loaded[f.storageId] = String(val);
+              }
+            }
+          }
         }
-        // Load model per provider
-        const mv = localStorage.getItem(`sayknowmind-${p.id}-model`);
-        if (mv) models[p.id] = mv;
-      }
-      setKeyValues(loaded);
-      setModelValues(models);
-
-      // Load embedding config
-      setEmbeddingProvider(localStorage.getItem("sayknowmind-embedding-provider") ?? "openai");
-      setEmbeddingModel(localStorage.getItem("sayknowmind-embedding-model") ?? "text-embedding-3-small");
-    };
-    syncFromStorage();
+        setKeyValues(loaded);
+        setModelValues(models);
+      })
+      .catch(() => {
+        // Server load failed — start with empty state
+      });
   }, []);
 
   const handleModeChange = (id: string) => {
@@ -483,7 +491,6 @@ export function AITab() {
 
   const handleSetActive = (providerId: string) => {
     setActiveProviderId(providerId);
-    localStorage.setItem("sayknowmind-active-provider", providerId);
     toast.success(t("ai.providerActivated").replace("{{name}}", providers.find((p) => p.id === providerId)?.name ?? providerId));
   };
 
@@ -525,33 +532,12 @@ export function AITab() {
   };
 
   const handleSave = async () => {
-    for (const [key, value] of Object.entries(keyValues)) {
-      if (value) {
-        localStorage.setItem(key, value);
-      } else {
-        localStorage.removeItem(key);
-      }
-    }
-    // Save model values
-    for (const [providerId, model] of Object.entries(modelValues)) {
-      if (model) {
-        localStorage.setItem(`sayknowmind-${providerId}-model`, model);
-      } else {
-        localStorage.removeItem(`sayknowmind-${providerId}-model`);
-      }
-    }
-    // Save active provider
-    if (activeProviderId) {
-      localStorage.setItem("sayknowmind-active-provider", activeProviderId);
-    } else {
-      localStorage.removeItem("sayknowmind-active-provider");
-    }
-
-    // Save embedding config
+    // Save UI preferences to localStorage (not secrets)
+    localStorage.setItem("sayknowmind-chat-mode", chatMode);
     localStorage.setItem("sayknowmind-embedding-provider", embeddingProvider);
     localStorage.setItem("sayknowmind-embedding-model", embeddingModel);
 
-    // Sync provider configs to server (for ingestion pipeline)
+    // Save provider configs to server DB (AES-256-GCM encrypted)
     try {
       const serverProviders = providers
         .filter((p) => p.category === "cloud" && keyValues[p.keyStorageId])
@@ -559,11 +545,16 @@ export function AITab() {
           id: p.id,
           apiKey: keyValues[p.keyStorageId],
           model: modelValues[p.id] ?? "",
-          baseUrl: getBaseUrl(p),
+          baseUrl: getBaseUrl(p, keyValues),
+          extraFields: Object.fromEntries(
+            (p.extraFields ?? [])
+              .map((f) => [f.id, keyValues[f.storageId] ?? ""])
+              .filter(([, v]) => v),
+          ),
         }))
         .filter((p) => p.apiKey && p.baseUrl);
 
-      await fetch("/api/settings/providers", {
+      const res = await fetch("/api/settings/providers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -572,11 +563,12 @@ export function AITab() {
           embedding: cloudMode ? { provider: embeddingProvider, model: embeddingModel } : undefined,
         }),
       });
-    } catch {
-      // Server sync failed silently — localStorage still works for chat
-    }
 
-    toast.success(t("settings.saved"));
+      if (!res.ok) throw new Error("Save failed");
+      toast.success(t("settings.saved"));
+    } catch {
+      toast.error(t("settings.saveFailed") ?? "Failed to save settings");
+    }
   };
 
   const cloudProviders = providers.filter((p) => p.category === "cloud");

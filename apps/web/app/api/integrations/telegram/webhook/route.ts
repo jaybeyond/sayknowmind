@@ -20,6 +20,7 @@ import { parseFile } from "@/lib/ingest/parsers";
 import { saveFile } from "@/lib/ingest/file-storage";
 import { listCategories, type CategoryRow } from "@/lib/categories/store";
 import { callAiCloudFirst } from "@/lib/agents/cloud-ai";
+import { checkAndIncrementUsage } from "@/lib/usage-limit";
 
 // ── i18n Message Map ─────────────────────────────────────────
 
@@ -70,6 +71,7 @@ const t: Record<string, Record<Lang, string>> = {
   aiFallbackSearch:   { en: "🔍 Related documents:", ko: "🔍 관련 문서:", ja: "🔍 関連ドキュメント:", zh: "🔍 相关文档:" },
   aiUnavailable:      { en: "AI service is temporarily unavailable. Please try again shortly.", ko: "AI 서비스에 일시적으로 연결할 수 없습니다. 잠시 후 다시 시도해주세요.", ja: "AIサービスに一時的に接続できません。しばらくしてからもう一度お試しください。", zh: "AI服务暂时无法连接。请稍后再试。" },
   aiError:            { en: "❌ An error occurred. Please try again.", ko: "❌ 처리 중 오류가 발생했습니다. 다시 시도해주세요.", ja: "❌ エラーが発生しました。もう一度お試しください。", zh: "❌ 发生错误。请重试。" },
+  dailyLimitReached:  { en: "⚠️ Daily free limit reached ({used}/{limit}).\nAdd your own API key in Settings to get unlimited access.", ko: "⚠️ 일일 무료 한도에 도달했습니다 ({used}/{limit}).\n설정에서 직접 API 키를 추가하면 무제한으로 이용할 수 있습니다.", ja: "⚠️ 1日の無料制限に達しました ({used}/{limit})。\n設定でAPIキーを追加すると無制限で利用できます。", zh: "⚠️ 已达每日免费限额 ({used}/{limit})。\n在设置中添加API密钥即可无限使用。" },
   imageLabel:         { en: "Telegram image", ko: "텔레그램 이미지", ja: "Telegram画像", zh: "Telegram图片" },
   jobDone:            { en: "✅ AI analysis complete for <b>{title}</b>:\n{summary}", ko: "✅ <b>{title}</b> AI 분석 완료:\n{summary}", ja: "✅ <b>{title}</b> AI分析完了:\n{summary}", zh: "✅ <b>{title}</b> AI分析完成:\n{summary}" },
   jobFailed:          { en: "⚠️ AI analysis failed for <b>{title}</b>. The document is saved but not summarized.", ko: "⚠️ <b>{title}</b> AI 분석 실패. 문서는 저장되었으나 요약되지 않았습니다.", ja: "⚠️ <b>{title}</b> AI分析に失敗。ドキュメントは保存済みですが要約されていません。", zh: "⚠️ <b>{title}</b> AI分析失败。文档已保存但未生成摘要。" },
@@ -599,7 +601,8 @@ export async function POST(request: NextRequest) {
     const cbBotToken = fallbackToken;
 
     const cbLinked = await pool.query(
-      `SELECT user_id FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1`,
+      `SELECT user_id FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1
+       ORDER BY linked_at DESC NULLS LAST LIMIT 1`,
       [cbTgUserId],
     ).catch(() => ({ rows: [] }));
     const cbUserId = cbLinked.rows[0]?.user_id as string | undefined;
@@ -775,9 +778,10 @@ export async function POST(request: NextRequest) {
   const L = userLang;
   console.log(`[telegram/webhook] msg from=${tgUserId} type=${msgType} userToken=${userToken ? "yes" : "no"} fallback=${fallbackToken ? "yes" : "no"}`);
 
-  // Look up linked SayKnowMind user
+  // Look up linked SayKnowMind user (prefer most recently linked if duplicates exist)
   const linked = await pool.query(
-    `SELECT user_id FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1`,
+    `SELECT user_id FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1
+     ORDER BY linked_at DESC NULLS LAST LIMIT 1`,
     [tgUserId],
   ).catch(() => ({ rows: [] }));
   let userId = linked.rows[0]?.user_id as string | undefined;
@@ -790,14 +794,12 @@ export async function POST(request: NextRequest) {
       const linkCode = text.split(" ")[1];
       if (linkCode) {
         // Link (or re-link) with code from web settings
-        // First, clear any existing link for this telegram user so we can re-link
-        if (userId) {
-          await pool.query(
-            `UPDATE channel_links SET channel_user_id = NULL, channel_username = NULL, linked_at = NULL
-             WHERE channel = 'telegram' AND channel_user_id = $1`,
-            [tgUserId],
-          ).catch(() => {});
-        }
+        // Delete ALL existing links for this telegram user to prevent duplicates
+        await pool.query(
+          `DELETE FROM channel_links
+           WHERE channel = 'telegram' AND channel_user_id = $1 AND link_code IS DISTINCT FROM $2`,
+          [tgUserId, linkCode],
+        ).catch(() => {});
         const linkResult = await pool.query(
           `UPDATE channel_links
            SET channel_user_id = $1, channel_username = $2, linked_at = NOW()
@@ -817,6 +819,12 @@ export async function POST(request: NextRequest) {
       } else {
         // Auto-create account for new Telegram users
         try {
+          // Clean up any stale/orphaned links for this Telegram user
+          await pool.query(
+            `DELETE FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1`,
+            [tgUserId],
+          ).catch(() => {});
+
           const newUserId = crypto.randomUUID();
           const tgUsername = message.from.username ?? `tg_${tgUserId}`;
           const displayName = message.from.first_name || tgUsername;
@@ -836,7 +844,7 @@ export async function POST(request: NextRequest) {
           );
           const actualUserId = userRow.rows[0]?.id ?? newUserId;
 
-          // Create channel_links entry
+          // Create channel_links entry (single link per Telegram user)
           await pool.query(
             `INSERT INTO channel_links (user_id, channel, channel_user_id, channel_username, linked_at)
              VALUES ($1, 'telegram', $2, $3, NOW())
@@ -995,6 +1003,12 @@ export async function POST(request: NextRequest) {
 
   if (!userId) {
     try {
+      // Clean up any stale/orphaned links for this Telegram user first
+      await pool.query(
+        `DELETE FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1`,
+        [tgUserId],
+      ).catch(() => {});
+
       const newUserId = crypto.randomUUID();
       const tgUsername = message.from.username ?? `tg_${tgUserId}`;
       const displayName = message.from.first_name || tgUsername;
@@ -1280,6 +1294,13 @@ export async function POST(request: NextRequest) {
 
     // Save user message
     await saveMessage(convId, "user", text);
+
+    // Daily usage limit check
+    const usage = await checkAndIncrementUsage(userId);
+    if (!usage.allowed) {
+      await sendMessage(botToken, chatId, msg("dailyLimitReached", L, { used: usage.used, limit: usage.limit }));
+      return NextResponse.json({ ok: true });
+    }
 
     const systemPrompt = buildSystemPrompt({
       context,

@@ -130,6 +130,11 @@
     "noResponse": "回答が生成されませんでした。",
     "stop": "停止"
   },
+  "usage": {
+    "remaining": "無料{{limit}}回中{{count}}回残り",
+    "exceeded": "1日の無料制限に達しました",
+    "addKey": "APIキーを追加"
+  },
   "ingest": {
     "addUrl": "URLを追加",
     "uploadFile": "ファイルをアップロード",

@@ -3,79 +3,15 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Plus, MessageSquare, Trash2 } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Zap, Key } from "lucide-react";
 import { ChatMessageBubble, type ChatMessage } from "./chat-message";
 import { ChatInput } from "./chat-input";
 import type { ThinkingPhase } from "./thinking-indicator";
 import type { SourceCardData } from "./source-card";
 import { useTranslation } from "@/lib/i18n";
 
-// ── Provider base URL mapping (matches ai-tab.tsx provider IDs) ──
-const PROVIDER_BASE_URLS: Record<string, string> = {
-  openrouter: "https://openrouter.ai/api",
-  openai: "https://api.openai.com",
-  anthropic: "https://api.anthropic.com",
-  grok: "https://api.x.ai",
-  google: "https://generativelanguage.googleapis.com",
-  upstage: "https://api.upstage.ai",
-  nvidia: "https://integrate.api.nvidia.com",
-  venice: "https://api.venice.ai",
-  zai: "https://open.bigmodel.cn/api/paas",
-};
-
-const PROVIDER_IDS = [
-  "openrouter", "openai", "anthropic", "zai", "grok",
-  "google", "upstage", "venice", "nvidia", "cloudflare",
-];
-
-/** Build provider config for a single provider ID from localStorage */
-function buildProvider(providerId: string): { id: string; apiKey: string; model: string; baseUrl: string } | null {
-  const keyStorageId = providerId === "cloudflare"
-    ? "sayknowmind-cloudflare-token"
-    : `sayknowmind-${providerId}-key`;
-  const apiKey = localStorage.getItem(keyStorageId);
-  if (!apiKey) return null;
-
-  const model = localStorage.getItem(`sayknowmind-${providerId}-model`) ?? "";
-  if (!model) return null;
-
-  let baseUrl = PROVIDER_BASE_URLS[providerId];
-  if (providerId === "cloudflare") {
-    const accountId = localStorage.getItem("sayknowmind-cloudflare-account-id") ?? "";
-    if (!accountId) return null;
-    baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai`;
-  }
-
-  if (!baseUrl) return null;
-  return { id: providerId, apiKey, model, baseUrl };
-}
-
-/** Get all configured providers — active first, then fallbacks */
-function getProviders(): Array<{ id: string; apiKey: string; model: string; baseUrl: string }> {
-  if (typeof window === "undefined") return [];
-
-  const activeId = localStorage.getItem("sayknowmind-active-provider") ?? "";
-  const result: Array<{ id: string; apiKey: string; model: string; baseUrl: string }> = [];
-  const seen = new Set<string>();
-
-  // Active provider goes first
-  if (activeId) {
-    const active = buildProvider(activeId);
-    if (active) {
-      result.push(active);
-      seen.add(activeId);
-    }
-  }
-
-  // Then all other configured providers as fallbacks
-  for (const id of PROVIDER_IDS) {
-    if (seen.has(id)) continue;
-    const p = buildProvider(id);
-    if (p) result.push(p);
-  }
-
-  return result;
-}
+// Provider keys are now stored server-side in DB (AES-256-GCM encrypted).
+// No API keys in localStorage or request body.
 
 type ConversationMeta = {
   id: string;
@@ -108,6 +44,17 @@ export function ChatPage() {
   );
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const abortRef = React.useRef<AbortController | null>(null);
+  const [usage, setUsage] = React.useState<{ hasOwnKeys: boolean; used: number; limit: number; remaining: number } | null>(null);
+
+  // Load usage status
+  React.useEffect(() => {
+    fetch("/api/usage").then((r) => r.json()).then(setUsage).catch(() => {});
+  }, []);
+
+  // Refresh usage after each message send
+  const refreshUsage = () => {
+    fetch("/api/usage").then((r) => r.json()).then(setUsage).catch(() => {});
+  };
 
   // Auto-scroll to bottom
   React.useEffect(() => {
@@ -255,7 +202,7 @@ export function ChatPage() {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
-        body: JSON.stringify({ message, conversationId, providers: getProviders() }),
+        body: JSON.stringify({ message, conversationId }),
         signal: controller.signal,
       });
 
@@ -331,8 +278,9 @@ export function ChatPage() {
                     : m,
                 ),
               );
-              // Refresh conversation list
+              // Refresh conversation list and usage
               fetchConversations();
+              refreshUsage();
             } else if (event.type === "error") {
               const errorMsg = event.message ?? "An error occurred";
               setMessages((prev) =>
@@ -445,7 +393,28 @@ export function ChatPage() {
         </div>
 
         <div className="border-t p-4">
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto space-y-2">
+            {usage && !usage.hasOwnKeys && (
+              <div className={cn(
+                "flex items-center justify-between text-xs px-3 py-1.5 rounded-lg",
+                usage.remaining > 3
+                  ? "bg-muted text-muted-foreground"
+                  : usage.remaining > 0
+                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                    : "bg-destructive/10 text-destructive"
+              )}>
+                <span className="flex items-center gap-1.5">
+                  <Zap className="size-3" />
+                  {usage.remaining > 0
+                    ? t("usage.remaining").replace("{{count}}", String(usage.remaining)).replace("{{limit}}", String(usage.limit))
+                    : t("usage.exceeded")}
+                </span>
+                <a href="/settings" className="flex items-center gap-1 hover:underline font-medium">
+                  <Key className="size-3" />
+                  {t("usage.addKey")}
+                </a>
+              </div>
+            )}
             <ChatInput
               onSend={handleSend}
               onStop={handleStop}

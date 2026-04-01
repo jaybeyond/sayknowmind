@@ -38,45 +38,66 @@ export function NotificationBell() {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // SSE stream for real-time updates (with backoff, max 5 retries)
+  // SSE stream for real-time updates using fetch (avoids console ERR_HTTP2_PROTOCOL_ERROR)
   useEffect(() => {
-    let eventSource: EventSource | null = null;
-    let retryTimeout: ReturnType<typeof setTimeout>;
+    let timer: ReturnType<typeof setTimeout>;
     let retryCount = 0;
+    let stopped = false;
+    let controller: AbortController | null = null;
     const MAX_RETRIES = 5;
 
-    function connect() {
-      if (retryCount >= MAX_RETRIES) return;
+    async function connect() {
+      if (stopped || retryCount >= MAX_RETRIES) return;
+      controller = new AbortController();
 
-      eventSource = new EventSource("/api/notifications/stream");
+      try {
+        const res = await fetch("/api/notifications/stream", {
+          signal: controller.signal,
+          headers: { Accept: "text/event-stream" },
+        });
+        if (!res.ok || !res.body) throw new Error("SSE connect failed");
 
-      eventSource.addEventListener("connected", () => {
-        retryCount = 0; // Reset on successful connection
-      });
+        retryCount = 0;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-      eventSource.addEventListener("notification", (event) => {
-        try {
-          const notif = JSON.parse(event.data) as Notification;
-          setNotifications((prev) => [notif, ...prev].slice(0, 50));
-          setUnreadCount((prev) => prev + 1);
-        } catch { /* ignore */ }
-      });
+        while (!stopped) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
 
-      eventSource.onerror = () => {
-        eventSource?.close();
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const notif = JSON.parse(line.slice(6)) as Notification;
+              if (notif.id && notif.type) {
+                setNotifications((prev) => [notif, ...prev].slice(0, 50));
+                setUnreadCount((prev) => prev + 1);
+              }
+            } catch { /* ignore non-notification data */ }
+          }
+        }
+      } catch {
+        // Silently handle — no console errors
+      }
+
+      if (!stopped) {
         retryCount++;
         if (retryCount < MAX_RETRIES) {
-          // Exponential backoff: 5s, 10s, 20s, 40s
           const delay = 5000 * Math.pow(2, retryCount - 1);
-          retryTimeout = setTimeout(connect, delay);
+          timer = setTimeout(connect, delay);
         }
-      };
+      }
     }
 
     connect();
     return () => {
-      eventSource?.close();
-      clearTimeout(retryTimeout);
+      stopped = true;
+      controller?.abort();
+      clearTimeout(timer);
     };
   }, []);
 

@@ -6,6 +6,7 @@ import { indexDocument, queryEdgeQuake } from "@/lib/edgequake/client";
 import { createNotification } from "@/lib/notifications";
 import { detectLanguage } from "./language-detect";
 import { emitDocumentEvent } from "@/lib/events";
+import { checkAndIncrementUsage } from "@/lib/usage-limit";
 
 interface JobRow {
   id: string;
@@ -115,6 +116,13 @@ async function processJob(job: JobRow): Promise<void> {
     const doc = await getDocument(documentId);
     if (!doc) {
       await failJob(jobId, "Document not found");
+      return;
+    }
+
+    // Daily usage limit check (1 count per document ingestion)
+    const usage = await checkAndIncrementUsage(userId);
+    if (!usage.allowed) {
+      await failJob(jobId, `Daily free limit reached (${usage.used}/${usage.limit}). Add your own API key in Settings for unlimited access.`);
       return;
     }
 

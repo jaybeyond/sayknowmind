@@ -42,13 +42,13 @@ export function GalleryCard({ item }: { item: GalleryItem }) {
       {/* Image or placeholder */}
       {item.ogImage ? (
         <div className="h-36 relative overflow-hidden bg-muted">
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src={item.ogImage}
             alt={item.title}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
-            unoptimized
+            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
           />
         </div>
       ) : (

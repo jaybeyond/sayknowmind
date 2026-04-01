@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
 import { useTranslation } from "@/lib/i18n";
 import { ShareDialog } from "./share-dialog";
+import { MemoryEditModal } from "./memory-edit-modal";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 
@@ -83,10 +84,11 @@ export function MemoryCard({
   context = "default",
   onSelect,
 }: MemoryCardProps) {
-  const { toggleFavorite, archiveMemory, trashMemory, restoreFromArchive, restoreFromTrash, permanentlyDelete, addUserTag } =
+  const { toggleFavorite, archiveMemory, trashMemory, restoreFromArchive, restoreFromTrash, permanentlyDelete, addUserTag, fetchMemories } =
     useMemoryStore();
   const { t } = useTranslation();
   const [shareOpen, setShareOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
   const [tagInputOpen, setTagInputOpen] = React.useState(false);
   const [tagValue, setTagValue] = React.useState("");
   const memoryTags = [...new Set(memory.tags)];
@@ -229,7 +231,7 @@ export function MemoryCard({
                 <Copy className="size-4 mr-2" />
                 {t("memory.copyUrl")}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onSelect?.(memory)}>
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
                 <Pencil className="size-4 mr-2" />
                 {t("common.edit")}
               </DropdownMenuItem>
@@ -304,6 +306,7 @@ export function MemoryCard({
           </form>
         )}
         <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
+        <MemoryEditModal open={editOpen} onOpenChange={setEditOpen} memory={memory} onSaved={() => fetchMemories()} />
       </div>
     );
   }
@@ -353,7 +356,7 @@ export function MemoryCard({
                 </a>
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={() => onSelect?.(memory)}>
+            <DropdownMenuItem onClick={() => setEditOpen(true)}>
               <Pencil className="size-4 mr-2" />
               {t("common.edit")}
             </DropdownMenuItem>
@@ -437,13 +440,13 @@ export function MemoryCard({
       >
         {memory.ogImage ? (
           <div className="h-36 relative overflow-hidden bg-muted">
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={memory.ogImage}
               alt={memory.title}
-              fill
-              className="object-cover"
-              unoptimized
+              className="absolute inset-0 w-full h-full object-cover"
               loading="lazy"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
           </div>
         ) : isVideo && fileUrl ? (
@@ -540,6 +543,7 @@ export function MemoryCard({
         </div>
       </button>
       <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
+      <MemoryEditModal open={editOpen} onOpenChange={setEditOpen} memory={memory} onSaved={() => fetchMemories()} />
     </div>
   );
 }

@@ -8,6 +8,7 @@
  */
 
 import { getOrderedProviders, type ProviderEntry } from "@/lib/provider-config";
+import { getUserProviders } from "@/lib/provider-db";
 
 const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 const AI_TIMEOUT = 60_000;
@@ -19,6 +20,8 @@ export interface AiCallOptions {
   images?: string[];
   /** Override providers instead of reading from config */
   providers?: ProviderEntry[];
+  /** User ID — loads encrypted providers from DB when set */
+  userId?: string;
   /** Timeout in ms (default 60s) */
   timeout?: number;
 }
@@ -136,8 +139,19 @@ async function callAiServer(
  * Always falls back to AI server if all cloud providers fail or none configured.
  */
 export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
-  const { system, message, images, timeout = AI_TIMEOUT } = opts;
-  const providers = opts.providers ?? getOrderedProviders();
+  const { system, message, images, userId, timeout = AI_TIMEOUT } = opts;
+
+  // Priority: explicit providers > DB (per-user) > JSON file/ENV fallback
+  let providers = opts.providers;
+  if (!providers && userId) {
+    try {
+      const dbProviders = await getUserProviders(userId);
+      if (dbProviders.length > 0) providers = dbProviders;
+    } catch (err) {
+      console.warn("[cloud-ai] Failed to load DB providers:", err);
+    }
+  }
+  if (!providers) providers = getOrderedProviders();
 
   // Try cloud providers in order
   for (const provider of providers) {
