@@ -137,6 +137,8 @@ services:
       EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}
       AI_SERVER_URL: http://ai-server:4000
       AI_API_KEY: ${AI_API_KEY:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
       IPFS_KUBO_API: http://ipfs:5001
       IPFS_GATEWAY: http://ipfs:8080/ipfs
     depends_on:
