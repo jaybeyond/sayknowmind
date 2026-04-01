@@ -438,7 +438,7 @@ export function MemoryCard({
         className="w-full text-left cursor-pointer"
         onClick={handleClick}
       >
-        {memory.ogImage ? (
+        {memory.ogImage && !memory.ogImage.includes("opengraph.githubassets.com") ? (
           <div className="h-36 relative overflow-hidden bg-muted">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img

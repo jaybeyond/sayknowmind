@@ -126,7 +126,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
       {/* Content */}
       <div className="overflow-auto h-[calc(100%-80px)] p-5 space-y-5">
         {/* File preview (images/videos) */}
-        {m.docType === "file" && m.fileType === "image" && m.ogImage && (
+        {m.docType === "file" && m.fileType === "image" && m.ogImage && !m.ogImage.includes("opengraph.githubassets.com") && (
           <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -321,7 +321,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
             {t("document.openOriginal")}
           </a>
         )}
-        {!m.url && m.docType === "file" && m.ogImage && (
+        {!m.url && m.docType === "file" && m.ogImage && !m.ogImage.includes("opengraph.githubassets.com") && (
           <a
             href={m.ogImage}
             target="_blank"

@@ -93,7 +93,7 @@ function ShareCard({
       </button>
 
       {/* Thumbnail / Header area */}
-      {item.ogImage ? (
+      {item.ogImage && !item.ogImage.includes("opengraph.githubassets.com") ? (
         <div className="relative h-36 bg-muted overflow-hidden">
           <img
             src={item.ogImage}
