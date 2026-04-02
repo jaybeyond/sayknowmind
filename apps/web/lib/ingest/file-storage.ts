@@ -32,6 +32,40 @@ export async function getFile(
   }
 }
 
+/**
+ * Download an OG image from an external URL and save it locally.
+ * Returns { relativePath, base64, contentType } on success, null on failure.
+ */
+export async function downloadOgImage(
+  documentId: string,
+  imageUrl: string,
+): Promise<{ relativePath: string; base64: string; contentType: string } | null> {
+  try {
+    const res = await fetch(imageUrl, {
+      signal: AbortSignal.timeout(10_000),
+      headers: { "User-Agent": "SayKnowMind/0.1" },
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+
+    const contentType = res.headers.get("content-type") ?? "image/png";
+    if (!contentType.startsWith("image/")) return null;
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    // Skip if too large (>2MB) or empty
+    if (buffer.length === 0 || buffer.length > 2 * 1024 * 1024) return null;
+
+    const ext = contentType.split("/")[1]?.split(";")[0]?.replace("jpeg", "jpg") || "png";
+    const fileName = `og.${ext}`;
+    const relativePath = await saveFile(documentId, fileName, buffer);
+    const base64 = buffer.toString("base64");
+
+    return { relativePath, base64, contentType };
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteFile(relativePath: string): Promise<void> {
   try {
     await unlink(join(UPLOADS_DIR, relativePath));

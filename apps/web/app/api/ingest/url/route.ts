@@ -5,6 +5,8 @@ import { fetchUrl } from "@/lib/ingest/url-fetcher";
 import { detectLanguage } from "@/lib/ingest/language-detect";
 import { insertDocument, assignDocumentCategory, findDuplicateByUrl, deduplicateName } from "@/lib/ingest/document-store";
 import { createJob } from "@/lib/ingest/job-queue";
+import { downloadOgImage } from "@/lib/ingest/file-storage";
+import { updateDocument } from "@/lib/ingest/document-store";
 import { ErrorCode } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
@@ -85,6 +87,21 @@ export async function POST(request: NextRequest) {
         ...fetched.metadata,
       },
     });
+
+    // Download and cache OG image locally (non-blocking for the response)
+    if (fetched.metadata.ogImage) {
+      downloadOgImage(documentId, fetched.metadata.ogImage).then(async (result) => {
+        if (result) {
+          await updateDocument(documentId, {
+            metadata: {
+              ogImage: `/api/og/${documentId}`,
+              ogImageBase64: result.base64,
+              ogImageContentType: result.contentType,
+            },
+          });
+        }
+      }).catch(() => {});
+    }
 
     // Assign to collection if specified
     if (categoryId) {
