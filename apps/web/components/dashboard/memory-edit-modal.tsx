@@ -344,7 +344,7 @@ export function MemoryEditModal({
               </label>
 
               {/* Existing OG image */}
-              {memory.ogImage && !memory.ogImage.includes("opengraph.githubassets.com") && (
+              {memory.ogImage && (
                 <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted">
                   <img
                     src={memory.ogImage}

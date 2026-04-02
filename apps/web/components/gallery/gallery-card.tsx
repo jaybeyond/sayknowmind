@@ -40,7 +40,7 @@ export function GalleryCard({ item }: { item: GalleryItem }) {
       className="group relative flex flex-col rounded-xl border bg-card overflow-hidden hover:bg-accent/30 transition-colors"
     >
       {/* Image or placeholder */}
-      {item.ogImage && !item.ogImage.includes("opengraph.githubassets.com") ? (
+      {item.ogImage ? (
         <div className="h-36 relative overflow-hidden bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
