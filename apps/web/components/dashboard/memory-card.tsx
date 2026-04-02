@@ -562,7 +562,7 @@ export function MemoryCard({
           onClick={() => setPlaying(false)}
         >
           <div
-            className="relative w-full max-w-2xl mx-4 aspect-video rounded-xl overflow-hidden bg-black shadow-2xl"
+            className="relative w-full max-w-lg mx-4 h-[80vh] rounded-xl overflow-hidden bg-black shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <iframe
