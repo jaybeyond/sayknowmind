@@ -442,23 +442,7 @@ export function MemoryCard({
         className="w-full text-left cursor-pointer"
         onClick={handleClick}
       >
-        {playing && embedUrl ? (
-          <div className="aspect-video relative overflow-hidden bg-black">
-            <iframe
-              src={embedUrl}
-              className="absolute inset-0 w-full h-full"
-              allow="autoplay; encrypted-media; picture-in-picture"
-              allowFullScreen
-              loading="lazy"
-            />
-            <button
-              className="absolute top-2 right-2 z-10 size-7 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors"
-              onClick={(e) => { e.stopPropagation(); setPlaying(false); }}
-            >
-              <XCircle className="size-4 text-white" />
-            </button>
-          </div>
-        ) : memory.ogImage ? (
+        {memory.ogImage ? (
           <div className="h-36 relative overflow-hidden bg-muted">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -570,6 +554,32 @@ export function MemoryCard({
       </button>
       <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
       <MemoryEditModal open={editOpen} onOpenChange={setEditOpen} memory={memory} onSaved={() => fetchMemories()} />
+
+      {/* Video embed modal */}
+      {playing && embedUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setPlaying(false)}
+        >
+          <div
+            className="relative w-full max-w-2xl mx-4 aspect-video rounded-xl overflow-hidden bg-black shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <iframe
+              src={embedUrl}
+              className="absolute inset-0 w-full h-full"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+            />
+            <button
+              className="absolute -top-10 right-0 size-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/40 transition-colors"
+              onClick={() => setPlaying(false)}
+            >
+              <XCircle className="size-5 text-white" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
