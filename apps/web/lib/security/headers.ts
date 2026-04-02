@@ -52,6 +52,7 @@ export function getSecurityHeaders(config: SecurityHeadersConfig = {}): Record<s
     `img-src 'self' data: blob: https:`,
     `font-src 'self' data: https://cdn.fontshare.com`,
     `connect-src ${connectSrc}`,
+    `frame-src 'self' https://www.instagram.com https://www.youtube.com https://www.tiktok.com https://player.vimeo.com`,
     `frame-ancestors 'none'`,
     `base-uri 'self'`,
     `form-action 'self'`,

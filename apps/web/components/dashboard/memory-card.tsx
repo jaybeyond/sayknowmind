@@ -33,7 +33,6 @@ import {
   File,
   Share2,
 } from "lucide-react";
-import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
 import { useTranslation } from "@/lib/i18n";
@@ -471,13 +470,9 @@ export function MemoryCard({
             />
             {embedUrl && (
               <button
-                className="absolute inset-0 flex items-center justify-center z-[1]"
+                className="absolute inset-0 z-[1] cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); setPlaying(true); }}
-              >
-                <div className="size-12 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors">
-                  <Play className="size-6 text-white ml-0.5" />
-                </div>
-              </button>
+              />
             )}
           </div>
         ) : isVideo && fileUrl ? (

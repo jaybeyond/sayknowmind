@@ -38,6 +38,7 @@ const nextConfig: NextConfig = {
             "img-src 'self' data: https://api.dicebear.com https://www.google.com https:",
             "font-src 'self' https://cdn.fontshare.com",
             `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"} ${process.env.NEXT_PUBLIC_EDGEQUAKE_URL ?? ""} ${process.env.NEXT_PUBLIC_AI_SERVER_URL ?? ""}`.trim(),
+            "frame-src 'self' https://www.instagram.com https://www.youtube.com https://www.tiktok.com https://player.vimeo.com",
             "frame-ancestors 'none'",
           ].join("; "),
         },
