@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
+import { getVideoEmbedUrl } from "@/lib/video-embed";
 import { ShareDialog } from "./share-dialog";
 import { MemoryEditModal } from "./memory-edit-modal";
 
@@ -125,6 +126,17 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
 
       {/* Content */}
       <div className="overflow-auto h-[calc(100%-80px)] p-5 space-y-5">
+        {/* Embedded video player for URL-type video content */}
+        {m.url && getVideoEmbedUrl(m.url) && (
+          <div className="relative w-full rounded-lg overflow-hidden border border-border bg-black aspect-video">
+            <iframe
+              src={getVideoEmbedUrl(m.url)!}
+              className="absolute inset-0 w-full h-full"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
         {/* File preview (images/videos) */}
         {m.docType === "file" && m.fileType === "image" && m.ogImage && (
           <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted">

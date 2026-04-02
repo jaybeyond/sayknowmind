@@ -33,9 +33,11 @@ import {
   File,
   Share2,
 } from "lucide-react";
+import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
 import { useTranslation } from "@/lib/i18n";
+import { getVideoEmbedUrl } from "@/lib/video-embed";
 import { ShareDialog } from "./share-dialog";
 import { MemoryEditModal } from "./memory-edit-modal";
 import { toast } from "sonner";
@@ -110,11 +112,14 @@ export function MemoryCard({
     setTagInputOpen(false);
   };
 
+  const [playing, setPlaying] = React.useState(false);
+
   const isFile = memory.docType === "file";
   const isImage = isFile && memory.fileType === "image";
   const isVideo = isFile && memory.fileType === "video";
   const fileUrl = isFile ? `/api/files/${memory.id}` : null;
   const downloadUrl = fileUrl ? `${fileUrl}?download=1` : null;
+  const embedUrl = memory.url ? getVideoEmbedUrl(memory.url) : null;
 
   const handleClick = () => {
     if (onSelect) {
@@ -438,7 +443,23 @@ export function MemoryCard({
         className="w-full text-left cursor-pointer"
         onClick={handleClick}
       >
-        {memory.ogImage ? (
+        {playing && embedUrl ? (
+          <div className="aspect-video relative overflow-hidden bg-black">
+            <iframe
+              src={embedUrl}
+              className="absolute inset-0 w-full h-full"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+              loading="lazy"
+            />
+            <button
+              className="absolute top-2 right-2 z-10 size-7 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors"
+              onClick={(e) => { e.stopPropagation(); setPlaying(false); }}
+            >
+              <XCircle className="size-4 text-white" />
+            </button>
+          </div>
+        ) : memory.ogImage ? (
           <div className="h-36 relative overflow-hidden bg-muted">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -448,6 +469,16 @@ export function MemoryCard({
               loading="lazy"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
+            {embedUrl && (
+              <button
+                className="absolute inset-0 flex items-center justify-center z-[1]"
+                onClick={(e) => { e.stopPropagation(); setPlaying(true); }}
+              >
+                <div className="size-12 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors">
+                  <Play className="size-6 text-white ml-0.5" />
+                </div>
+              </button>
+            )}
           </div>
         ) : isVideo && fileUrl ? (
           <div className="h-36 relative overflow-hidden bg-black flex items-center justify-center">
