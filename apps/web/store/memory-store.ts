@@ -82,7 +82,7 @@ function documentToMemory(row: Record<string, unknown>): Memory {
     fileType,
     fileName: typeof metadata.fileName === "string" ? metadata.fileName : undefined,
     ogImage: typeof metadata.ogImage === "string"
-      ? (metadata.ogImage.startsWith("http") ? `/api/og/${String(row.id)}` : metadata.ogImage)
+      ? (metadata.ogImageBase64 ? `/api/og/${String(row.id)}` : metadata.ogImage)
       : (isImage && hasFile ? `/api/files/${String(row.id)}` : undefined),
     jobStatus: typeof row.job_status === "string" ? row.job_status as Memory["jobStatus"] : undefined,
   };
