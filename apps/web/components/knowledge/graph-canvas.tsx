@@ -142,7 +142,6 @@ export function GraphCanvas({
       fgNodeMap.set(n.id, fgNode);
       return fgNode;
     });
-    nodeMapRef.current = fgNodeMap;
 
     const edgeSet = new Set<string>();
     const fgLinks: FGLink[] = [];
@@ -163,8 +162,13 @@ export function GraphCanvas({
       });
     }
 
-    return { nodes: fgNodes, links: fgLinks };
+    return { nodes: fgNodes, links: fgLinks, nodeMap: fgNodeMap };
   }, [nodes, edges]);
+
+  // Sync nodeMapRef outside of render to satisfy React 19 rules-of-hooks
+  useEffect(() => {
+    nodeMapRef.current = data.nodeMap;
+  }, [data.nodeMap]);
 
   // Zoom to fit after initial render
   useEffect(() => {

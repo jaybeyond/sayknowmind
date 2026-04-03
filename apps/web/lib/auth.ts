@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
+import { jwt } from "better-auth/plugins";
 import { Pool } from "pg";
 
 const pool = new Pool({
@@ -47,7 +48,7 @@ export const auth = betterAuth({
     },
   },
 
-  plugins: [nextCookies()],
+  plugins: [nextCookies(), jwt()],
 
   trustedOrigins: process.env.TRUSTED_ORIGINS
     ? process.env.TRUSTED_ORIGINS.split(",").map((o) => o.trim())
