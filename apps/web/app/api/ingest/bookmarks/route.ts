@@ -88,18 +88,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Import bookmarks
+    // Import bookmarks in parallel batches
     let imported = 0;
     let skipped = 0;
     const jobIds: string[] = [];
+    const BATCH_SIZE = 10;
 
-    for (const bookmark of bookmarks) {
-      // Duplicate check
+    async function importOne(bookmark: typeof bookmarks[number]): Promise<void> {
       if (skipDuplicates) {
         const dup = await findDuplicateByUrl(userId, bookmark.url);
         if (dup) {
           skipped++;
-          continue;
+          return;
         }
       }
 
@@ -119,7 +119,6 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Assign to folder category or explicit categoryId
       const catId = (bookmark.folder && folderCategoryMap.get(bookmark.folder)) || categoryId;
       if (catId) {
         await assignDocumentCategory(documentId, catId);
@@ -128,6 +127,12 @@ export async function POST(request: NextRequest) {
       const jobId = await createJob(userId, documentId);
       jobIds.push(jobId);
       imported++;
+    }
+
+    // Process in batches of BATCH_SIZE for controlled parallelism
+    for (let i = 0; i < bookmarks.length; i += BATCH_SIZE) {
+      const batch = bookmarks.slice(i, i + BATCH_SIZE);
+      await Promise.allSettled(batch.map(importOne));
     }
 
     return NextResponse.json({
