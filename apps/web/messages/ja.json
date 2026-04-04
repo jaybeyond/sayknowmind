@@ -146,6 +146,8 @@
     "tabUrl": "URL",
     "tabFile": "ファイル",
     "tabText": "テキスト",
+    "tabBookmarks": "ブックマーク",
+    "bookmarkDragDrop": "ブックマークHTMLファイルをここにドロップ",
     "textPlaceholder": "コンテンツを貼り付けるか入力...",
     "titlePlaceholder": "タイトル（任意）",
     "saving": "保存中...",

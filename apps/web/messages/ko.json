@@ -146,6 +146,8 @@
     "tabUrl": "URL",
     "tabFile": "파일",
     "tabText": "텍스트",
+    "tabBookmarks": "북마크",
+    "bookmarkDragDrop": "북마크 HTML 파일을 여기에 드롭하세요",
     "textPlaceholder": "내용을 붙여넣거나 직접 입력하세요...",
     "titlePlaceholder": "제목 (선택사항)",
     "saving": "저장 중...",

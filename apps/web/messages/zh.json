@@ -146,6 +146,8 @@
     "tabUrl": "网址",
     "tabFile": "文件",
     "tabText": "文本",
+    "tabBookmarks": "书签",
+    "bookmarkDragDrop": "将书签HTML文件拖放到此处",
     "textPlaceholder": "粘贴或输入内容...",
     "titlePlaceholder": "标题（可选）",
     "saving": "保存中...",

@@ -146,6 +146,8 @@
     "tabUrl": "URL",
     "tabFile": "File",
     "tabText": "Text",
+    "tabBookmarks": "Bookmarks",
+    "bookmarkDragDrop": "Drop bookmark HTML file here",
     "textPlaceholder": "Paste or type content here...",
     "titlePlaceholder": "Title (optional)",
     "saving": "Saving...",
