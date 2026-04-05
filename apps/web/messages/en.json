@@ -133,7 +133,8 @@
   "usage": {
     "remaining": "{{count}} of {{limit}} free calls remaining",
     "exceeded": "Daily free limit reached",
-    "addKey": "Add API Key"
+    "addKey": "Add API Key",
+    "dailyLimit": "Daily AI calls: {{used}}/{{limit}} used"
   },
   "ingest": {
     "addUrl": "Add URL",

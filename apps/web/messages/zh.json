@@ -133,7 +133,8 @@
   "usage": {
     "remaining": "免费{{limit}}次中剩余{{count}}次",
     "exceeded": "已达每日免费限额",
-    "addKey": "添加API密钥"
+    "addKey": "添加API密钥",
+    "dailyLimit": "每日AI调用: {{used}}/{{limit}} 已使用"
   },
   "ingest": {
     "addUrl": "添加网址",

@@ -23,7 +23,13 @@ import {
   SlidersHorizontal,
   ArrowUpDown,
   Check,
+  Zap,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useMemoryStore } from "@/store/memory-store";
 import { useCategoriesStore } from "@/store/categories-store";
 import { cn } from "@/lib/utils";
@@ -53,6 +59,14 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   } = useMemoryStore();
   const { categories } = useCategoriesStore();
   const { t } = useTranslation();
+
+  // Daily usage limit
+  const [usage, setUsage] = React.useState<{ used: number; limit: number; hasOwnKeys: boolean } | null>(null);
+  React.useEffect(() => {
+    fetch("/api/usage").then((r) => r.ok ? r.json() : null).then((data) => {
+      if (data) setUsage({ used: data.used, limit: data.limit, hasOwnKeys: data.hasOwnKeys });
+    }).catch(() => {});
+  }, []);
 
   // Build breadcrumb segments for folder > tab navigation
   const breadcrumb = React.useMemo(() => {
@@ -237,6 +251,26 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
             </>
           )}
 
+          {usage && !usage.hasOwnKeys && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className={cn(
+                  "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
+                  usage.used >= usage.limit
+                    ? "bg-destructive/10 text-destructive"
+                    : usage.limit - usage.used <= 3
+                      ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                      : "bg-muted text-muted-foreground"
+                )}>
+                  <Zap className="size-3" />
+                  {usage.limit - usage.used}/{usage.limit}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{t("usage.dailyLimit") || `Daily AI limit: ${usage.used}/${usage.limit} used`}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           <LanguageSwitcher />
           <ThemeToggle />
         </div>

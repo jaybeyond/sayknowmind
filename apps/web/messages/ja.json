@@ -133,7 +133,8 @@
   "usage": {
     "remaining": "無料{{limit}}回中{{count}}回残り",
     "exceeded": "1日の無料制限に達しました",
-    "addKey": "APIキーを追加"
+    "addKey": "APIキーを追加",
+    "dailyLimit": "日次AI呼び出し: {{used}}/{{limit}} 使用済み"
   },
   "ingest": {
     "addUrl": "URLを追加",
