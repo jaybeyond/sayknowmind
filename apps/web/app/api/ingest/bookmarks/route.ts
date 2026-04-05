@@ -5,8 +5,11 @@ import {
   insertDocument,
   assignDocumentCategory,
   findDuplicateByUrl,
+  updateDocument,
 } from "@/lib/ingest/document-store";
 import { createJob } from "@/lib/ingest/job-queue";
+import { fetchUrl } from "@/lib/ingest/url-fetcher";
+import { downloadOgImage } from "@/lib/ingest/file-storage";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { parseBookmarkHtml, isBookmarkHtml } from "@/lib/ingest/bookmark-parser";
@@ -106,10 +109,24 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Fetch actual page content (best-effort — skip on failure)
+      let content = "";
+      let fetchedMeta: Record<string, unknown> = {};
+      try {
+        const fetched = await fetchUrl(bookmark.url);
+        content = fetched.content;
+        fetchedMeta = {
+          wordCount: fetched.wordCount,
+          ...fetched.metadata,
+        };
+      } catch {
+        // URL unreachable — save bookmark anyway with empty content
+      }
+
       const documentId = await insertDocument({
         userId: uid,
-        title: bookmark.title,
-        content: "",
+        title: bookmark.title || (fetchedMeta.title as string) || bookmark.url,
+        content,
         url: bookmark.url,
         sourceType: "web",
         metadata: {
@@ -119,8 +136,25 @@ export async function POST(request: NextRequest) {
           bookmarkFolder: bookmark.folder || undefined,
           bookmarkAddDate: bookmark.addDate?.toISOString(),
           importedFrom: "bookmark-file",
+          ...fetchedMeta,
         },
       });
+
+      // Download OG image (non-blocking)
+      const ogImage = fetchedMeta.ogImage as string | undefined;
+      if (ogImage) {
+        downloadOgImage(documentId, ogImage).then(async (result) => {
+          if (result) {
+            await updateDocument(documentId, {
+              metadata: {
+                ogImage: `/api/og/${documentId}`,
+                ogImageBase64: result.base64,
+                ogImageContentType: result.contentType,
+              },
+            });
+          }
+        }).catch(() => {});
+      }
 
       const catId = (bookmark.folder && folderCategoryMap.get(bookmark.folder)) || categoryId;
       if (catId) {
