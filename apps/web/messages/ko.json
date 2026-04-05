@@ -134,7 +134,12 @@
     "remaining": "무료 {{limit}}회 중 {{count}}회 남음",
     "exceeded": "일일 무료 한도 초과",
     "addKey": "API 키 추가",
-    "dailyLimit": "일일 AI 호출: {{used}}/{{limit}} 사용"
+    "dailyLimit": "일일 AI 호출: {{used}}/{{limit}} 사용",
+    "modalTitle": "AI 사용량",
+    "modalDesc": "일일 AI 호출 사용량",
+    "used": "사용",
+    "includes": "포함: 채팅 메시지, 문서 AI 처리",
+    "resets": "매일 자정(UTC)에 초기화됩니다"
   },
   "ingest": {
     "addUrl": "URL 추가",

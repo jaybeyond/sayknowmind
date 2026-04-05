@@ -5,6 +5,13 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { AddMemoryDialog } from "@/components/dashboard/add-memory-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -43,6 +50,7 @@ interface MemoryHeaderProps {
 
 export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   const [addOpen, setAddOpen] = React.useState(false);
+  const [usageOpen, setUsageOpen] = React.useState(false);
   const {
     viewMode,
     setViewMode,
@@ -252,24 +260,78 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
           )}
 
           {usage && !usage.hasOwnKeys && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className={cn(
-                  "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
-                  usage.used >= usage.limit
-                    ? "bg-destructive/10 text-destructive"
-                    : usage.limit - usage.used <= 3
-                      ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                      : "bg-muted text-muted-foreground"
-                )}>
-                  <Zap className="size-3" />
-                  {usage.limit - usage.used}/{usage.limit}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{t("usage.dailyLimit") || `Daily AI limit: ${usage.used}/${usage.limit} used`}</p>
-              </TooltipContent>
-            </Tooltip>
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setUsageOpen(true)}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors hover:opacity-80",
+                      usage.used >= usage.limit
+                        ? "bg-destructive/10 text-destructive"
+                        : usage.limit - usage.used <= 3
+                          ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                          : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    <Zap className="size-3" />
+                    {usage.limit - usage.used}/{usage.limit}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{t("usage.dailyLimit") || `Daily AI limit: ${usage.used}/${usage.limit} used`}</p>
+                </TooltipContent>
+              </Tooltip>
+              <Dialog open={usageOpen} onOpenChange={setUsageOpen}>
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>{t("usage.modalTitle") || "AI Usage"}</DialogTitle>
+                    <DialogDescription>{t("usage.modalDesc") || "Your daily AI call usage"}</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{t("usage.used") || "Used"}</span>
+                        <span className="font-medium">{usage.used} / {usage.limit}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all",
+                            usage.used >= usage.limit
+                              ? "bg-destructive"
+                              : usage.limit - usage.used <= 3
+                                ? "bg-yellow-500"
+                                : "bg-primary"
+                          )}
+                          style={{ width: `${Math.min((usage.used / usage.limit) * 100, 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {usage.used >= usage.limit
+                          ? t("usage.exceeded")
+                          : (t("usage.remaining") || "{{count}} of {{limit}} free calls remaining")
+                              .replace("{{count}}", String(usage.limit - usage.used))
+                              .replace("{{limit}}", String(usage.limit))
+                        }
+                      </p>
+                    </div>
+                    <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground space-y-1">
+                      <p>{t("usage.includes") || "Includes: chat messages, document AI processing"}</p>
+                      <p>{t("usage.resets") || "Resets daily at midnight UTC"}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => { setUsageOpen(false); window.location.href = "/settings"; }}
+                    >
+                      {t("usage.addKey")}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
           <LanguageSwitcher />
           <ThemeToggle />

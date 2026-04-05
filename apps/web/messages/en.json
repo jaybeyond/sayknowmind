@@ -134,7 +134,12 @@
     "remaining": "{{count}} of {{limit}} free calls remaining",
     "exceeded": "Daily free limit reached",
     "addKey": "Add API Key",
-    "dailyLimit": "Daily AI calls: {{used}}/{{limit}} used"
+    "dailyLimit": "Daily AI calls: {{used}}/{{limit}} used",
+    "modalTitle": "AI Usage",
+    "modalDesc": "Your daily AI call usage",
+    "used": "Used",
+    "includes": "Includes: chat messages, document AI processing",
+    "resets": "Resets daily at midnight UTC"
   },
   "ingest": {
     "addUrl": "Add URL",
