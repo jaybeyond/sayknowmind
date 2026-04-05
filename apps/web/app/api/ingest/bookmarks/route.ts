@@ -64,25 +64,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Narrow userId for closures (already null-checked above)
+    const uid = userId as string;
+
     // Resolve folder names → category IDs (create if needed)
     const folderCategoryMap = new Map<string, string>();
     const uniqueFolders = [...new Set(bookmarks.map((b) => b.folder).filter(Boolean))];
 
     for (const folder of uniqueFolders) {
-      // Use the leaf folder name as category name
       const categoryName = folder.includes("/") ? folder.split("/").pop()! : folder;
 
       const existing = await pool.query(
         `SELECT id FROM categories WHERE user_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1`,
-        [userId, categoryName],
+        [uid, categoryName],
       );
 
       if (existing.rows.length > 0) {
         folderCategoryMap.set(folder, existing.rows[0].id);
       } else {
+        const path = folder.replace(/\//g, ".");
         const created = await pool.query(
-          `INSERT INTO categories (user_id, name) VALUES ($1, $2) RETURNING id`,
-          [userId, categoryName],
+          `INSERT INTO categories (user_id, name, path) VALUES ($1, $2, $3) RETURNING id`,
+          [uid, categoryName, path],
         );
         folderCategoryMap.set(folder, created.rows[0].id);
       }
@@ -96,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     async function importOne(bookmark: typeof bookmarks[number]): Promise<void> {
       if (skipDuplicates) {
-        const dup = await findDuplicateByUrl(userId, bookmark.url);
+        const dup = await findDuplicateByUrl(uid, bookmark.url);
         if (dup) {
           skipped++;
           return;
@@ -104,7 +107,7 @@ export async function POST(request: NextRequest) {
       }
 
       const documentId = await insertDocument({
-        userId,
+        userId: uid,
         title: bookmark.title,
         content: "",
         url: bookmark.url,
@@ -124,7 +127,7 @@ export async function POST(request: NextRequest) {
         await assignDocumentCategory(documentId, catId);
       }
 
-      const jobId = await createJob(userId, documentId);
+      const jobId = await createJob(uid, documentId);
       jobIds.push(jobId);
       imported++;
     }

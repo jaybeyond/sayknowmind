@@ -6,7 +6,7 @@
  *   <DT><A HREF="..." ADD_DATE="..." TAGS="...">Title</A>
  *   <DT><H3>Folder Name</H3><DL>...children...</DL>
  */
-import * as cheerio from "cheerio";
+import { load, type CheerioAPI } from "cheerio";
 
 export interface BookmarkEntry {
   url: string;
@@ -28,12 +28,12 @@ export function isBookmarkHtml(html: string): boolean {
  * Parse a Netscape Bookmark HTML file into a flat list of BookmarkEntry.
  */
 export function parseBookmarkHtml(html: string): BookmarkEntry[] {
-  const $ = cheerio.load(html, { xml: false });
+  const $ = load(html, { xml: false });
   const entries: BookmarkEntry[] = [];
 
-  function walk(container: cheerio.Cheerio, folderPath: string) {
-    container.children("dt").each((_, dt) => {
-      const $dt = $(dt);
+  function walk($container: ReturnType<CheerioAPI>, folderPath: string) {
+    $container.children("dt").each(function () {
+      const $dt = $(this);
 
       // Folder: <DT><H3>Name</H3> followed by <DL>
       const h3 = $dt.children("h3");
@@ -42,7 +42,9 @@ export function parseBookmarkHtml(html: string): BookmarkEntry[] {
         const nestedDl = $dt.children("dl");
         if (nestedDl.length) {
           const subPath = folderPath ? `${folderPath}/${folderName}` : folderName;
-          walk(nestedDl, subPath);
+          nestedDl.each(function () {
+            walk($(this), subPath);
+          });
         }
         return;
       }
@@ -77,9 +79,9 @@ export function parseBookmarkHtml(html: string): BookmarkEntry[] {
     });
   }
 
-  // Start from each top-level <DL>
-  $("dl").first().each((_, dl) => {
-    walk($(dl), "");
+  // Start from the first top-level <DL>
+  $("dl").first().each(function () {
+    walk($(this), "");
   });
 
   return entries;
