@@ -155,3 +155,10 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     }
   },
 }));
+
+// Re-check when Tauri injects env (fires after page load)
+if (typeof window !== "undefined") {
+  window.addEventListener("sayknow-env-ready", () => {
+    useRuntimeStore.getState().checkRuntime();
+  });
+}

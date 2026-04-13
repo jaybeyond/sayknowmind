@@ -350,7 +350,7 @@ fn main() {
                 let env_data = detect_environment();
                 let env_json = serde_json::to_string(&env_data).unwrap_or_else(|_| "{}".to_string());
                 let js = format!(
-                    "window.__SAYKNOW_ENV__ = {};",
+                    "window.__SAYKNOW_ENV__ = {}; window.dispatchEvent(new CustomEvent('sayknow-env-ready'));",
                     env_json
                 );
                 let w = window.clone();
