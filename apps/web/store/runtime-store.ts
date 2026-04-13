@@ -54,46 +54,42 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   checkRuntime: async () => {
     set({ status: "checking", error: null });
     try {
-      // Try injected env from Tauri (runs on user's machine)
-      const tauriData = getInjectedEnv();
-
-      if (tauriData) {
-        const node = tauriData.node as { version: string; source: string; path: string } | null;
-        set({
-          status: (node && tauriData.serverInstalled) ? "ready" : "not-installed",
-          nodeVersion: node?.version ?? null,
-          serverPort: null,
-          environment: {
-            node: node as EnvironmentInfo["node"],
-            docker: tauriData.docker as EnvironmentInfo["docker"],
-            ollama: tauriData.ollama as EnvironmentInfo["ollama"],
-            git: tauriData.git as EnvironmentInfo["git"],
-            serverInstalled: tauriData.serverInstalled as boolean,
-          },
-        });
-        return;
-      }
-
-      // Fallback: try local API server (port 3458), then cloud API
-      let res: Response;
+      // Priority 1: Local API server on port 3458 (most accurate, runs on user's machine)
+      let data: Record<string, unknown> | null = null;
       try {
-        res = await fetch(`${LOCAL_API}/env`, { signal: AbortSignal.timeout(2000) });
-      } catch {
-        res = await fetch(`${RUNTIME_API}`);
+        const res = await fetch(`${LOCAL_API}/env`, { signal: AbortSignal.timeout(2000) });
+        if (res.ok) data = await res.json();
+      } catch { /* local API not available */ }
+
+      // Priority 2: Injected env from Tauri webview eval
+      if (!data) {
+        data = getInjectedEnv();
       }
-      if (!res.ok) throw new Error("Check failed");
-      const data = await res.json();
+
+      // Priority 3: Cloud API fallback
+      if (!data) {
+        try {
+          const res = await fetch(`${RUNTIME_API}`);
+          if (res.ok) data = await res.json();
+        } catch { /* cloud not available */ }
+      }
+
+      if (!data) throw new Error("No environment data available");
+
+      // Normalize: local API has flat structure, cloud API has nested .environment
+      const env = (data.environment ?? {}) as Record<string, unknown>;
+      const node = (data.node ?? env.node ?? null) as EnvironmentInfo["node"];
+      const docker = (data.docker ?? env.docker ?? null) as EnvironmentInfo["docker"];
+      const ollama = (data.ollama ?? env.ollama ?? null) as EnvironmentInfo["ollama"];
+      const git = (data.git ?? env.git ?? null) as EnvironmentInfo["git"];
+      const serverInstalled = (data.serverInstalled ?? false) as boolean;
+      const ready = !!(node && serverInstalled);
+
       set({
-        status: data.ready ? "ready" : "not-installed",
-        nodeVersion: data.node?.version ?? null,
-        serverPort: data.serverPort ?? null,
-        environment: {
-          node: data.node,
-          docker: data.environment?.docker ?? null,
-          ollama: data.environment?.ollama ?? null,
-          git: data.environment?.git ?? null,
-          serverInstalled: data.serverInstalled,
-        },
+        status: ready ? "ready" : "not-installed",
+        nodeVersion: node?.version ?? null,
+        serverPort: null,
+        environment: { node, docker, ollama, git, serverInstalled },
       });
     } catch {
       set({ status: "not-installed", error: null });
