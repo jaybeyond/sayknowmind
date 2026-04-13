@@ -437,6 +437,19 @@
     "categorySuggestion": "分类建议",
     "categorySuggestionHint": "分类建议指令"
   },
+  "mcp": {
+    "title": "MCP 服务器连接",
+    "description": "通过 MCP 将 AI 工具（Claude、Cursor、VS Code）连接到 SayknowMind。",
+    "apiKey": "API 密钥",
+    "generate": "生成密钥",
+    "regenerate": "重新生成",
+    "noKey": "生成 API 密钥以保护您的 MCP 连接。",
+    "howToUse": "连接方法",
+    "step1": "复制下面的配置并粘贴到 AI 工具的 MCP 设置中。",
+    "step2": "Claude Desktop：设置 → 开发者 → 编辑配置",
+    "step3": "重启 AI 工具即可激活连接。",
+    "compatible": "兼容的 AI 工具"
+  },
   "runtime": {
     "title": "本地运行时",
     "description": "在您的设备上完全运行 SayknowMind。所有数据都保存在本地。",

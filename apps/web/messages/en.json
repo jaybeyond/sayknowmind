@@ -437,6 +437,19 @@
     "categorySuggestion": "Category Suggestion",
     "categorySuggestionHint": "Category suggestion instructions"
   },
+  "mcp": {
+    "title": "MCP Server Connection",
+    "description": "Connect your AI tools (Claude, Cursor, VS Code) to SayknowMind via Model Context Protocol.",
+    "apiKey": "API Key",
+    "generate": "Generate Key",
+    "regenerate": "Regenerate",
+    "noKey": "Generate an API key to secure your MCP connection.",
+    "howToUse": "How to connect",
+    "step1": "Copy the config below and paste into your AI tool's MCP settings.",
+    "step2": "For Claude Desktop: Settings → Developer → Edit Config",
+    "step3": "Restart your AI tool to activate the connection.",
+    "compatible": "Compatible AI Tools"
+  },
   "runtime": {
     "title": "Local Runtime",
     "description": "Run SayknowMind entirely on your device. All data stays on your machine.",

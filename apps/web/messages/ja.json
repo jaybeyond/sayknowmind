@@ -437,6 +437,19 @@
     "categorySuggestion": "カテゴリ提案",
     "categorySuggestionHint": "カテゴリ提案の指示"
   },
+  "mcp": {
+    "title": "MCPサーバー接続",
+    "description": "AIツール（Claude、Cursor、VS Code）をMCPでSayknowMindに接続します。",
+    "apiKey": "APIキー",
+    "generate": "キーを生成",
+    "regenerate": "再生成",
+    "noKey": "MCP接続を保護するAPIキーを生成してください。",
+    "howToUse": "接続方法",
+    "step1": "下記の設定をコピーしてAIツールのMCP設定に貼り付けてください。",
+    "step2": "Claude Desktop：設定 → 開発者 → 設定を編集",
+    "step3": "AIツールを再起動すると接続が有効になります。",
+    "compatible": "対応AIツール"
+  },
   "runtime": {
     "title": "ローカルランタイム",
     "description": "SayknowMindをデバイス上で完全に実行します。すべてのデータはお使いのマシンに保存されます。",

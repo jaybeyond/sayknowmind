@@ -11,10 +11,11 @@ import { PromptEditor } from "./prompt-editor";
 import { IntegrationsTab } from "./integrations-tab";
 import { ServicesTab } from "./services-tab";
 import { LocalRuntimeTab } from "./local-runtime-tab";
+import { McpConnectTab } from "./mcp-connect-tab";
 import { useTranslation } from "@/lib/i18n";
 import { isCloud, isDesktop } from "@/lib/environment";
 
-type TabId = "profile" | "appearance" | "ai" | "models" | "prompts" | "privacy" | "integrations" | "services" | "runtime";
+type TabId = "profile" | "appearance" | "ai" | "models" | "prompts" | "privacy" | "integrations" | "services" | "mcp" | "runtime";
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -34,6 +35,7 @@ export function SettingsPage() {
       { id: "privacy", label: t("settings.tabPrivacy") },
       { id: "integrations", label: t("settings.tabIntegrations") },
       { id: "services", label: t("settings.tabServices") },
+      { id: "mcp", label: "MCP" },
       { id: "runtime", label: t("settings.tabRuntime") },
     ];
     return all;
@@ -94,6 +96,7 @@ export function SettingsPage() {
         {activeTab === "privacy" && <PrivacyTab />}
         {activeTab === "integrations" && <IntegrationsTab />}
         {activeTab === "services" && <ServicesTab />}
+        {activeTab === "mcp" && <McpConnectTab />}
         {activeTab === "runtime" && <LocalRuntimeTab />}
       </div>
     </main>
