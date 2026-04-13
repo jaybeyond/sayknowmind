@@ -36,10 +36,10 @@ export function SettingsPage() {
       { id: "integrations", label: t("settings.tabIntegrations") },
       { id: "services", label: t("settings.tabServices") },
       { id: "mcp", label: "MCP" },
-      { id: "runtime", label: t("settings.tabRuntime") },
+      ...(desktop ? [{ id: "runtime" as TabId, label: t("settings.tabRuntime") }] : []),
     ];
     return all;
-  }, [t, cloud]);
+  }, [t, cloud, desktop]);
 
   return (
     <main className="flex-1 overflow-auto">
