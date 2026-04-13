@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       [limit, offset],
     );
 
-    const items = result.rows.map((row) => {
+    const items = result.rows.map((row: Record<string, unknown>) => {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
       return {
         shareToken: row.share_token,

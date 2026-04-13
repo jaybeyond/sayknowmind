@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
       [userId, limit, offset],
     );
 
-    const shares = result.rows.map((row) => {
+    const shares = result.rows.map((row: Record<string, unknown>) => {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
       return {
         id: row.id,
@@ -171,7 +171,7 @@ export async function GET(request: NextRequest) {
           ...(Array.isArray(meta.tags) ? meta.tags : []),
         ].filter((t): t is string => typeof t === "string"))],
         readingTimeMinutes: typeof meta.reading_time_minutes === "number" ? meta.reading_time_minutes : null,
-        accessType: row.access_conditions?.type ?? "public",
+        accessType: (row.access_conditions as Record<string, unknown>)?.type ?? "public",
         encryptionMethod: row.encryption_method,
         isRevoked: row.is_revoked,
         expiresAt: row.expires_at,

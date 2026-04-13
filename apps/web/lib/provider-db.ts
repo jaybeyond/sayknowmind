@@ -84,7 +84,7 @@ export async function getUserProviders(userId: string): Promise<ProviderEntry[]>
   const entries: ProviderEntry[] = [];
   for (const row of result.rows) {
     try {
-      const apiKey = decryptForUser(userId, row.encrypted_api_key);
+      const apiKey = decryptForUser(userId, row.encrypted_api_key as string);
       entries.push({
         id: row.provider_id,
         apiKey,
@@ -114,10 +114,10 @@ export async function getUserProvidersMasked(
     [userId],
   );
 
-  return result.rows.map((row) => {
+  return result.rows.map((row: Record<string, unknown>) => {
     let maskedKey = MASK_SENTINEL;
     try {
-      const apiKey = decryptForUser(userId, row.encrypted_api_key);
+      const apiKey = decryptForUser(userId, row.encrypted_api_key as string);
       maskedKey = maskApiKey(apiKey);
     } catch {
       // Can't decrypt — show generic mask

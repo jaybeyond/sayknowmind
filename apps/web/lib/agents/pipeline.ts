@@ -314,7 +314,7 @@ async function searchKnowledge(
         `SELECT id, title, url FROM documents WHERE id = ANY($1)`,
         [ids],
       );
-      const metaMap = new Map(
+      const metaMap = new Map<string, { title: string; url: string | null }>(
         metaResult.rows.map((r: { id: string; title: string; url: string | null }) => [
           r.id,
           { title: r.title, url: r.url },
@@ -323,8 +323,8 @@ async function searchKnowledge(
       for (const src of allSources) {
         const meta = metaMap.get(src.id);
         if (meta) {
-          src.title = meta.title;
-          src.url = meta.url ?? undefined;
+          (src as unknown as Record<string, unknown>).title = meta.title;
+          (src as unknown as Record<string, unknown>).url = meta.url ?? undefined;
         }
       }
     } catch {

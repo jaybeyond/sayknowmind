@@ -45,7 +45,7 @@ export async function GET() {
 
   return NextResponse.json({
     webUserId: webUserId ?? "NOT_LOGGED_IN",
-    telegramLinks: links.rows.map((r) => ({
+    telegramLinks: links.rows.map((r: Record<string, unknown>) => ({
       userId: r.user_id,
       isCurrentUser: r.user_id === webUserId,
       telegramId: r.channel_user_id,

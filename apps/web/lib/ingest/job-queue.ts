@@ -254,7 +254,7 @@ async function processJob(job: JobRow): Promise<void> {
         if (isNew && suggestion.categoryName && !newCategoryCreated) {
           // Check if a similar category already exists (case-insensitive)
           const similar = existingCategories.find(
-            (c) => c.name.toLowerCase() === suggestion.categoryName.toLowerCase(),
+            (c: { id: string; name: string }) => c.name.toLowerCase() === suggestion.categoryName.toLowerCase(),
           );
           if (similar) {
             categoryId = similar.id;

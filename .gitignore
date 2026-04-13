@@ -71,3 +71,5 @@ venv/
 .claude/
 .omc/
 .superset/
+apps/desktop/web-standalone/
+apps/desktop/src-tauri/target/

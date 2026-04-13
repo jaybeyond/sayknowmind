@@ -46,11 +46,11 @@ export const cap = new Cap({
       },
       read: async (token: string) => {
         await ensureSchema();
-        const result = await pool.query<{ data: ChallengeData }>(
+        const result = await pool.query(
           `SELECT data FROM cap_challenges WHERE token = $1`,
           [token],
         );
-        return result.rows[0]?.data ?? null;
+        return (result.rows[0] as { data: ChallengeData } | undefined)?.data ?? null;
       },
       delete: async (token: string) => {
         await pool.query(`DELETE FROM cap_challenges WHERE token = $1`, [token]);
@@ -74,12 +74,12 @@ export const cap = new Cap({
       },
       get: async (token: string) => {
         await ensureSchema();
-        const result = await pool.query<{ expires_at: string }>(
+        const result = await pool.query(
           `SELECT expires_at FROM cap_tokens WHERE token = $1`,
           [token],
         );
         if (result.rows.length === 0) return null;
-        return Number(result.rows[0].expires_at);
+        return Number((result.rows[0] as { expires_at: string }).expires_at);
       },
       delete: async (token: string) => {
         await pool.query(`DELETE FROM cap_tokens WHERE token = $1`, [token]);
