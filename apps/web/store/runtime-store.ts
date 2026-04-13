@@ -66,15 +66,11 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         data = getInjectedEnv();
       }
 
-      // Priority 3: Cloud API fallback
+      // No cloud fallback — cloud API returns server env, not user's machine
       if (!data) {
-        try {
-          const res = await fetch(`${RUNTIME_API}`);
-          if (res.ok) data = await res.json();
-        } catch { /* cloud not available */ }
+        set({ status: "not-installed", environment: null });
+        return;
       }
-
-      if (!data) throw new Error("No environment data available");
 
       // Normalize: local API has flat structure, cloud API has nested .environment
       const env = (data.environment ?? {}) as Record<string, unknown>;
