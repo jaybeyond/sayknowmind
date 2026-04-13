@@ -2,6 +2,14 @@ import { create } from "zustand";
 
 export type RuntimeStatus = "checking" | "not-installed" | "downloading" | "ready" | "running" | "error";
 
+export interface EnvironmentInfo {
+  node: { version: string; source: "bundled" | "system"; path: string } | null;
+  docker: { version: string } | null;
+  ollama: { version: string; running: boolean } | null;
+  git: { version: string } | null;
+  serverInstalled: boolean;
+}
+
 interface RuntimeState {
   status: RuntimeStatus;
   downloadProgress: number; // 0-100
@@ -9,6 +17,7 @@ interface RuntimeState {
   nodeVersion: string | null;
   serverPort: number | null;
   error: string | null;
+  environment: EnvironmentInfo | null;
 
   // Actions
   checkRuntime: () => Promise<void>;
@@ -28,6 +37,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   nodeVersion: null,
   serverPort: null,
   error: null,
+  environment: null,
 
   setStatus: (status) => set({ status }),
   setProgress: (progress, label) => set({ downloadProgress: progress, downloadLabel: label }),
@@ -40,8 +50,15 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       const data = await res.json();
       set({
         status: data.ready ? "ready" : "not-installed",
-        nodeVersion: data.nodeVersion ?? null,
+        nodeVersion: data.node?.version ?? null,
         serverPort: data.serverPort ?? null,
+        environment: {
+          node: data.node,
+          docker: data.environment?.docker ?? null,
+          ollama: data.environment?.ollama ?? null,
+          git: data.environment?.git ?? null,
+          serverInstalled: data.serverInstalled,
+        },
       });
     } catch {
       set({ status: "not-installed", error: null });

@@ -21,23 +21,60 @@ function getNodeUrl(): string {
   return `https://nodejs.org/dist/v22.15.0/node-v22.15.0-${platform}-${arch}.tar.gz`;
 }
 
-/** GET /api/desktop/runtime — Check runtime status */
-export async function GET() {
-  const nodeReady = existsSync(NODE_BIN);
-  const serverReady = existsSync(join(WEB_DIR, "server.js"));
-  let nodeVersion: string | null = null;
-
-  if (nodeReady) {
+/** Detect a binary — check bundled path first, then system PATH */
+function detectBinary(bundledPath: string, name: string): { path: string; version: string; source: "bundled" | "system" } | null {
+  // 1. Check bundled (app data)
+  if (existsSync(bundledPath)) {
     try {
-      nodeVersion = execSync(`"${NODE_BIN}" --version`, { encoding: "utf-8" }).trim();
-    } catch { /* ignore */ }
+      const version = execSync(`"${bundledPath}" --version`, { encoding: "utf-8" }).trim();
+      return { path: bundledPath, version, source: "bundled" };
+    } catch { /* fallthrough */ }
   }
+  // 2. Check system PATH
+  try {
+    const sysPath = execSync(`which ${name}`, { encoding: "utf-8" }).trim();
+    if (sysPath) {
+      const version = execSync(`"${sysPath}" --version`, { encoding: "utf-8" }).trim();
+      return { path: sysPath, version, source: "system" };
+    }
+  } catch { /* not found */ }
+  return null;
+}
+
+/** GET /api/desktop/runtime — Check runtime status + system environment */
+export async function GET() {
+  const node = detectBinary(NODE_BIN, "node");
+  const serverReady = existsSync(join(WEB_DIR, "server.js"));
+
+  // Detect other local tools
+  let docker: { version: string } | null = null;
+  let ollama: { version: string; running: boolean } | null = null;
+  let git: { version: string } | null = null;
+
+  try {
+    const v = execSync("docker --version", { encoding: "utf-8" }).trim();
+    docker = { version: v.replace("Docker version ", "").split(",")[0] };
+  } catch { /* not installed */ }
+
+  try {
+    const v = execSync("ollama --version", { encoding: "utf-8" }).trim();
+    const running = (() => {
+      try { execSync("curl -sf --max-time 1 http://localhost:11434/api/tags", { encoding: "utf-8" }); return true; }
+      catch { return false; }
+    })();
+    ollama = { version: v.replace("ollama version ", ""), running };
+  } catch { /* not installed */ }
+
+  try {
+    const v = execSync("git --version", { encoding: "utf-8" }).trim();
+    git = { version: v.replace("git version ", "") };
+  } catch { /* not installed */ }
 
   return NextResponse.json({
-    ready: nodeReady && serverReady,
-    nodeInstalled: nodeReady,
+    ready: !!node && serverReady,
+    node: node ? { version: node.version, source: node.source, path: node.path } : null,
     serverInstalled: serverReady,
-    nodeVersion,
+    environment: { docker, ollama, git },
     appDataPath: APP_DATA,
   });
 }

@@ -458,7 +458,8 @@
     "serverFiles": "SayknowMind 서버 (~75MB 압축)",
     "pgliteDb": "PGlite 내장 데이터베이스 (~10MB)",
     "dataStoredIn": "데이터 저장 위치:",
-    "confirmRemove": "로컬 런타임을 삭제하시겠습니까? 데이터는 보존됩니다."
+    "confirmRemove": "로컬 런타임을 삭제하시겠습니까? 데이터는 보존됩니다.",
+    "envDetected": "감지된 환경"
   },
   "integrations": {
     "loading": "서비스 상태 로딩 중...",

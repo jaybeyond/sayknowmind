@@ -458,7 +458,8 @@
     "serverFiles": "SayknowMind サーバー (~75MB 圧縮)",
     "pgliteDb": "PGlite 組み込みデータベース (~10MB)",
     "dataStoredIn": "データの保存先：",
-    "confirmRemove": "ローカルランタイムを削除しますか？データは保持されます。"
+    "confirmRemove": "ローカルランタイムを削除しますか？データは保持されます。",
+    "envDetected": "検出された環境"
   },
   "integrations": {
     "loading": "サービス状態を読み込み中...",

@@ -458,7 +458,8 @@
     "serverFiles": "SayknowMind server (~75MB compressed)",
     "pgliteDb": "PGlite embedded database (~10MB)",
     "dataStoredIn": "Data stored in:",
-    "confirmRemove": "Remove local runtime? Your data will be preserved."
+    "confirmRemove": "Remove local runtime? Your data will be preserved.",
+    "envDetected": "Detected Environment"
   },
   "integrations": {
     "loading": "Loading service status...",

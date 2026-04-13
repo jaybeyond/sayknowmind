@@ -458,7 +458,8 @@
     "serverFiles": "SayknowMind 服务器 (~75MB 压缩)",
     "pgliteDb": "PGlite 嵌入式数据库 (~10MB)",
     "dataStoredIn": "数据存储位置：",
-    "confirmRemove": "删除本地运行时？您的数据将被保留。"
+    "confirmRemove": "删除本地运行时？您的数据将被保留。",
+    "envDetected": "检测到的环境"
   },
   "integrations": {
     "loading": "加载服务状态...",
