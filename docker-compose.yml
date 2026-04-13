@@ -7,12 +7,11 @@ services:
       context: ./docker
       dockerfile: Dockerfile.postgres
     container_name: sayknowmind-postgres
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    # ports: — internal only, access via Docker network
     environment:
       POSTGRES_DB: sayknowmind
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./db/init/01-edgequake-init.sql:/docker-entrypoint-initdb.d/01-edgequake.sql
@@ -52,8 +51,7 @@ services:
       context: ./packages/edgequake
       dockerfile: docker/Dockerfile
     container_name: sayknowmind-edgequake
-    ports:
-      - "${EDGEQUAKE_PORT:-8080}:8080"
+    # ports: — internal only, access via Docker network
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/sayknowmind
       RUST_LOG: ${RUST_LOG:-info}
@@ -177,8 +175,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: sayknowmind-ollama
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+    # ports: — internal only, access via Docker network
     volumes:
       - ollama_data:/root/.ollama
     environment:
@@ -190,8 +187,7 @@ services:
   searxng:
     image: searxng/searxng:latest
     container_name: sayknowmind-searxng
-    ports:
-      - "${SEARXNG_PORT:-8888}:8080"
+    # ports: — internal only, access via Docker network
     volumes:
       - ./docker/searxng/settings.yml:/etc/searxng/settings.yml:ro
     environment:
@@ -247,9 +243,7 @@ services:
   ipfs:
     image: ipfs/kubo:latest
     container_name: sayknowmind-ipfs
-    ports:
-      - "${IPFS_API_PORT:-5001}:5001"
-      - "${IPFS_GATEWAY_PORT:-8180}:8080"
+    # ports: — internal only, access via Docker network
     volumes:
       - ipfs_data:/data/ipfs
     environment:

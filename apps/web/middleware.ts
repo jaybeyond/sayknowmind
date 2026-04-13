@@ -4,10 +4,6 @@ import { getSecurityHeaders } from "@/lib/security/headers";
 
 // Routes that bypass auth even if under a protected prefix
 const publicApiPaths = [
-  "/api/documents/reprocess",
-  "/api/documents/sync-edgequake",
-  "/api/knowledge/graph",
-  "/api/knowledge/node",
   "/api/integrations/telegram/webhook",
   "/api/share/view",
   "/api/share/gallery",

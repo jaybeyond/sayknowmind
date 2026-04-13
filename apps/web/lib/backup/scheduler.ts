@@ -56,7 +56,8 @@ export async function createBackup(): Promise<BackupResult> {
 
   for (const table of BACKUP_TABLES) {
     try {
-      const result = await pool.query(`SELECT * FROM ${table}`);
+      // Use identifier quoting to prevent SQL injection — table names are from BACKUP_TABLES whitelist
+      const result = await pool.query(`SELECT * FROM "${table}"`);
       backup[table] = result.rows;
       tablesIncluded.push(table);
     } catch {
@@ -110,8 +111,13 @@ export async function restoreBackup(filePath: string): Promise<{
     for (const [table, rows] of Object.entries(tables)) {
       if (!BACKUP_TABLES.includes(table) || rows.length === 0) continue;
 
-      // Get column names from first row
+      // Get column names from first row — validate against alphanumeric+underscore only
       const columns = Object.keys(rows[0] as Record<string, unknown>);
+      const colPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+      if (!columns.every((c) => colPattern.test(c))) {
+        throw new Error(`Invalid column names in backup data for table ${table}`);
+      }
+
       const placeholders = columns.map((_, i) => `$${i + 1}`).join(", ");
       const columnList = columns.map((c) => `"${c}"`).join(", ");
 
@@ -119,7 +125,7 @@ export async function restoreBackup(filePath: string): Promise<{
         const values = columns.map((c) => (row as Record<string, unknown>)[c]);
         try {
           await client.query(
-            `INSERT INTO ${table} (${columnList}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
+            `INSERT INTO "${table}" (${columnList}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
             values,
           );
           totalRows++;

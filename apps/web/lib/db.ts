@@ -14,6 +14,4 @@ export const pool =
       `postgres://${process.env.POSTGRES_USER ?? "postgres"}:${process.env.POSTGRES_PASSWORD ?? "changeme-in-production"}@localhost:${process.env.POSTGRES_PORT ?? "5432"}/sayknowmind`,
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.pool = pool;
-}
+globalForDb.pool = pool;

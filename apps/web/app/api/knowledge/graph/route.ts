@@ -9,14 +9,6 @@ export async function GET(request: NextRequest) {
     userId = await getUserIdFromRequest();
   } catch { /* auth check failed */ }
 
-  // Dev fallback: if not authenticated, use first user
-  if (!userId) {
-    try {
-      const fallback = await pool.query(`SELECT id FROM "user" LIMIT 1`);
-      userId = fallback.rows[0]?.id ?? null;
-    } catch { /* ignore */ }
-  }
-
   if (!userId) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },

@@ -218,6 +218,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   addUserTag: (memoryId, tag) => {
     const memory = get().memories.find((m) => m.id === memoryId);
     if (!memory) return;
+    const prevTags = memory.userTags;
+    const prevAllTags = memory.tags;
     const newTags = [...new Set([...memory.userTags, tag])];
     const allTags = [...new Set([...newTags, ...memory.aiTags])];
     set((s) => ({
@@ -229,12 +231,20 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ metadata: { userTags: newTags } }),
-    }).catch(() => {});
+    }).catch(() => {
+      set((s) => ({
+        memories: s.memories.map((m) =>
+          m.id === memoryId ? { ...m, userTags: prevTags, tags: prevAllTags } : m
+        ),
+      }));
+    });
   },
 
   removeUserTag: (memoryId, tag) => {
     const memory = get().memories.find((m) => m.id === memoryId);
     if (!memory) return;
+    const prevTags = memory.userTags;
+    const prevAllTags = memory.tags;
     const newTags = memory.userTags.filter((t) => t !== tag);
     const allTags = [...new Set([...newTags, ...memory.aiTags])];
     set((s) => ({
@@ -246,10 +256,17 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ metadata: { userTags: newTags } }),
-    }).catch(() => {});
+    }).catch(() => {
+      set((s) => ({
+        memories: s.memories.map((m) =>
+          m.id === memoryId ? { ...m, userTags: prevTags, tags: prevAllTags } : m
+        ),
+      }));
+    });
   },
 
   updateMemoryTitle: (memoryId, title) => {
+    const prevTitle = get().memories.find((m) => m.id === memoryId)?.title;
     set((s) => ({
       memories: s.memories.map((m) =>
         m.id === memoryId ? { ...m, title } : m
@@ -259,7 +276,15 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
-    }).catch(() => {});
+    }).catch(() => {
+      if (prevTitle !== undefined) {
+        set((s) => ({
+          memories: s.memories.map((m) =>
+            m.id === memoryId ? { ...m, title: prevTitle } : m
+          ),
+        }));
+      }
+    });
   },
 
   toggleFavorite: (memoryId) => {
@@ -388,12 +413,17 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   },
 
   permanentlyDelete: (memoryId) => {
+    const memory = get().trashedMemories.find((m) => m.id === memoryId);
     set((state) => ({
       trashedMemories: state.trashedMemories.filter((m) => m.id !== memoryId),
     }));
 
     // Hard-delete from DB
-    fetch(`/api/documents/${memoryId}`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/documents/${memoryId}`, { method: "DELETE" }).catch(() => {
+      if (memory) {
+        set((s) => ({ trashedMemories: [...s.trashedMemories, memory] }));
+      }
+    });
   },
 
   /** Fetch first page of active memories (resets pagination) */

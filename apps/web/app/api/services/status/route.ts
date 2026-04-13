@@ -10,8 +10,20 @@ interface ServiceStatus {
   version?: string;
 }
 
+function maskUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.hostname.endsWith(".railway.internal")) return `[internal] ${u.port || "default"}`;
+    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return `[local] ${u.port || "default"}`;
+    return u.origin;
+  } catch {
+    return "[unknown]";
+  }
+}
+
 async function checkService(id: string, name: string, url: string, healthPath: string): Promise<ServiceStatus> {
   const start = Date.now();
+  const displayUrl = maskUrl(url);
   try {
     const res = await fetch(`${url}${healthPath}`, { signal: AbortSignal.timeout(5_000) });
     const latencyMs = Date.now() - start;
@@ -21,11 +33,11 @@ async function checkService(id: string, name: string, url: string, healthPath: s
         const data = await res.json();
         version = data.version ?? data.Version ?? undefined;
       } catch { /* not JSON */ }
-      return { id, name, url, status: "online", latencyMs, version };
+      return { id, name, url: displayUrl, status: "online", latencyMs, version };
     }
-    return { id, name, url, status: "degraded", latencyMs };
+    return { id, name, url: displayUrl, status: "degraded", latencyMs };
   } catch {
-    return { id, name, url, status: "offline" };
+    return { id, name, url: displayUrl, status: "offline" };
   }
 }
 

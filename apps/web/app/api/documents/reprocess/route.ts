@@ -12,13 +12,7 @@ async function reprocess(request: NextRequest) {
   try {
     userId = await getUserIdFromRequest();
   } catch {
-    // Auth check failed — fall through to fallback
-  }
-
-  // Fallback: if not authenticated, use first user (safe — reprocess is read-modify-own-data only)
-  if (!userId) {
-    const fallback = await pool.query(`SELECT id FROM "user" LIMIT 1`);
-    userId = fallback.rows[0]?.id ?? null;
+    // Auth check failed
   }
 
   if (!userId) {

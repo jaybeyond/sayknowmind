@@ -108,7 +108,7 @@ export class ResilientPool {
 
     try {
       await client.query("BEGIN");
-      await client.query(`SET LOCAL statement_timeout = '${this.queryTimeoutMs}'`);
+      await client.query("SET LOCAL statement_timeout = $1", [String(this.queryTimeoutMs)]);
       const result = await fn(client);
       await client.query("COMMIT");
       return result;
