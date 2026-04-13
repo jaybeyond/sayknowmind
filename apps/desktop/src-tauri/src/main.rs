@@ -42,17 +42,25 @@ fn get_app_info() -> serde_json::Value {
 /// Detect local environment: Node.js, Docker, Ollama, Git
 #[tauri::command]
 fn detect_environment() -> serde_json::Value {
-    fn detect(cmd: &str, args: &[&str]) -> Option<String> {
+    // macOS app bundles have limited PATH — extend with common locations
+    let extra_paths = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let full_path = format!("{}:{}", extra_paths, current_path);
+
+    fn detect_with_path(cmd: &str, args: &[&str], path: &str) -> Option<String> {
         Command::new(cmd)
             .args(args)
+            .env("PATH", path)
             .output()
             .ok()
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
     }
 
+    let detect = |cmd: &str, args: &[&str]| detect_with_path(cmd, args, &full_path);
+
     let node = detect("node", &["--version"]);
-    let node_path = Command::new("which").arg("node").output().ok()
+    let node_path = Command::new("which").arg("node").env("PATH", &full_path).output().ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
 
     let docker = detect("docker", &["--version"])
