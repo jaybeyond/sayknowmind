@@ -95,7 +95,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   downloadRuntime: async () => {
     set({ status: "downloading", downloadProgress: 10, downloadLabel: "Downloading Node.js + server...", error: null });
     try {
-      const res = await fetch(`${LOCAL_API}/download`, { method: "POST" });
+      const res = await fetch(`${LOCAL_API}/download`);
       if (!res.ok) throw new Error("Download failed");
       const data = await res.json();
       if (data.error) {
@@ -112,7 +112,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
 
   startLocalServer: async () => {
     try {
-      const res = await fetch(`${LOCAL_API}/start`, { method: "POST" });
+      const res = await fetch(`${LOCAL_API}/start`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       set({ status: "running", serverPort: data.port });
@@ -123,7 +123,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
 
   stopLocalServer: async () => {
     try {
-      await fetch(`${LOCAL_API}/stop`, { method: "POST" });
+      await fetch(`${LOCAL_API}/stop`);
       set({ status: "ready", serverPort: null });
     } catch {
       // silent

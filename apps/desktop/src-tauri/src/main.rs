@@ -342,11 +342,11 @@ fn handle_api_request(mut stream: TcpStream) {
     let (status, body) = if first_line.contains("/env") {
         let env = detect_environment();
         ("200 OK", serde_json::to_string(&env).unwrap_or_else(|_| "{}".to_string()))
-    } else if first_line.contains("/start") && first_line.starts_with("POST") {
+    } else if first_line.contains("/start") {
         do_start_local_server()
-    } else if first_line.contains("/stop") && first_line.starts_with("POST") {
+    } else if first_line.contains("/stop") {
         do_stop_local_server()
-    } else if first_line.contains("/download") && first_line.starts_with("POST") {
+    } else if first_line.contains("/download") {
         do_download_runtime()
     } else {
         ("404 Not Found", r#"{"error":"not found"}"#.to_string())
