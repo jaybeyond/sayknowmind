@@ -30,6 +30,18 @@ interface RuntimeState {
 
 const RUNTIME_API = "/api/desktop/runtime";
 
+/** Try Tauri invoke (desktop), fall back to API (web) */
+async function tauriInvoke(cmd: string): Promise<unknown> {
+  try {
+    // @ts-expect-error — __TAURI__ injected by Tauri runtime
+    if (typeof window !== "undefined" && window.__TAURI__) {
+      // @ts-expect-error
+      return await window.__TAURI__.core.invoke(cmd);
+    }
+  } catch { /* not in Tauri */ }
+  return null;
+}
+
 export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   status: "checking",
   downloadProgress: 0,
@@ -45,7 +57,28 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   checkRuntime: async () => {
     set({ status: "checking", error: null });
     try {
-      const res = await fetch(`${RUNTIME_API}/check`);
+      // Try Tauri invoke first (runs on user's machine)
+      const tauriData = await tauriInvoke("detect_environment") as Record<string, unknown> | null;
+
+      if (tauriData) {
+        const node = tauriData.node as { version: string; source: string; path: string } | null;
+        set({
+          status: (node && tauriData.serverInstalled) ? "ready" : "not-installed",
+          nodeVersion: node?.version ?? null,
+          serverPort: null,
+          environment: {
+            node: node as EnvironmentInfo["node"],
+            docker: tauriData.docker as EnvironmentInfo["docker"],
+            ollama: tauriData.ollama as EnvironmentInfo["ollama"],
+            git: tauriData.git as EnvironmentInfo["git"],
+            serverInstalled: tauriData.serverInstalled as boolean,
+          },
+        });
+        return;
+      }
+
+      // Fallback: API call (cloud mode)
+      const res = await fetch(`${RUNTIME_API}`);
       if (!res.ok) throw new Error("Check failed");
       const data = await res.json();
       set({

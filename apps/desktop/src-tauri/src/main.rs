@@ -39,6 +39,55 @@ fn get_app_info() -> serde_json::Value {
     })
 }
 
+/// Detect local environment: Node.js, Docker, Ollama, Git
+#[tauri::command]
+fn detect_environment() -> serde_json::Value {
+    fn detect(cmd: &str, args: &[&str]) -> Option<String> {
+        Command::new(cmd)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    }
+
+    let node = detect("node", &["--version"]);
+    let node_path = Command::new("which").arg("node").output().ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+    let docker = detect("docker", &["--version"])
+        .map(|v| v.replace("Docker version ", "").split(',').next().unwrap_or("").to_string());
+
+    let ollama_version = detect("ollama", &["--version"])
+        .map(|v| v.replace("ollama version ", ""));
+    let ollama_running = port_open(11434);
+
+    let git = detect("git", &["--version"])
+        .map(|v| v.replace("git version ", ""));
+
+    // Check if web-standalone exists
+    let home = std::env::var("HOME").unwrap_or_default();
+    let app_data = format!("{}/Library/Application Support/com.sayknowmind.desktop", home);
+    let server_installed = PathBuf::from(&format!("{}/web-standalone/server.js", app_data)).exists();
+    let node_bundled = PathBuf::from(&format!("{}/node/bin/node", app_data)).exists();
+
+    serde_json::json!({
+        "node": node.as_ref().map(|v| serde_json::json!({
+            "version": v,
+            "source": if node_bundled { "bundled" } else { "system" },
+            "path": node_path,
+        })),
+        "docker": docker.map(|v| serde_json::json!({ "version": v })),
+        "ollama": ollama_version.map(|v| serde_json::json!({
+            "version": v,
+            "running": ollama_running,
+        })),
+        "git": git.map(|v| serde_json::json!({ "version": v })),
+        "serverInstalled": server_installed,
+        "appDataPath": app_data,
+    })
+}
+
 /// Check if a local port is reachable (200ms timeout).
 fn port_open(port: u16) -> bool {
     let addr = format!("127.0.0.1:{}", port);
@@ -253,6 +302,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             quick_search,
             get_app_info,
+            detect_environment,
             check_services_health,
             start_local_services,
             stop_local_services,
