@@ -34,7 +34,7 @@ export function SettingsPage() {
       { id: "privacy", label: t("settings.tabPrivacy") },
       { id: "integrations", label: t("settings.tabIntegrations") },
       { id: "services", label: t("settings.tabServices") },
-      { id: "runtime", label: "Local Mode" },
+      { id: "runtime", label: t("settings.tabRuntime") },
     ];
     return all;
   }, [t, cloud]);
