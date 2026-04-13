@@ -11,7 +11,9 @@ export function getDeployMode(): DeployMode {
 export function isDesktop(): boolean {
   if (typeof window === "undefined") return false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return !!(window as any).__TAURI_INTERNALS__;
+  const w = window as any;
+  // Check Tauri internals (local URL mode) or injected env (cloud URL mode)
+  return !!(w.__TAURI_INTERNALS__ || w.__SAYKNOW_ENV__);
 }
 
 /** Resolved environment — works on both server and client */
