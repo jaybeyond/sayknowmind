@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  serverExternalPackages: ["pg", "better-auth"],
+  serverExternalPackages: ["pg", "better-auth", "@electric-sql/pglite"],
   images: {
     remotePatterns: [
       {

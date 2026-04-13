@@ -1,0 +1,13 @@
+{
+  "name": "sayknowmind-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "cargo tauri dev",
+    "build": "cargo tauri build",
+    "icons": "cargo tauri icon"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Brain, LogIn, UserPlus } from "lucide-react";
+import { Brain, Globe, LogIn, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, useI18nStore, localeNames, type Locale } from "@/lib/i18n";
 import { AuthModal } from "@/components/auth/auth-modal";
 import { GalleryCard, type GalleryItem } from "./gallery-card";
 
@@ -20,6 +20,8 @@ export function PublicGallery() {
 
   const [authOpen, setAuthOpen] = React.useState(false);
   const [authMode, setAuthMode] = React.useState<"login" | "signup">("login");
+  const [langOpen, setLangOpen] = React.useState(false);
+  const { locale, setLocale } = useI18nStore();
 
   const openLogin = () => {
     setAuthMode("login");
@@ -94,6 +96,27 @@ export function PublicGallery() {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <Button variant="ghost" size="sm" onClick={() => setLangOpen(!langOpen)}>
+                <Globe className="size-4 mr-1.5" />
+                {localeNames[locale]}
+              </Button>
+              {langOpen && (
+                <div className="absolute right-0 top-full mt-1 bg-popover border rounded-md shadow-md py-1 z-50 min-w-[120px]">
+                  {(Object.entries(localeNames) as [Locale, string][]).map(([code, name]) => (
+                    <button
+                      key={code}
+                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${
+                        locale === code ? "text-primary font-medium" : ""
+                      }`}
+                      onClick={() => { setLocale(code); setLangOpen(false); }}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Button variant="ghost" size="sm" onClick={openLogin}>
               <LogIn className="size-4 mr-1.5" />
               {t("auth.login")}

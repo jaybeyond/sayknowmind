@@ -19,6 +19,7 @@ use tauri::{
     tray::TrayIconBuilder,
     Manager, Runtime,
 };
+use tauri_plugin_shell::ShellExt;
 
 // ---------------------------------------------------------------------------
 // Commands
@@ -50,13 +51,16 @@ fn port_open(port: u16) -> bool {
 
 #[tauri::command]
 fn check_services_health() -> serde_json::Value {
+    // Cloud services: check via HTTPS reachability
+    let cloud_ok = std::process::Command::new("curl")
+        .args(["-sf", "--max-time", "3", "https://mind.sayknow.ai/api/health"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
     serde_json::json!({
-        "web":       port_open(3000),
-        "edgequake": port_open(8080),
-        "ai_server": port_open(4000),
-        "postgres":  port_open(5432),
-        "ollama":    port_open(11434),
-        "mcp":       port_open(8082),
+        "cloud":  cloud_ok,
+        "ollama": port_open(11434),
     })
 }
 
@@ -221,7 +225,7 @@ fn setup_global_shortcut<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyK);
 
     let handle = app.handle().clone();
-    app.global_shortcut().on_shortcut(shortcut, move |_app, _sc, _ev| {
+    if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _sc, _ev| {
         if let Some(w) = handle.get_webview_window("main") {
             if w.is_visible().unwrap_or(false) {
                 let _ = w.hide();
@@ -230,7 +234,9 @@ fn setup_global_shortcut<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                 let _ = w.set_focus();
             }
         }
-    })?;
+    }) {
+        eprintln!("[desktop] Failed to register global shortcut: {}", e);
+    }
 
     Ok(())
 }
@@ -258,13 +264,34 @@ fn main() {
             setup_tray(app)?;
             setup_global_shortcut(app)?;
 
-            // Auto-start services on launch
+            // Start embedded Next.js server (PGlite mode)
+            let sidecar = app.shell()
+                .sidecar("start-server")
+                .expect("failed to create sidecar command");
+
+            let (mut _rx, _child) = sidecar
+                .spawn()
+                .expect("failed to spawn Next.js sidecar");
+
+            eprintln!("[desktop] Next.js sidecar started on port 3457");
+
+            // Wait for server to be ready, then show window
+            std::thread::spawn(move || {
+                for _ in 0..30 {
+                    std::thread::sleep(Duration::from_secs(1));
+                    if port_open(3457) {
+                        eprintln!("[desktop] Server ready on port 3457");
+                        return;
+                    }
+                }
+                eprintln!("[desktop] WARNING: Server did not start within 30s");
+            });
+
+            // Check local Ollama
             std::thread::spawn(|| {
-                // Wait a moment for the window to load
-                std::thread::sleep(Duration::from_secs(2));
-                if !port_open(3000) {
-                    eprintln!("[desktop] Web service not running, attempting to start...");
-                    let _ = start_local_services();
+                std::thread::sleep(Duration::from_secs(3));
+                if !port_open(11434) {
+                    eprintln!("[desktop] Ollama not running — local AI unavailable. Install from https://ollama.ai");
                 }
             });
 

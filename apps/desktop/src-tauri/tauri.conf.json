@@ -1,19 +1,19 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/dev/tooling/cli/schema.json",
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
   "productName": "SayknowMind",
   "version": "0.1.0",
   "identifier": "com.sayknowmind.desktop",
   "build": {
-    "frontendDist": "../../web/.next",
+    "frontendDist": "http://localhost:3457",
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "cd ../../web && pnpm build",
-    "beforeDevCommand": "cd ../../web && pnpm dev"
+    "beforeBuildCommand": "",
+    "beforeDevCommand": ""
   },
   "app": {
-    "title": "SayknowMind",
     "windows": [
       {
         "title": "SayknowMind - Agentic Second Brain",
+        "url": "http://localhost:3457",
         "width": 1280,
         "height": 800,
         "resizable": true,
@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self' http://localhost:3457; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3457; style-src 'self' 'unsafe-inline' http://localhost:3457; img-src 'self' data: blob: http: https:; connect-src 'self' http://localhost:* ws://localhost:*; font-src 'self' data: http://localhost:3457"
     },
     "trayIcon": {
       "iconPath": "icons/tray.png",
@@ -39,6 +39,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "externalBin": ["../sidecar/start-server"],
     "macOS": {
       "entitlements": null,
       "exceptionDomain": "",
@@ -56,10 +57,10 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://releases.sayknowmind.ai/{{target}}/{{arch}}/{{current_version}}"],
+      "endpoints": ["https://releases.sayknow.ai/{{target}}/{{arch}}/{{current_version}}"],
       "dialog": true,
       "pubkey": ""
     },
-    "global-shortcut": {}
+    "global-shortcut": null
   }
 }
