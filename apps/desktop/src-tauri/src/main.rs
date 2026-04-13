@@ -9,11 +9,12 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::net::TcpStream;
+use std::net::{TcpStream, TcpListener};
 use std::process::Command;
 use std::time::Duration;
 use std::path::PathBuf;
 use std::fs;
+use std::io::{Read as IoRead, Write as IoWrite};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -299,6 +300,189 @@ fn setup_global_shortcut<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Local API Server (port 3458) — lets cloud-loaded frontend talk to desktop
+// ---------------------------------------------------------------------------
+
+fn start_local_api_server(port: u16) {
+    let listener = match TcpListener::bind(format!("127.0.0.1:{}", port)) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("[api] Failed to bind port {}: {}", port, e);
+            return;
+        }
+    };
+    eprintln!("[api] Local API server on http://127.0.0.1:{}", port);
+
+    for stream in listener.incoming() {
+        if let Ok(stream) = stream {
+            std::thread::spawn(move || handle_api_request(stream));
+        }
+    }
+}
+
+fn handle_api_request(mut stream: TcpStream) {
+    let mut buf = [0u8; 4096];
+    let n = match stream.read(&mut buf) {
+        Ok(n) => n,
+        Err(_) => return,
+    };
+    let request = String::from_utf8_lossy(&buf[..n]);
+    let first_line = request.lines().next().unwrap_or("");
+
+    // CORS headers for cloud-loaded frontend
+    let cors = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type";
+
+    // Handle OPTIONS preflight
+    if first_line.starts_with("OPTIONS") {
+        let response = format!("HTTP/1.1 204 No Content\r\n{}\r\n\r\n", cors);
+        let _ = stream.write_all(response.as_bytes());
+        return;
+    }
+
+    let (status, body) = if first_line.contains("/env") {
+        let env = detect_environment();
+        ("200 OK", serde_json::to_string(&env).unwrap_or_else(|_| "{}".to_string()))
+    } else if first_line.contains("/start") && first_line.starts_with("POST") {
+        do_start_local_server()
+    } else if first_line.contains("/stop") && first_line.starts_with("POST") {
+        do_stop_local_server()
+    } else if first_line.contains("/download") && first_line.starts_with("POST") {
+        do_download_runtime()
+    } else {
+        ("404 Not Found", r#"{"error":"not found"}"#.to_string())
+    };
+
+    let response = format!(
+        "HTTP/1.1 {}\r\n{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        status, cors, body.len(), body
+    );
+    let _ = stream.write_all(response.as_bytes());
+}
+
+fn get_app_data_dir() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    format!("{}/Library/Application Support/com.sayknowmind.desktop", home)
+}
+
+fn do_start_local_server() -> (&'static str, String) {
+    let app_data = get_app_data_dir();
+    let web_dir = format!("{}/web-standalone", app_data);
+    let server_js = format!("{}/server.js", web_dir);
+
+    if !PathBuf::from(&server_js).exists() {
+        return ("400 Bad Request", r#"{"error":"Server files not found. Download first."}"#.to_string());
+    }
+
+    // Find node
+    let node = find_node(&app_data);
+    if node.is_none() {
+        return ("400 Bad Request", r#"{"error":"Node.js not found"}"#.to_string());
+    }
+    let node_bin = node.unwrap();
+
+    // Generate or read auth secret
+    let secret_file = format!("{}/auth-secret", app_data);
+    let secret = if PathBuf::from(&secret_file).exists() {
+        fs::read_to_string(&secret_file).unwrap_or_default().trim().to_string()
+    } else {
+        let s = Command::new("openssl").args(["rand", "-base64", "32"])
+            .output().ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_else(|| "fallback-desktop-secret".to_string());
+        let _ = fs::create_dir_all(&app_data);
+        let _ = fs::write(&secret_file, &s);
+        s
+    };
+
+    let result = Command::new(&node_bin)
+        .arg("server.js")
+        .current_dir(&web_dir)
+        .env("NODE_ENV", "production")
+        .env("PGLITE_MODE", "true")
+        .env("PORT", "3457")
+        .env("BETTER_AUTH_SECRET", &secret)
+        .env("BETTER_AUTH_URL", "http://localhost:3457")
+        .env("NEXT_PUBLIC_APP_URL", "http://localhost:3457")
+        .spawn();
+
+    match result {
+        Ok(child) => {
+            ("200 OK", format!(r#"{{"success":true,"port":3457,"pid":{}}}"#, child.id()))
+        }
+        Err(e) => {
+            ("500 Internal Server Error", format!(r#"{{"error":"{}"}}"#, e))
+        }
+    }
+}
+
+fn do_stop_local_server() -> (&'static str, String) {
+    let _ = Command::new("sh").args(["-c", "lsof -ti:3457 | xargs kill -9 2>/dev/null"]).output();
+    ("200 OK", r#"{"success":true}"#.to_string())
+}
+
+fn do_download_runtime() -> (&'static str, String) {
+    let app_data = get_app_data_dir();
+    let node_dir = format!("{}/node", app_data);
+    let node_bin = format!("{}/bin/node", node_dir);
+    let web_dir = format!("{}/web-standalone", app_data);
+
+    let _ = fs::create_dir_all(&app_data);
+
+    // Download Node.js if not present
+    if !PathBuf::from(&node_bin).exists() {
+        let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
+        let url = format!("https://nodejs.org/dist/v22.15.0/node-v22.15.0-darwin-{}.tar.gz", arch);
+        let tar_path = format!("{}/node.tar.gz", app_data);
+
+        let dl = Command::new("curl").args(["-fSL", "-o", &tar_path, &url]).output();
+        if dl.is_err() || !dl.unwrap().status.success() {
+            return ("500 Internal Server Error", r#"{"error":"Failed to download Node.js"}"#.to_string());
+        }
+
+        let _ = fs::create_dir_all(&node_dir);
+        let extract = Command::new("tar")
+            .args(["-xzf", &tar_path, "--strip-components=1", "-C", &node_dir])
+            .output();
+        let _ = fs::remove_file(&tar_path);
+
+        if extract.is_err() || !extract.unwrap().status.success() {
+            return ("500 Internal Server Error", r#"{"error":"Failed to extract Node.js"}"#.to_string());
+        }
+    }
+
+    // Copy web-standalone if not present
+    if !PathBuf::from(&format!("{}/server.js", web_dir)).exists() {
+        // Check if already exists in common locations
+        let home = std::env::var("HOME").unwrap_or_default();
+        let candidates = vec![
+            format!("{}/web-standalone", app_data),
+        ];
+
+        // If not found, tell user to build
+        let found = candidates.iter().any(|c| PathBuf::from(&format!("{}/server.js", c)).exists());
+        if !found {
+            return ("200 OK", r#"{"status":"node_ready","serverNeeded":true,"message":"Node.js installed. Server files need to be built: cd apps/web && pnpm build"}"#.to_string());
+        }
+    }
+
+    ("200 OK", r#"{"status":"complete"}"#.to_string())
+}
+
+fn find_node(app_data: &str) -> Option<String> {
+    let bundled = format!("{}/node/bin/node", app_data);
+    if PathBuf::from(&bundled).exists() {
+        return Some(bundled);
+    }
+    // Check system
+    let extra_paths = "/opt/homebrew/bin:/usr/local/bin:/usr/bin";
+    Command::new("sh")
+        .args(["-c", &format!("PATH={} which node", extra_paths)])
+        .output().ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -343,6 +527,11 @@ fn main() {
                     }
                 }
                 eprintln!("[desktop] WARNING: Server did not start within 30s");
+            });
+
+            // Start local API server on port 3458 for frontend communication
+            std::thread::spawn(|| {
+                start_local_api_server(3458);
             });
 
             // Inject environment info into webview

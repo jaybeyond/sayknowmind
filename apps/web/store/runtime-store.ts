@@ -29,6 +29,7 @@ interface RuntimeState {
 }
 
 const RUNTIME_API = "/api/desktop/runtime";
+const LOCAL_API = "http://127.0.0.1:3458";
 
 /** Read injected env from Tauri webview, or fall back to API */
 function getInjectedEnv(): Record<string, unknown> | null {
@@ -73,8 +74,13 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         return;
       }
 
-      // Fallback: API call (cloud mode)
-      const res = await fetch(`${RUNTIME_API}`);
+      // Fallback: try local API server (port 3458), then cloud API
+      let res: Response;
+      try {
+        res = await fetch(`${LOCAL_API}/env`, { signal: AbortSignal.timeout(2000) });
+      } catch {
+        res = await fetch(`${RUNTIME_API}`);
+      }
       if (!res.ok) throw new Error("Check failed");
       const data = await res.json();
       set({
@@ -95,51 +101,28 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   },
 
   downloadRuntime: async () => {
-    set({ status: "downloading", downloadProgress: 0, downloadLabel: "Preparing...", error: null });
+    set({ status: "downloading", downloadProgress: 10, downloadLabel: "Downloading Node.js + server...", error: null });
     try {
-      const res = await fetch(`${RUNTIME_API}/download`, { method: "POST" });
+      const res = await fetch(`${LOCAL_API}/download`, { method: "POST" });
       if (!res.ok) throw new Error("Download failed");
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No stream");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-            if (event.progress !== undefined) {
-              set({ downloadProgress: event.progress, downloadLabel: event.label ?? "" });
-            }
-            if (event.status === "complete") {
-              set({ status: "ready", downloadProgress: 100, downloadLabel: "Complete" });
-            }
-            if (event.error) {
-              set({ status: "error", error: event.error });
-            }
-          } catch { /* skip malformed */ }
-        }
+      const data = await res.json();
+      if (data.error) {
+        set({ status: "error", error: data.error, downloadProgress: 0 });
+      } else if (data.serverNeeded) {
+        set({ status: "not-installed", downloadProgress: 50, downloadLabel: data.message, error: data.message });
+      } else {
+        set({ status: "ready", downloadProgress: 100, downloadLabel: "Complete" });
       }
     } catch (err) {
-      set({ status: "error", error: (err as Error).message });
+      set({ status: "error", error: (err as Error).message, downloadProgress: 0 });
     }
   },
 
   startLocalServer: async () => {
     try {
-      const res = await fetch(`${RUNTIME_API}/start`, { method: "POST" });
-      if (!res.ok) throw new Error("Start failed");
+      const res = await fetch(`${LOCAL_API}/start`, { method: "POST" });
       const data = await res.json();
+      if (data.error) throw new Error(data.error);
       set({ status: "running", serverPort: data.port });
     } catch (err) {
       set({ status: "error", error: (err as Error).message });
@@ -148,7 +131,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
 
   stopLocalServer: async () => {
     try {
-      await fetch(`${RUNTIME_API}/stop`, { method: "POST" });
+      await fetch(`${LOCAL_API}/stop`, { method: "POST" });
       set({ status: "ready", serverPort: null });
     } catch {
       // silent
