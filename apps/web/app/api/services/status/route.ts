@@ -13,11 +13,12 @@ interface ServiceStatus {
 function maskUrl(url: string): string {
   try {
     const u = new URL(url);
-    if (u.hostname.endsWith(".railway.internal")) return `[internal] ${u.port || "default"}`;
     if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return `[local] ${u.port || "default"}`;
-    return u.origin;
+    // Hide all external URLs — only show port or [cloud]
+    if (u.hostname.includes("railway")) return `[cloud] ${u.port || "443"}`;
+    return `[cloud] ${u.port || "443"}`;
   } catch {
-    return "[unknown]";
+    return "[internal]";
   }
 }
 
