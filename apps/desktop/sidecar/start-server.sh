@@ -23,4 +23,22 @@ fi
 echo "[desktop] Starting SayknowMind on port $PORT (PGlite mode)"
 
 # Run the standalone Next.js server
-cd "$DIR/../web-standalone" && exec node server.js
+# Search order: bundled Resources > sibling folder > app data cache
+WEB_DIR=""
+for candidate in \
+  "$DIR/../Resources/web-standalone" \
+  "$DIR/../web-standalone" \
+  "$HOME/Library/Application Support/com.sayknowmind.desktop/web-standalone"; do
+  if [ -f "$candidate/server.js" ]; then
+    WEB_DIR="$candidate"
+    break
+  fi
+done
+
+if [ -z "$WEB_DIR" ]; then
+  echo "[desktop] ERROR: web-standalone not found. Please run the installer."
+  exit 1
+fi
+
+echo "[desktop] Using server at: $WEB_DIR"
+cd "$WEB_DIR" && exec node server.js
