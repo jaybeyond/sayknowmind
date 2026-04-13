@@ -30,16 +30,12 @@ interface RuntimeState {
 
 const RUNTIME_API = "/api/desktop/runtime";
 
-/** Try Tauri invoke (desktop), fall back to API (web) */
-async function tauriInvoke(cmd: string): Promise<unknown> {
-  try {
-    // @ts-expect-error — __TAURI__ injected by Tauri runtime
-    if (typeof window !== "undefined" && window.__TAURI__) {
-      // @ts-expect-error
-      return await window.__TAURI__.core.invoke(cmd);
-    }
-  } catch { /* not in Tauri */ }
-  return null;
+/** Read injected env from Tauri webview, or fall back to API */
+function getInjectedEnv(): Record<string, unknown> | null {
+  if (typeof window === "undefined") return null;
+  // @ts-expect-error — injected by Tauri main.rs via eval()
+  const env = window.__SAYKNOW_ENV__;
+  return env && typeof env === "object" ? env as Record<string, unknown> : null;
 }
 
 export const useRuntimeStore = create<RuntimeState>((set, get) => ({
@@ -57,8 +53,8 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   checkRuntime: async () => {
     set({ status: "checking", error: null });
     try {
-      // Try Tauri invoke first (runs on user's machine)
-      const tauriData = await tauriInvoke("detect_environment") as Record<string, unknown> | null;
+      // Try injected env from Tauri (runs on user's machine)
+      const tauriData = getInjectedEnv();
 
       if (tauriData) {
         const node = tauriData.node as { version: string; source: string; path: string } | null;

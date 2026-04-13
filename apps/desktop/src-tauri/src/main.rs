@@ -345,19 +345,24 @@ fn main() {
                 eprintln!("[desktop] WARNING: Server did not start within 30s");
             });
 
-            // Check local Ollama
-            std::thread::spawn(|| {
-                std::thread::sleep(Duration::from_secs(3));
-                if !port_open(11434) {
-                    eprintln!("[desktop] Ollama not running — local AI unavailable. Install from https://ollama.ai");
-                }
-            });
+            // Inject environment info into webview
+            if let Some(window) = app.get_webview_window("main") {
+                let env_data = detect_environment();
+                let env_json = serde_json::to_string(&env_data).unwrap_or_else(|_| "{}".to_string());
+                let js = format!(
+                    "window.__SAYKNOW_ENV__ = {};",
+                    env_json
+                );
+                let w = window.clone();
+                std::thread::spawn(move || {
+                    // Wait for page to load
+                    std::thread::sleep(Duration::from_secs(3));
+                    let _ = w.eval(&js);
+                    eprintln!("[desktop] Environment injected into webview");
+                });
 
-            #[cfg(debug_assertions)]
-            {
-                if let Some(window) = app.get_webview_window("main") {
-                    window.open_devtools();
-                }
+                #[cfg(debug_assertions)]
+                window.open_devtools();
             }
             Ok(())
         })
