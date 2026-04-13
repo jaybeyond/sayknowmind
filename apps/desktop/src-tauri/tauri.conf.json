@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' https://mind.sayknow.ai; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://mind.sayknow.ai; style-src 'self' 'unsafe-inline' https://mind.sayknow.ai; img-src 'self' data: blob: http: https:; connect-src 'self' https://mind.sayknow.ai http://localhost:11434 ws://localhost:* wss://mind.sayknow.ai; font-src 'self' data: https://mind.sayknow.ai"
+      "csp": "default-src 'self' https://mind.sayknow.ai; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://mind.sayknow.ai; style-src 'self' 'unsafe-inline' https://mind.sayknow.ai; img-src 'self' data: blob: http: https:; connect-src 'self' https://mind.sayknow.ai http://127.0.0.1:3458 http://localhost:3457 http://localhost:11434 ws://localhost:* wss://mind.sayknow.ai; font-src 'self' data: https://mind.sayknow.ai"
     },
     "trayIcon": {
       "iconPath": "icons/tray.png",
