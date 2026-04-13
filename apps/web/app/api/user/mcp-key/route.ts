@@ -3,6 +3,16 @@ import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
 import { randomBytes } from "crypto";
 
+async function ensureTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_mcp_keys (
+      user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+      api_key TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
 /** POST /api/user/mcp-key — Generate a new MCP API key for the current user */
 export async function POST() {
   const userId = await getUserIdFromRequest();
@@ -10,15 +20,10 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  await ensureTable();
+
   const apiKey = `sk-mcp-${randomBytes(32).toString("hex")}`;
 
-  // Store in user metadata (upsert)
-  await pool.query(
-    `UPDATE "user" SET "updatedAt" = NOW() WHERE id = $1`,
-    [userId],
-  );
-
-  // Store key in a dedicated table or metadata
   await pool.query(
     `INSERT INTO user_mcp_keys (user_id, api_key, created_at)
      VALUES ($1, $2, NOW())
@@ -35,6 +40,8 @@ export async function GET() {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  await ensureTable();
 
   const result = await pool.query(
     `SELECT api_key FROM user_mcp_keys WHERE user_id = $1`,

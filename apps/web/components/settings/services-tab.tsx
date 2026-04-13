@@ -63,7 +63,6 @@ export function ServicesTab() {
               <div>
                 <span className="text-sm font-medium">{svc.name}</span>
                 {svc.version && <span className="text-xs text-muted-foreground ml-1.5">v{svc.version}</span>}
-                <p className="text-xs text-muted-foreground">{svc.url}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">

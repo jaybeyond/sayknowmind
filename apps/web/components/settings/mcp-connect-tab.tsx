@@ -12,6 +12,15 @@ export function McpConnectTab() {
   const [transport, setTransport] = useState<Transport>("streamable-http");
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  // Load existing key on mount
+  if (!loaded && typeof window !== "undefined") {
+    setLoaded(true);
+    fetch("/api/user/mcp-key").then((r) => r.ok ? r.json() : null).then((data) => {
+      if (data?.apiKey) setApiKey(data.apiKey);
+    }).catch(() => {});
+  }
 
   const serverUrl = typeof window !== "undefined"
     ? `${window.location.origin}/mcp`
