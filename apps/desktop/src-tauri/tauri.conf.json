@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.sayknowmind.desktop",
   "build": {
-    "frontendDist": "http://localhost:3457",
+    "frontendDist": "https://mind.sayknow.ai",
     "devUrl": "http://localhost:3000",
     "beforeBuildCommand": "",
     "beforeDevCommand": ""
@@ -13,7 +13,7 @@
     "windows": [
       {
         "title": "SayknowMind - Agentic Second Brain",
-        "url": "http://localhost:3457",
+        "url": "https://mind.sayknow.ai",
         "width": 1280,
         "height": 800,
         "resizable": true,
@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' http://localhost:3457; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3457; style-src 'self' 'unsafe-inline' http://localhost:3457; img-src 'self' data: blob: http: https:; connect-src 'self' http://localhost:* ws://localhost:*; font-src 'self' data: http://localhost:3457"
+      "csp": "default-src 'self' https://mind.sayknow.ai; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://mind.sayknow.ai; style-src 'self' 'unsafe-inline' https://mind.sayknow.ai; img-src 'self' data: blob: http: https:; connect-src 'self' https://mind.sayknow.ai http://localhost:11434 ws://localhost:* wss://mind.sayknow.ai; font-src 'self' data: https://mind.sayknow.ai"
     },
     "trayIcon": {
       "iconPath": "icons/tray.png",

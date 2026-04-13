@@ -42,6 +42,7 @@ import { useCategoriesStore } from "@/store/categories-store";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { useRuntimeStore } from "@/store/runtime-store";
 
 interface MemoryHeaderProps {
   title?: string;
@@ -116,6 +117,7 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   return (
     <>
     <AddMemoryDialog open={addOpen} onOpenChange={setAddOpen} />
+    <DownloadBanner />
     <header className="w-full border-b">
       <div className="flex items-center justify-between h-14 px-4">
         <div className="flex items-center gap-3">
@@ -339,5 +341,26 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
       </div>
     </header>
     </>
+  );
+}
+
+function DownloadBanner() {
+  const { status, downloadProgress, downloadLabel } = useRuntimeStore();
+  if (status !== "downloading") return null;
+
+  return (
+    <div className="w-full bg-primary/10 border-b px-4 py-1.5 flex items-center gap-3">
+      <div className="size-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="flex-1 flex items-center gap-3 text-xs">
+        <span className="font-medium text-primary">{downloadLabel}</span>
+        <div className="flex-1 max-w-xs h-1.5 rounded-full bg-primary/20 overflow-hidden">
+          <div
+            className="h-full bg-primary rounded-full transition-all duration-300"
+            style={{ width: `${downloadProgress}%` }}
+          />
+        </div>
+        <span className="font-mono text-muted-foreground">{downloadProgress}%</span>
+      </div>
+    </div>
   );
 }
