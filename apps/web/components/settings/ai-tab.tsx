@@ -564,10 +564,14 @@ export function AITab() {
         }),
       });
 
-      if (!res.ok) throw new Error("Save failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message ?? `Server error ${res.status}`);
+      }
       toast.success(t("settings.saved"));
-    } catch {
-      toast.error(t("settings.saveFailed") ?? "Failed to save settings");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast.error(`${t("settings.saveFailed") ?? "Failed to save"}: ${msg}`);
     }
   };
 

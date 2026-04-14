@@ -67,8 +67,9 @@ export async function POST(request: NextRequest) {
   try {
     await saveUserProviders(userId, validProviders);
   } catch (err) {
-    console.error("[providers/POST] DB save error:", err);
-    return NextResponse.json({ message: "Failed to save" }, { status: 500 });
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("[providers/POST] DB save error:", errMsg, err);
+    return NextResponse.json({ message: `Failed to save: ${errMsg}` }, { status: 500 });
   }
 
   // Forward decrypted keys to AI Server for cascade routing
