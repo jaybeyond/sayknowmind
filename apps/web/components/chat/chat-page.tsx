@@ -327,6 +327,8 @@ export function ChatPage() {
     } finally {
       setIsStreaming(false);
       abortRef.current = null;
+      // Notify header badge to refresh usage count
+      window.dispatchEvent(new CustomEvent("sayknow-usage-changed"));
     }
   };
 

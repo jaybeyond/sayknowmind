@@ -69,13 +69,23 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   const { categories } = useCategoriesStore();
   const { t } = useTranslation();
 
-  // Daily usage limit
+  // Daily usage limit — fetch on mount + listen for changes + poll every 30s
   const [usage, setUsage] = React.useState<{ used: number; limit: number; hasOwnKeys: boolean } | null>(null);
-  React.useEffect(() => {
+  const fetchUsage = React.useCallback(() => {
     fetch("/api/usage").then((r) => r.ok ? r.json() : null).then((data) => {
       if (data) setUsage({ used: data.used, limit: data.limit, hasOwnKeys: data.hasOwnKeys });
     }).catch(() => {});
   }, []);
+
+  React.useEffect(() => {
+    fetchUsage();
+    // Poll every 30s for real-time updates
+    const interval = setInterval(fetchUsage, 30_000);
+    // Listen for custom event (fired after AI calls)
+    const handler = () => fetchUsage();
+    window.addEventListener("sayknow-usage-changed", handler);
+    return () => { clearInterval(interval); window.removeEventListener("sayknow-usage-changed", handler); };
+  }, [fetchUsage]);
 
   // Build breadcrumb segments for folder > tab navigation
   const breadcrumb = React.useMemo(() => {
