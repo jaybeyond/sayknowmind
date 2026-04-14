@@ -158,10 +158,7 @@ export function PublicGallery() {
           !loading && items.length === 0 && !activeSearch ? "mb-8" : "mb-4"
         }`}>
           {(!loading && items.length === 0 && !activeSearch) && (
-            <div className="flex flex-col items-center gap-3">
-              <img src="/logo-icon.svg" alt="SayknowMind" className="size-16 rounded-2xl" />
-              <img src="/logo-text.svg" alt="SayknowMind" className="h-5 invert dark:invert-0" />
-            </div>
+            <img src="/logo-text.svg" alt="SayknowMind" className="h-8 md:h-10 invert dark:invert-0" />
           )}
 
           {/* Search bar */}
