@@ -21,6 +21,10 @@ export const metadata: Metadata = {
   title: "SayknowMind - Agentic Second Brain",
   description:
     "Everything you say, we know, and mind forever. Personal knowledge management with GraphRAG.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({

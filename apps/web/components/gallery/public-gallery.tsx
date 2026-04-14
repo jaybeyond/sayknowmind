@@ -91,6 +91,7 @@ export function PublicGallery() {
         <div className="max-w-7xl mx-auto flex items-center justify-between px-4 md:px-6 h-14">
           <div className="flex items-center gap-2">
             <img src="/app-icon.png" alt="SayknowMind" className="size-7 rounded-lg" />
+            <img src="/logo-text.svg" alt="SayknowMind" className="h-4 hidden sm:block invert dark:invert-0" />
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
