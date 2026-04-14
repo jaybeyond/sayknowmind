@@ -317,17 +317,14 @@ export function MemorySidebar({
           <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
             <DialogTrigger asChild>
               <button className="flex items-center gap-2 outline-none cursor-pointer">
-                <div className="size-7 rounded-full overflow-hidden bg-linear-to-br from-blue-400 via-indigo-500 to-violet-500 flex items-center justify-center ring-1 ring-white/40 shadow-lg" />
-                <span className="font-medium text-muted-foreground">
-                  {t("app.title")}
-                </span>
+                <img src="/app-icon.png" alt="SayknowMind" className="size-7 rounded-lg" />
                 <ChevronDown className="size-3 text-muted-foreground" />
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-sm">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <div className="size-6 rounded-full bg-linear-to-br from-blue-400 via-indigo-500 to-violet-500 shrink-0" />
+                  <img src="/app-icon.png" alt="" className="size-6 rounded-lg shrink-0" />
                   {userName || t("app.title")}
                 </DialogTitle>
                 <DialogDescription>{t("app.subtitle")}</DialogDescription>
