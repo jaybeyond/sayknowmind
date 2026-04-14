@@ -12,6 +12,21 @@
 import type { SharedContent, AccessConditions, AccessConditionType, PrivacyLevel } from "@/lib/types";
 import { isPrivateMode, canShare } from "@/lib/private-mode";
 import { pool } from "@/lib/db";
+
+let sharedColumnsEnsured = false;
+export async function ensureSharedColumns() {
+  if (sharedColumnsEnsured) return;
+  try {
+    await pool.query(`
+      ALTER TABLE shared_content
+        ADD COLUMN IF NOT EXISTS encryption_method VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS share_token TEXT UNIQUE,
+        ADD COLUMN IF NOT EXISTS passphrase_hash TEXT
+    `);
+  } catch { /* columns may already exist */ }
+  sharedColumnsEnsured = true;
+}
 import {
   randomBytes,
   createCipheriv,
@@ -314,6 +329,7 @@ export async function shareDocument(
   categoryPrivacyLevel?: PrivacyLevel,
 ): Promise<ShareResult> {
   assertDocumentShareable(documentPrivacyLevel, categoryPrivacyLevel);
+  await ensureSharedColumns();
 
   // 1. Build access conditions
   const accessConditions: AccessConditions = {

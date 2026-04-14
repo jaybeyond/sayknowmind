@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
-import { shareDocument, SharedModeError } from "@/lib/shared-mode";
+import { shareDocument, SharedModeError, ensureSharedColumns } from "@/lib/shared-mode";
 import type { ShareOptions } from "@/lib/shared-mode";
 
 export const dynamic = "force-dynamic";
@@ -134,6 +134,8 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? "24", 10) || 24, 1), 100);
     const offset = Math.max(parseInt(url.searchParams.get("offset") ?? "0", 10) || 0, 0);
+
+    await ensureSharedColumns();
 
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM shared_content WHERE user_id = $1`,
