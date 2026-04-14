@@ -277,7 +277,7 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
                     )}
                   >
                     <Zap className="size-3" />
-                    {usage.limit - usage.used}/{usage.limit}
+                    {usage.used}/{usage.limit}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
