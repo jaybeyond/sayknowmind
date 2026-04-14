@@ -628,7 +628,8 @@
     "heroSubtitle": "Discover publicly shared memories from the community",
     "sharedCount": "{{count}} shared memories",
     "noShares": "No shared content yet",
-    "loginToSave": "Log in to start saving your own knowledge"
+    "loginToSave": "Log in to start saving your own knowledge",
+    "searchPlaceholder": "Search shared knowledge..."
   },
   "edit": {
     "title": "Edit Memory",

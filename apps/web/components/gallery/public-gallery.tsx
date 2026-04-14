@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Brain, Globe, LogIn, UserPlus } from "lucide-react";
+import { Brain, Globe, LogIn, Search, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useTranslation, useI18nStore, localeNames, type Locale } from "@/lib/i18n";
 import { AuthModal } from "@/components/auth/auth-modal";
 import { GalleryCard, type GalleryItem } from "./gallery-card";
@@ -23,6 +24,13 @@ export function PublicGallery() {
   const [langOpen, setLangOpen] = React.useState(false);
   const { locale, setLocale } = useI18nStore();
 
+  // Search & filter
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [activeSearch, setActiveSearch] = React.useState("");
+  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null);
+  const [categories, setCategories] = React.useState<{ id: string; name: string; count: number }[]>([]);
+  const searchTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+
   const openLogin = () => {
     setAuthMode("login");
     setAuthOpen(true);
@@ -32,33 +40,47 @@ export function PublicGallery() {
     setAuthOpen(true);
   };
 
-  // Initial fetch
+  // Build query URL
+  const buildUrl = React.useCallback((offset: number) => {
+    const sp = new URLSearchParams();
+    sp.set("limit", String(PAGE_SIZE));
+    sp.set("offset", String(offset));
+    if (activeSearch) sp.set("q", activeSearch);
+    if (selectedCategory) sp.set("categoryId", selectedCategory);
+    return `/api/share/gallery?${sp.toString()}`;
+  }, [activeSearch, selectedCategory]);
+
+  // Fetch items (resets on search/category change)
   React.useEffect(() => {
+    setLoading(true);
     (async () => {
       try {
-        const res = await fetch(`/api/share/gallery?limit=${PAGE_SIZE}&offset=0`);
+        const res = await fetch(buildUrl(0));
         if (res.ok) {
           const data = await res.json();
           setItems(data.items);
           setTotal(data.total);
           setHasMore(data.hasMore);
+          if (data.categories) setCategories(data.categories);
         }
-      } catch {
-        /* network error */
-      } finally {
-        setLoading(false);
-      }
+      } catch { /* network error */ }
+      finally { setLoading(false); }
     })();
-  }, []);
+  }, [buildUrl]);
+
+  // Debounced search
+  const handleSearch = (value: string) => {
+    setSearchQuery(value);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => setActiveSearch(value), 400);
+  };
 
   // Infinite scroll
   const loadMore = React.useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const res = await fetch(
-        `/api/share/gallery?limit=${PAGE_SIZE}&offset=${items.length}`,
-      );
+      const res = await fetch(buildUrl(items.length));
       if (res.ok) {
         const data = await res.json();
         setItems((prev) => [...prev, ...data.items]);
@@ -139,6 +161,57 @@ export function PublicGallery() {
           <p className="text-sm text-muted-foreground">
             {t("gallery.sharedCount").replace("{{count}}", String(total))}
           </p>
+        )}
+      </section>
+
+      {/* Search + Categories */}
+      <section className="max-w-7xl mx-auto px-4 md:px-6 pb-6 space-y-4">
+        {/* Search bar */}
+        <div className="relative max-w-md mx-auto">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder={t("gallery.searchPlaceholder")}
+            className="pl-9 pr-9"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchQuery(""); setActiveSearch(""); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Category pills */}
+        {categories.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                !selectedCategory
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t("filter.all")} ({total})
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  selectedCategory === cat.id
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {cat.name} ({cat.count})
+              </button>
+            ))}
+          </div>
         )}
       </section>
 

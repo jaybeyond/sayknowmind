@@ -628,7 +628,8 @@
     "heroSubtitle": "커뮤니티에서 공유된 메모리를 발견하세요",
     "sharedCount": "공유된 메모리 {{count}}개",
     "noShares": "아직 공유된 콘텐츠가 없습니다",
-    "loginToSave": "로그인하여 나만의 지식을 저장하세요"
+    "loginToSave": "로그인하여 나만의 지식을 저장하세요",
+    "searchPlaceholder": "공유된 지식 검색..."
   },
   "edit": {
     "title": "메모리 편집",

@@ -628,7 +628,8 @@
     "heroSubtitle": "发现社区公开分享的记忆",
     "sharedCount": "{{count}} 条共享记忆",
     "noShares": "暂无共享内容",
-    "loginToSave": "登录开始保存您的知识"
+    "loginToSave": "登录开始保存您的知识",
+    "searchPlaceholder": "搜索共享知识..."
   },
   "edit": {
     "title": "编辑记忆",

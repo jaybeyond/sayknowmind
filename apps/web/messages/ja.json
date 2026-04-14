@@ -628,7 +628,8 @@
     "heroSubtitle": "コミュニティで公開された共有メモリを発見しよう",
     "sharedCount": "共有メモリ {{count}}件",
     "noShares": "共有コンテンツはまだありません",
-    "loginToSave": "ログインして知識の保存を始めよう"
+    "loginToSave": "ログインして知識の保存を始めよう",
+    "searchPlaceholder": "共有された知識を検索..."
   },
   "edit": {
     "title": "メモリを編集",
