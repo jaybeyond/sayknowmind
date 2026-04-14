@@ -149,40 +149,43 @@ export function PublicGallery() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="max-w-7xl mx-auto px-4 md:px-6 pt-12 pb-8 text-center">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
-          {t("gallery.hero")}
-        </h1>
-        <p className="text-muted-foreground max-w-lg mx-auto mb-2">
-          {t("gallery.heroSubtitle")}
-        </p>
-        {total > 0 && (
-          <p className="text-sm text-muted-foreground">
-            {t("gallery.sharedCount").replace("{{count}}", String(total))}
-          </p>
-        )}
-      </section>
-
-      {/* Search + Categories */}
-      <section className="max-w-7xl mx-auto px-4 md:px-6 pb-6 space-y-4">
-        {/* Search bar */}
-        <div className="relative max-w-md mx-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder={t("gallery.searchPlaceholder")}
-            className="pl-9 pr-9"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => { setSearchQuery(""); setActiveSearch(""); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
+      {/* Search engine style — centered when no results, top when results exist */}
+      <section className={`max-w-2xl mx-auto px-4 md:px-6 transition-all duration-500 ${
+        !loading && items.length === 0 && !activeSearch ? "pt-[20vh] pb-8" : "pt-6 pb-4"
+      }`}>
+        {/* Logo + Search */}
+        <div className={`flex flex-col items-center gap-6 transition-all duration-500 ${
+          !loading && items.length === 0 && !activeSearch ? "mb-8" : "mb-4"
+        }`}>
+          {(!loading && items.length === 0 && !activeSearch) && (
+            <div className="flex flex-col items-center gap-3">
+              <img src="/logo-icon.svg" alt="SayknowMind" className="size-16 rounded-2xl" />
+              <img src="/logo-text.svg" alt="SayknowMind" className="h-5 invert dark:invert-0" />
+            </div>
           )}
+
+          {/* Search bar */}
+          <div className={`relative w-full transition-all duration-300 ${
+            !loading && items.length === 0 && !activeSearch ? "max-w-lg" : "max-w-xl"
+          }`}>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder={t("gallery.searchPlaceholder")}
+              className={`pl-11 pr-10 rounded-full border-muted-foreground/20 ${
+                !loading && items.length === 0 && !activeSearch ? "h-12 text-base" : "h-10"
+              }`}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => { setSearchQuery(""); setActiveSearch(""); }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Category pills */}
@@ -196,7 +199,7 @@ export function PublicGallery() {
                   : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
             >
-              {t("filter.all")} ({total})
+              {t("filter.all")}
             </button>
             {categories.map((cat) => (
               <button
@@ -208,7 +211,7 @@ export function PublicGallery() {
                     : "bg-muted text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {cat.name} ({cat.count})
+                {cat.name}
               </button>
             ))}
           </div>
