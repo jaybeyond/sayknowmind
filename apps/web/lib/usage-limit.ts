@@ -9,6 +9,21 @@ import { pool } from "@/lib/db";
 /** Free tier: max AI calls per day when using server API key */
 const FREE_DAILY_LIMIT = 10;
 
+let tableEnsured = false;
+async function ensureTable() {
+  if (tableEnsured) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_daily_usage (
+      user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      usage_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      ai_call_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, usage_date)
+    )
+  `);
+  tableEnsured = true;
+}
+
 /**
  * Check if a user has their own provider keys configured.
  */
@@ -60,6 +75,7 @@ export interface UsageCheckResult {
  * Users with own API keys always pass. Free tier users are limited.
  */
 export async function checkAndIncrementUsage(userId: string): Promise<UsageCheckResult> {
+  await ensureTable();
   const ownKeys = await hasOwnApiKeys(userId);
 
   if (ownKeys) {
@@ -93,6 +109,7 @@ export async function checkAndIncrementUsage(userId: string): Promise<UsageCheck
  * Get current usage status without incrementing.
  */
 export async function getUsageStatus(userId: string): Promise<UsageCheckResult> {
+  await ensureTable();
   const ownKeys = await hasOwnApiKeys(userId);
 
   if (ownKeys) {
