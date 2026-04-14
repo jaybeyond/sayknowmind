@@ -6,7 +6,7 @@ import { indexDocument, queryEdgeQuake } from "@/lib/edgequake/client";
 import { createNotification } from "@/lib/notifications";
 import { detectLanguage } from "./language-detect";
 import { emitDocumentEvent } from "@/lib/events";
-import { checkAndIncrementUsage } from "@/lib/usage-limit";
+// usage-limit import removed — ingestion no longer counted against daily limit
 
 interface JobRow {
   id: string;
@@ -119,12 +119,8 @@ async function processJob(job: JobRow): Promise<void> {
       return;
     }
 
-    // Daily usage limit check (1 count per document ingestion)
-    const usage = await checkAndIncrementUsage(userId);
-    if (!usage.allowed) {
-      await failJob(jobId, `Daily free limit reached (${usage.used}/${usage.limit}). Add your own API key in Settings for unlimited access.`);
-      return;
-    }
+    // Note: ingestion is not counted against daily AI limit.
+    // Only chat completions consume the daily free quota.
 
     // Resolve language: user DB locale > document metadata > content detection
     const meta = (doc.metadata ?? {}) as Record<string, unknown>;
