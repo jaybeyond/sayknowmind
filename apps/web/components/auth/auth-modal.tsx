@@ -36,9 +36,8 @@ export function AuthModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
         <DialogHeader className="p-6 pb-0">
-          <DialogTitle className="flex flex-col items-center gap-3">
-            <img src="/logo-icon.svg" alt="SayknowMind" className="size-12 rounded-xl" />
-            <img src="/logo-text.svg" alt="SayknowMind" className="h-4 invert dark:invert-0" />
+          <DialogTitle className="flex justify-center">
+            <img src="/logo-text.svg" alt="SayknowMind" className="h-5 invert dark:invert-0" />
           </DialogTitle>
           <p className="text-center text-sm text-muted-foreground">
             {t("app.subtitle")}
