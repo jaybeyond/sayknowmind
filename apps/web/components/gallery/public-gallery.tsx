@@ -107,7 +107,7 @@ export function PublicGallery() {
   }, [loadMore]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between px-4 md:px-6 h-14">
