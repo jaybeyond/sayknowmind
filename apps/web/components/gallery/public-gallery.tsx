@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Brain, Globe, LogIn, Search, UserPlus, X } from "lucide-react";
+import { Brain, Globe, LogIn, Search, UserPlus, X, Zap, Database, Network, TrendingUp, BookOpen, Sparkles, FileText, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTranslation, useI18nStore, localeNames, type Locale } from "@/lib/i18n";
@@ -234,19 +234,7 @@ export function PublicGallery() {
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <Brain className="size-16 text-muted-foreground/20 mb-4" />
-            <h2 className="text-xl font-semibold mb-2">
-              {t("gallery.noShares")}
-            </h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              {t("gallery.loginToSave")}
-            </p>
-            <Button onClick={openSignup}>
-              <UserPlus className="size-4 mr-1.5" />
-              {t("auth.signup")}
-            </Button>
-          </div>
+          <EmptyHero onSignup={openSignup} />
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -274,6 +262,154 @@ export function PublicGallery() {
         onOpenChange={setAuthOpen}
         defaultMode={authMode}
       />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Empty Hero — knowledge graph visualization with mock data
+// ---------------------------------------------------------------------------
+
+const MOCK_NODES = [
+  { x: 15, y: 20, size: 6, label: "AI", color: "bg-blue-500" },
+  { x: 35, y: 35, size: 8, label: "ML", color: "bg-violet-500" },
+  { x: 55, y: 15, size: 5, label: "NLP", color: "bg-cyan-500" },
+  { x: 75, y: 30, size: 7, label: "RAG", color: "bg-emerald-500" },
+  { x: 25, y: 60, size: 5, label: "LLM", color: "bg-amber-500" },
+  { x: 50, y: 50, size: 9, label: "Knowledge", color: "bg-primary" },
+  { x: 70, y: 60, size: 5, label: "Graph", color: "bg-pink-500" },
+  { x: 85, y: 45, size: 4, label: "API", color: "bg-orange-500" },
+  { x: 40, y: 75, size: 6, label: "Vector", color: "bg-teal-500" },
+  { x: 65, y: 80, size: 5, label: "Search", color: "bg-indigo-500" },
+];
+
+const MOCK_EDGES: [number, number][] = [
+  [0, 1], [1, 2], [2, 3], [1, 5], [4, 5], [5, 6], [3, 7], [5, 8], [8, 9], [6, 9], [0, 4], [3, 6],
+];
+
+const MOCK_STATS = [
+  { icon: Database, value: "12.4K", label: "Documents" },
+  { icon: Network, value: "847", label: "Connections" },
+  { icon: Zap, value: "2.1M", label: "Embeddings" },
+  { icon: TrendingUp, value: "99.2%", label: "Accuracy" },
+];
+
+const MOCK_CARDS = [
+  { title: "Transformer Architecture Deep Dive", tags: ["AI", "ML", "Architecture"], icon: BookOpen, color: "from-blue-500/10 to-violet-500/10", minutes: 8 },
+  { title: "Building RAG Pipelines at Scale", tags: ["RAG", "Vector", "Search"], icon: Sparkles, color: "from-emerald-500/10 to-cyan-500/10", minutes: 12 },
+  { title: "Knowledge Graph Fundamentals", tags: ["Graph", "NLP", "Data"], icon: Network, color: "from-amber-500/10 to-orange-500/10", minutes: 5 },
+  { title: "LLM Fine-tuning Best Practices", tags: ["LLM", "ML", "Training"], icon: FileText, color: "from-pink-500/10 to-rose-500/10", minutes: 15 },
+  { title: "Vector Database Comparison 2026", tags: ["Vector", "DB", "Benchmark"], icon: Database, color: "from-indigo-500/10 to-blue-500/10", minutes: 10 },
+  { title: "Multi-Agent System Design", tags: ["Agent", "AI", "System"], icon: Link2, color: "from-teal-500/10 to-emerald-500/10", minutes: 7 },
+];
+
+function EmptyHero({ onSignup }: { onSignup: () => void }) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="space-y-12">
+      {/* Knowledge Graph Visualization */}
+      <div className="relative w-full h-[280px] rounded-2xl border bg-card/50 overflow-hidden">
+        {/* Animated gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-violet-500/5" />
+
+        {/* SVG edges */}
+        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+          {MOCK_EDGES.map(([from, to], i) => (
+            <line
+              key={i}
+              x1={`${MOCK_NODES[from].x}%`}
+              y1={`${MOCK_NODES[from].y}%`}
+              x2={`${MOCK_NODES[to].x}%`}
+              y2={`${MOCK_NODES[to].y}%`}
+              className="stroke-muted-foreground/10"
+              strokeWidth="1"
+            />
+          ))}
+        </svg>
+
+        {/* Nodes */}
+        {MOCK_NODES.map((node, i) => (
+          <div
+            key={i}
+            className="absolute flex items-center gap-1.5 animate-pulse"
+            style={{
+              left: `${node.x}%`,
+              top: `${node.y}%`,
+              transform: "translate(-50%, -50%)",
+              animationDelay: `${i * 300}ms`,
+              animationDuration: `${2 + (i % 3)}s`,
+            }}
+          >
+            <div
+              className={`rounded-full ${node.color} opacity-80`}
+              style={{ width: `${node.size * 2}px`, height: `${node.size * 2}px` }}
+            />
+            <span className="text-[10px] font-medium text-muted-foreground/60 whitespace-nowrap">
+              {node.label}
+            </span>
+          </div>
+        ))}
+
+        {/* Center CTA overlay */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="rounded-2xl bg-background/80 backdrop-blur-sm border shadow-lg px-8 py-5 text-center">
+            <Brain className="size-8 text-primary mx-auto mb-2" />
+            <h2 className="text-lg font-bold tracking-tight mb-1">Your Second Brain Awaits</h2>
+            <p className="text-xs text-muted-foreground mb-3">Save, connect, and discover knowledge with AI</p>
+            <Button size="sm" onClick={onSignup}>
+              <UserPlus className="size-3.5 mr-1.5" />
+              {t("auth.signup")}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {MOCK_STATS.map((stat) => (
+          <div key={stat.label} className="flex items-center gap-3 rounded-xl border bg-card/50 px-4 py-3">
+            <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <stat.icon className="size-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-lg font-bold tracking-tight">{stat.value}</p>
+              <p className="text-[11px] text-muted-foreground">{stat.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Mock cards grid */}
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">Trending Knowledge</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {MOCK_CARDS.map((card) => (
+            <div
+              key={card.title}
+              className="group relative rounded-xl border bg-card overflow-hidden opacity-75 hover:opacity-100 transition-opacity cursor-default"
+            >
+              <div className={`h-24 bg-gradient-to-br ${card.color} flex items-center justify-center`}>
+                <card.icon className="size-8 text-muted-foreground/20" />
+              </div>
+              <div className="p-3 space-y-1.5">
+                <h4 className="text-sm font-medium line-clamp-1">{card.title}</h4>
+                <div className="flex items-center gap-1.5">
+                  {card.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground">{card.minutes} min read</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
