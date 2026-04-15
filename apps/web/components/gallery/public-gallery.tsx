@@ -385,47 +385,65 @@ const HERO_TEXT: Record<string, { title: string; subtitle: string; desc: string;
   },
 };
 
-function EmptyHero({ onSignup }: { onSignup: () => void }) {
-  const { locale } = useI18nStore();
-  const lang = HERO_TEXT[locale] ? locale : "en";
-  const hero = HERO_TEXT[lang];
-  const cards = MOCK_CARDS_I18N[lang] ?? MOCK_CARDS_I18N.en;
-
+function NeuralBackground() {
   return (
-    <>
-      {/* Full-page neural network background */}
-      <div className="relative w-full min-h-[70vh] -mx-4 md:-mx-6 px-4 md:px-6 overflow-hidden">
-        {/* Gradient overlays */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-background z-[1]" />
-        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/3 via-transparent to-cyan-500/3" />
+    <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+      {/* Gradient overlays */}
+      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-background" />
+      <div className="absolute inset-0 bg-gradient-to-r from-violet-500/3 via-transparent to-cyan-500/3" />
 
-        {/* SVG edges */}
-        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          {NEURAL_EDGES.map(([from, to], i) => (
-            <line
-              key={i}
-              x1={`${NEURAL_NODES[from].x}%`}
-              y1={`${NEURAL_NODES[from].y}%`}
-              x2={`${NEURAL_NODES[to].x}%`}
-              y2={`${NEURAL_NODES[to].y}%`}
-              className="stroke-primary/[0.06]"
-              strokeWidth="0.5"
-            />
-          ))}
-        </svg>
+      {/* Inline keyframes for floating animation */}
+      <style>{`
+        @keyframes neural-drift {
+          0%, 100% { transform: translate(-50%, -50%) translate(0px, 0px); }
+          25% { transform: translate(-50%, -50%) translate(var(--dx1), var(--dy1)); }
+          50% { transform: translate(-50%, -50%) translate(var(--dx2), var(--dy2)); }
+          75% { transform: translate(-50%, -50%) translate(var(--dx3), var(--dy3)); }
+        }
+      `}</style>
 
-        {/* Dense nodes */}
-        {NEURAL_NODES.map((node, i) => (
+      {/* SVG edges — they move with nodes via CSS */}
+      <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+        {NEURAL_EDGES.map(([from, to], i) => (
+          <line
+            key={i}
+            x1={`${NEURAL_NODES[from].x}%`}
+            y1={`${NEURAL_NODES[from].y}%`}
+            x2={`${NEURAL_NODES[to].x}%`}
+            y2={`${NEURAL_NODES[to].y}%`}
+            className="stroke-primary/[0.07]"
+            strokeWidth="0.5"
+          />
+        ))}
+      </svg>
+
+      {/* Floating nodes */}
+      {NEURAL_NODES.map((node, i) => {
+        // Each node gets unique drift offsets
+        const seed = i * 7 + 13;
+        const dx1 = ((seed * 3) % 30) - 15;
+        const dy1 = ((seed * 5) % 24) - 12;
+        const dx2 = ((seed * 7) % 26) - 13;
+        const dy2 = ((seed * 11) % 20) - 10;
+        const dx3 = ((seed * 13) % 28) - 14;
+        const dy3 = ((seed * 17) % 22) - 11;
+
+        return (
           <div
             key={i}
-            className="absolute animate-pulse"
+            className="absolute"
             style={{
               left: `${node.x}%`,
               top: `${node.y}%`,
-              transform: "translate(-50%, -50%)",
-              animationDelay: `${(i * 97) % 4000}ms`,
-              animationDuration: `${1.5 + (i % 5)}s`,
-            }}
+              animation: `neural-drift ${8 + (i % 7) * 2}s ease-in-out infinite`,
+              animationDelay: `${(i * 137) % 5000}ms`,
+              "--dx1": `${dx1}px`,
+              "--dy1": `${dy1}px`,
+              "--dx2": `${dx2}px`,
+              "--dy2": `${dy2}px`,
+              "--dx3": `${dx3}px`,
+              "--dy3": `${dy3}px`,
+            } as React.CSSProperties}
           >
             <div
               className={`rounded-full ${node.color}`}
@@ -436,30 +454,44 @@ function EmptyHero({ onSignup }: { onSignup: () => void }) {
               }}
             />
           </div>
-        ))}
+        );
+      })}
+    </div>
+  );
+}
 
-        {/* Center hero text */}
-        <div className="relative z-[2] flex flex-col items-center justify-center min-h-[70vh] text-center px-4">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium mb-6">
-              <Brain className="size-3.5" />
-              SayKnowMind
-            </div>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text">
-              {hero.title}
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground font-medium mb-3">
-              {hero.subtitle}
-            </p>
-            <p className="text-sm text-muted-foreground/70 max-w-lg mx-auto">
-              {hero.desc}
-            </p>
+function EmptyHero({ onSignup }: { onSignup: () => void }) {
+  const { locale } = useI18nStore();
+  const lang = HERO_TEXT[locale] ? locale : "en";
+  const hero = HERO_TEXT[lang];
+  const cards = MOCK_CARDS_I18N[lang] ?? MOCK_CARDS_I18N.en;
+
+  return (
+    <>
+      {/* Full-page fixed neural network background */}
+      <NeuralBackground />
+
+      {/* Hero text */}
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 -mt-8">
+        <div className="max-w-2xl">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium mb-6 backdrop-blur-sm">
+            <Brain className="size-3.5" />
+            SayKnowMind
           </div>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text">
+            {hero.title}
+          </h1>
+          <p className="text-lg md:text-xl text-muted-foreground font-medium mb-3">
+            {hero.subtitle}
+          </p>
+          <p className="text-sm text-muted-foreground/70 max-w-lg mx-auto">
+            {hero.desc}
+          </p>
         </div>
       </div>
 
       {/* Trending cards — i18n */}
-      <div className="pt-8">
+      <div className="pt-8 relative">
         <h3 className="text-sm font-medium text-muted-foreground mb-4">{hero.trending}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {cards.map((card, i) => {
@@ -468,7 +500,7 @@ function EmptyHero({ onSignup }: { onSignup: () => void }) {
             return (
               <div
                 key={i}
-                className="group relative rounded-xl border bg-card overflow-hidden opacity-60 hover:opacity-100 transition-opacity cursor-default"
+                className="group relative rounded-xl border bg-card/80 backdrop-blur-sm overflow-hidden opacity-70 hover:opacity-100 transition-opacity cursor-default"
               >
                 <div className={`h-24 bg-gradient-to-br ${color} flex items-center justify-center`}>
                   <Icon className="size-8 text-muted-foreground/20" />
