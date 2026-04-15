@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Brain, Globe, LogIn, Search, UserPlus, X, Zap, Database, Network, TrendingUp, BookOpen, Sparkles, FileText, Link2 } from "lucide-react";
+import { Brain, Globe, LogIn, Search, UserPlus, X, Database, Network, BookOpen, Sparkles, FileText, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTranslation, useI18nStore, localeNames, type Locale } from "@/lib/i18n";
@@ -267,147 +267,197 @@ export function PublicGallery() {
 }
 
 // ---------------------------------------------------------------------------
-// Empty Hero — knowledge graph visualization with mock data
+// Empty Hero — neural network style knowledge graph + i18n mock cards
 // ---------------------------------------------------------------------------
 
-const MOCK_NODES = [
-  { x: 15, y: 20, size: 6, label: "AI", color: "bg-blue-500" },
-  { x: 35, y: 35, size: 8, label: "ML", color: "bg-violet-500" },
-  { x: 55, y: 15, size: 5, label: "NLP", color: "bg-cyan-500" },
-  { x: 75, y: 30, size: 7, label: "RAG", color: "bg-emerald-500" },
-  { x: 25, y: 60, size: 5, label: "LLM", color: "bg-amber-500" },
-  { x: 50, y: 50, size: 9, label: "Knowledge", color: "bg-primary" },
-  { x: 70, y: 60, size: 5, label: "Graph", color: "bg-pink-500" },
-  { x: 85, y: 45, size: 4, label: "API", color: "bg-orange-500" },
-  { x: 40, y: 75, size: 6, label: "Vector", color: "bg-teal-500" },
-  { x: 65, y: 80, size: 5, label: "Search", color: "bg-indigo-500" },
+// Generate dense neural-network-like nodes
+function generateNeuralNodes() {
+  const nodes: { x: number; y: number; size: number; color: string }[] = [];
+  const colors = [
+    "bg-blue-500", "bg-violet-500", "bg-cyan-500", "bg-emerald-500",
+    "bg-amber-500", "bg-primary", "bg-pink-500", "bg-orange-500",
+    "bg-teal-500", "bg-indigo-500", "bg-rose-500", "bg-sky-500",
+    "bg-lime-500", "bg-fuchsia-500", "bg-purple-500",
+  ];
+  // Seed-based pseudo-random for deterministic layout
+  let seed = 42;
+  const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return (seed - 1) / 2147483646; };
+
+  for (let i = 0; i < 80; i++) {
+    nodes.push({
+      x: 3 + rand() * 94,
+      y: 3 + rand() * 94,
+      size: 2 + rand() * 5,
+      color: colors[Math.floor(rand() * colors.length)],
+    });
+  }
+  return nodes;
+}
+
+function generateNeuralEdges(nodeCount: number) {
+  const edges: [number, number][] = [];
+  let seed = 99;
+  const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return (seed - 1) / 2147483646; };
+
+  // Connect nearby nodes to form neural-network-like clusters
+  for (let i = 0; i < nodeCount; i++) {
+    const connections = 1 + Math.floor(rand() * 3);
+    for (let c = 0; c < connections; c++) {
+      const target = Math.floor(rand() * nodeCount);
+      if (target !== i) edges.push([i, target]);
+    }
+  }
+  return edges;
+}
+
+const NEURAL_NODES = generateNeuralNodes();
+const NEURAL_EDGES = generateNeuralEdges(NEURAL_NODES.length);
+
+const MOCK_CARDS_I18N: Record<string, { title: string; tags: string[]; minutes: number }[]> = {
+  en: [
+    { title: "Transformer Architecture Deep Dive", tags: ["AI", "ML", "Architecture"], minutes: 8 },
+    { title: "Building RAG Pipelines at Scale", tags: ["RAG", "Vector", "Search"], minutes: 12 },
+    { title: "Knowledge Graph Fundamentals", tags: ["Graph", "NLP", "Data"], minutes: 5 },
+    { title: "LLM Fine-tuning Best Practices", tags: ["LLM", "ML", "Training"], minutes: 15 },
+    { title: "Vector Database Comparison 2026", tags: ["Vector", "DB", "Benchmark"], minutes: 10 },
+    { title: "Multi-Agent System Design", tags: ["Agent", "AI", "System"], minutes: 7 },
+  ],
+  ko: [
+    { title: "트랜스포머 아키텍처 심층 분석", tags: ["AI", "ML", "아키텍처"], minutes: 8 },
+    { title: "대규모 RAG 파이프라인 구축", tags: ["RAG", "벡터", "검색"], minutes: 12 },
+    { title: "지식 그래프 기초", tags: ["그래프", "NLP", "데이터"], minutes: 5 },
+    { title: "LLM 파인튜닝 모범 사례", tags: ["LLM", "ML", "학습"], minutes: 15 },
+    { title: "벡터 데이터베이스 비교 2026", tags: ["벡터", "DB", "벤치마크"], minutes: 10 },
+    { title: "멀티 에이전트 시스템 설계", tags: ["에이전트", "AI", "시스템"], minutes: 7 },
+  ],
+  zh: [
+    { title: "Transformer 架构深度解析", tags: ["AI", "ML", "架构"], minutes: 8 },
+    { title: "大规模 RAG 管道构建", tags: ["RAG", "向量", "搜索"], minutes: 12 },
+    { title: "知识图谱基础", tags: ["图谱", "NLP", "数据"], minutes: 5 },
+    { title: "LLM 微调最佳实践", tags: ["LLM", "ML", "训练"], minutes: 15 },
+    { title: "向量数据库对比 2026", tags: ["向量", "DB", "基准"], minutes: 10 },
+    { title: "多智能体系统设计", tags: ["智能体", "AI", "系统"], minutes: 7 },
+  ],
+  ja: [
+    { title: "Transformerアーキテクチャ詳解", tags: ["AI", "ML", "設計"], minutes: 8 },
+    { title: "大規模RAGパイプライン構築", tags: ["RAG", "ベクトル", "検索"], minutes: 12 },
+    { title: "ナレッジグラフの基礎", tags: ["グラフ", "NLP", "データ"], minutes: 5 },
+    { title: "LLMファインチューニング実践", tags: ["LLM", "ML", "学習"], minutes: 15 },
+    { title: "ベクトルDB比較 2026", tags: ["ベクトル", "DB", "ベンチ"], minutes: 10 },
+    { title: "マルチエージェントシステム設計", tags: ["エージェント", "AI", "システム"], minutes: 7 },
+  ],
+};
+
+const CARD_ICONS = [BookOpen, Sparkles, Network, FileText, Database, Link2];
+const CARD_COLORS = [
+  "from-blue-500/10 to-violet-500/10",
+  "from-emerald-500/10 to-cyan-500/10",
+  "from-amber-500/10 to-orange-500/10",
+  "from-pink-500/10 to-rose-500/10",
+  "from-indigo-500/10 to-blue-500/10",
+  "from-teal-500/10 to-emerald-500/10",
 ];
 
-const MOCK_EDGES: [number, number][] = [
-  [0, 1], [1, 2], [2, 3], [1, 5], [4, 5], [5, 6], [3, 7], [5, 8], [8, 9], [6, 9], [0, 4], [3, 6],
-];
-
-const MOCK_STATS = [
-  { icon: Database, value: "12.4K", label: "Documents" },
-  { icon: Network, value: "847", label: "Connections" },
-  { icon: Zap, value: "2.1M", label: "Embeddings" },
-  { icon: TrendingUp, value: "99.2%", label: "Accuracy" },
-];
-
-const MOCK_CARDS = [
-  { title: "Transformer Architecture Deep Dive", tags: ["AI", "ML", "Architecture"], icon: BookOpen, color: "from-blue-500/10 to-violet-500/10", minutes: 8 },
-  { title: "Building RAG Pipelines at Scale", tags: ["RAG", "Vector", "Search"], icon: Sparkles, color: "from-emerald-500/10 to-cyan-500/10", minutes: 12 },
-  { title: "Knowledge Graph Fundamentals", tags: ["Graph", "NLP", "Data"], icon: Network, color: "from-amber-500/10 to-orange-500/10", minutes: 5 },
-  { title: "LLM Fine-tuning Best Practices", tags: ["LLM", "ML", "Training"], icon: FileText, color: "from-pink-500/10 to-rose-500/10", minutes: 15 },
-  { title: "Vector Database Comparison 2026", tags: ["Vector", "DB", "Benchmark"], icon: Database, color: "from-indigo-500/10 to-blue-500/10", minutes: 10 },
-  { title: "Multi-Agent System Design", tags: ["Agent", "AI", "System"], icon: Link2, color: "from-teal-500/10 to-emerald-500/10", minutes: 7 },
-];
+const HERO_TEXT: Record<string, { title: string; subtitle: string; trending: string }> = {
+  en: { title: "Your Second Brain", subtitle: "Save, connect, and discover knowledge with AI", trending: "Trending Knowledge" },
+  ko: { title: "당신의 두 번째 뇌", subtitle: "AI로 지식을 저장하고 연결하고 발견하세요", trending: "트렌딩 지식" },
+  zh: { title: "你的第二大脑", subtitle: "用AI保存、连接和发现知识", trending: "热门知识" },
+  ja: { title: "あなたのセカンドブレイン", subtitle: "AIで知識を保存・接続・発見", trending: "トレンド知識" },
+};
 
 function EmptyHero({ onSignup }: { onSignup: () => void }) {
-  const { t } = useTranslation();
+  const { locale } = useI18nStore();
+  const lang = HERO_TEXT[locale] ? locale : "en";
+  const hero = HERO_TEXT[lang];
+  const cards = MOCK_CARDS_I18N[lang] ?? MOCK_CARDS_I18N.en;
 
   return (
-    <div className="space-y-12">
-      {/* Knowledge Graph Visualization */}
-      <div className="relative w-full h-[280px] rounded-2xl border bg-card/50 overflow-hidden">
-        {/* Animated gradient background */}
+    <div className="space-y-10">
+      {/* Neural Network Graph */}
+      <div className="relative w-full h-[400px] rounded-2xl border bg-card/30 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-violet-500/5" />
 
-        {/* SVG edges */}
+        {/* SVG edges — dense neural connections */}
         <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          {MOCK_EDGES.map(([from, to], i) => (
+          {NEURAL_EDGES.map(([from, to], i) => (
             <line
               key={i}
-              x1={`${MOCK_NODES[from].x}%`}
-              y1={`${MOCK_NODES[from].y}%`}
-              x2={`${MOCK_NODES[to].x}%`}
-              y2={`${MOCK_NODES[to].y}%`}
-              className="stroke-muted-foreground/10"
-              strokeWidth="1"
+              x1={`${NEURAL_NODES[from].x}%`}
+              y1={`${NEURAL_NODES[from].y}%`}
+              x2={`${NEURAL_NODES[to].x}%`}
+              y2={`${NEURAL_NODES[to].y}%`}
+              className="stroke-primary/8"
+              strokeWidth="0.5"
             />
           ))}
         </svg>
 
-        {/* Nodes */}
-        {MOCK_NODES.map((node, i) => (
+        {/* Nodes — dense, varied sizes */}
+        {NEURAL_NODES.map((node, i) => (
           <div
             key={i}
-            className="absolute flex items-center gap-1.5 animate-pulse"
+            className="absolute animate-pulse"
             style={{
               left: `${node.x}%`,
               top: `${node.y}%`,
               transform: "translate(-50%, -50%)",
-              animationDelay: `${i * 300}ms`,
-              animationDuration: `${2 + (i % 3)}s`,
+              animationDelay: `${(i * 137) % 3000}ms`,
+              animationDuration: `${2 + (i % 4)}s`,
             }}
           >
             <div
-              className={`rounded-full ${node.color} opacity-80`}
-              style={{ width: `${node.size * 2}px`, height: `${node.size * 2}px` }}
+              className={`rounded-full ${node.color}`}
+              style={{
+                width: `${node.size * 2}px`,
+                height: `${node.size * 2}px`,
+                opacity: 0.3 + (node.size / 7) * 0.5,
+              }}
             />
-            <span className="text-[10px] font-medium text-muted-foreground/60 whitespace-nowrap">
-              {node.label}
-            </span>
           </div>
         ))}
 
-        {/* Center CTA overlay */}
+        {/* Center text overlay */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="rounded-2xl bg-background/80 backdrop-blur-sm border shadow-lg px-8 py-5 text-center">
-            <Brain className="size-8 text-primary mx-auto mb-2" />
-            <h2 className="text-lg font-bold tracking-tight mb-1">Your Second Brain Awaits</h2>
-            <p className="text-xs text-muted-foreground mb-3">Save, connect, and discover knowledge with AI</p>
-            <Button size="sm" onClick={onSignup}>
-              <UserPlus className="size-3.5 mr-1.5" />
-              {t("auth.signup")}
-            </Button>
+          <div className="rounded-2xl bg-background/70 backdrop-blur-md border border-border/50 shadow-2xl px-10 py-6 text-center max-w-md">
+            <Brain className="size-10 text-primary mx-auto mb-3" />
+            <h2 className="text-xl font-bold tracking-tight mb-1">{hero.title}</h2>
+            <p className="text-sm text-muted-foreground">{hero.subtitle}</p>
           </div>
         </div>
       </div>
 
-      {/* Stats bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {MOCK_STATS.map((stat) => (
-          <div key={stat.label} className="flex items-center gap-3 rounded-xl border bg-card/50 px-4 py-3">
-            <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <stat.icon className="size-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-lg font-bold tracking-tight">{stat.value}</p>
-              <p className="text-[11px] text-muted-foreground">{stat.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Mock cards grid */}
+      {/* Trending cards — i18n */}
       <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">Trending Knowledge</h3>
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">{hero.trending}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {MOCK_CARDS.map((card) => (
-            <div
-              key={card.title}
-              className="group relative rounded-xl border bg-card overflow-hidden opacity-75 hover:opacity-100 transition-opacity cursor-default"
-            >
-              <div className={`h-24 bg-gradient-to-br ${card.color} flex items-center justify-center`}>
-                <card.icon className="size-8 text-muted-foreground/20" />
-              </div>
-              <div className="p-3 space-y-1.5">
-                <h4 className="text-sm font-medium line-clamp-1">{card.title}</h4>
-                <div className="flex items-center gap-1.5">
-                  {card.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
-                    >
-                      {tag}
-                    </span>
-                  ))}
+          {cards.map((card, i) => {
+            const Icon = CARD_ICONS[i % CARD_ICONS.length];
+            const color = CARD_COLORS[i % CARD_COLORS.length];
+            return (
+              <div
+                key={i}
+                className="group relative rounded-xl border bg-card overflow-hidden opacity-60 hover:opacity-100 transition-opacity cursor-default"
+              >
+                <div className={`h-24 bg-gradient-to-br ${color} flex items-center justify-center`}>
+                  <Icon className="size-8 text-muted-foreground/20" />
                 </div>
-                <p className="text-[10px] text-muted-foreground">{card.minutes} min read</p>
+                <div className="p-3 space-y-1.5">
+                  <h4 className="text-sm font-medium line-clamp-1">{card.title}</h4>
+                  <div className="flex items-center gap-1.5">
+                    {card.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">{card.minutes} min read</p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
