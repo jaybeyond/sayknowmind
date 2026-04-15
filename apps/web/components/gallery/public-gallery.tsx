@@ -267,11 +267,11 @@ export function PublicGallery() {
 }
 
 // ---------------------------------------------------------------------------
-// Empty Hero — neural network style knowledge graph + i18n mock cards
+// Empty Hero — full-page neural network + i18n mock cards
 // ---------------------------------------------------------------------------
 
-// Generate dense neural-network-like nodes
-function generateNeuralNodes() {
+// Generate ultra-dense neural nodes (250+)
+function generateNeuralNodes(count: number) {
   const nodes: { x: number; y: number; size: number; color: string }[] = [];
   const colors = [
     "bg-blue-500", "bg-violet-500", "bg-cyan-500", "bg-emerald-500",
@@ -279,15 +279,14 @@ function generateNeuralNodes() {
     "bg-teal-500", "bg-indigo-500", "bg-rose-500", "bg-sky-500",
     "bg-lime-500", "bg-fuchsia-500", "bg-purple-500",
   ];
-  // Seed-based pseudo-random for deterministic layout
   let seed = 42;
   const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return (seed - 1) / 2147483646; };
 
-  for (let i = 0; i < 80; i++) {
+  for (let i = 0; i < count; i++) {
     nodes.push({
-      x: 3 + rand() * 94,
-      y: 3 + rand() * 94,
-      size: 2 + rand() * 5,
+      x: 1 + rand() * 98,
+      y: 1 + rand() * 98,
+      size: 1.5 + rand() * 4.5,
       color: colors[Math.floor(rand() * colors.length)],
     });
   }
@@ -299,18 +298,19 @@ function generateNeuralEdges(nodeCount: number) {
   let seed = 99;
   const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return (seed - 1) / 2147483646; };
 
-  // Connect nearby nodes to form neural-network-like clusters
   for (let i = 0; i < nodeCount; i++) {
-    const connections = 1 + Math.floor(rand() * 3);
+    const connections = 1 + Math.floor(rand() * 4);
     for (let c = 0; c < connections; c++) {
-      const target = Math.floor(rand() * nodeCount);
+      // Prefer connecting to nearby nodes for cluster effect
+      const offset = 1 + Math.floor(rand() * Math.min(20, nodeCount));
+      const target = (i + offset) % nodeCount;
       if (target !== i) edges.push([i, target]);
     }
   }
   return edges;
 }
 
-const NEURAL_NODES = generateNeuralNodes();
+const NEURAL_NODES = generateNeuralNodes(250);
 const NEURAL_EDGES = generateNeuralEdges(NEURAL_NODES.length);
 
 const MOCK_CARDS_I18N: Record<string, { title: string; tags: string[]; minutes: number }[]> = {
@@ -358,11 +358,31 @@ const CARD_COLORS = [
   "from-teal-500/10 to-emerald-500/10",
 ];
 
-const HERO_TEXT: Record<string, { title: string; subtitle: string; trending: string }> = {
-  en: { title: "Your Second Brain", subtitle: "Save, connect, and discover knowledge with AI", trending: "Trending Knowledge" },
-  ko: { title: "당신의 두 번째 뇌", subtitle: "AI로 지식을 저장하고 연결하고 발견하세요", trending: "트렌딩 지식" },
-  zh: { title: "你的第二大脑", subtitle: "用AI保存、连接和发现知识", trending: "热门知识" },
-  ja: { title: "あなたのセカンドブレイン", subtitle: "AIで知識を保存・接続・発見", trending: "トレンド知識" },
+const HERO_TEXT: Record<string, { title: string; subtitle: string; desc: string; trending: string }> = {
+  en: {
+    title: "Every thought, connected.",
+    subtitle: "The AI-native knowledge engine that thinks with you.",
+    desc: "Capture anything. Let AI find the meaning. Build a living network of everything you know.",
+    trending: "Explore Knowledge",
+  },
+  ko: {
+    title: "모든 생각이 연결됩니다.",
+    subtitle: "당신과 함께 사고하는 AI 네이티브 지식 엔진.",
+    desc: "무엇이든 저장하세요. AI가 의미를 찾습니다. 당신이 아는 모든 것의 살아있는 네트워크를 구축하세요.",
+    trending: "지식 탐색",
+  },
+  zh: {
+    title: "每个想法，皆有连接。",
+    subtitle: "与你共同思考的AI原生知识引擎。",
+    desc: "捕获一切，让AI发现意义，构建你所知一切的活知识网络。",
+    trending: "探索知识",
+  },
+  ja: {
+    title: "すべての思考が、つながる。",
+    subtitle: "あなたと共に考えるAIネイティブ知識エンジン。",
+    desc: "何でも保存。AIが意味を見つけ、知識のネットワークを構築します。",
+    trending: "知識を探索",
+  },
 };
 
 function EmptyHero({ onSignup }: { onSignup: () => void }) {
@@ -372,12 +392,14 @@ function EmptyHero({ onSignup }: { onSignup: () => void }) {
   const cards = MOCK_CARDS_I18N[lang] ?? MOCK_CARDS_I18N.en;
 
   return (
-    <div className="space-y-10">
-      {/* Neural Network Graph */}
-      <div className="relative w-full h-[400px] rounded-2xl border bg-card/30 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-violet-500/5" />
+    <>
+      {/* Full-page neural network background */}
+      <div className="relative w-full min-h-[70vh] -mx-4 md:-mx-6 px-4 md:px-6 overflow-hidden">
+        {/* Gradient overlays */}
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-background z-[1]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/3 via-transparent to-cyan-500/3" />
 
-        {/* SVG edges — dense neural connections */}
+        {/* SVG edges */}
         <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
           {NEURAL_EDGES.map(([from, to], i) => (
             <line
@@ -386,13 +408,13 @@ function EmptyHero({ onSignup }: { onSignup: () => void }) {
               y1={`${NEURAL_NODES[from].y}%`}
               x2={`${NEURAL_NODES[to].x}%`}
               y2={`${NEURAL_NODES[to].y}%`}
-              className="stroke-primary/8"
+              className="stroke-primary/[0.06]"
               strokeWidth="0.5"
             />
           ))}
         </svg>
 
-        {/* Nodes — dense, varied sizes */}
+        {/* Dense nodes */}
         {NEURAL_NODES.map((node, i) => (
           <div
             key={i}
@@ -401,8 +423,8 @@ function EmptyHero({ onSignup }: { onSignup: () => void }) {
               left: `${node.x}%`,
               top: `${node.y}%`,
               transform: "translate(-50%, -50%)",
-              animationDelay: `${(i * 137) % 3000}ms`,
-              animationDuration: `${2 + (i % 4)}s`,
+              animationDelay: `${(i * 97) % 4000}ms`,
+              animationDuration: `${1.5 + (i % 5)}s`,
             }}
           >
             <div
@@ -410,25 +432,35 @@ function EmptyHero({ onSignup }: { onSignup: () => void }) {
               style={{
                 width: `${node.size * 2}px`,
                 height: `${node.size * 2}px`,
-                opacity: 0.3 + (node.size / 7) * 0.5,
+                opacity: 0.15 + (node.size / 6) * 0.45,
               }}
             />
           </div>
         ))}
 
-        {/* Center text overlay */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="rounded-2xl bg-background/70 backdrop-blur-md border border-border/50 shadow-2xl px-10 py-6 text-center max-w-md">
-            <Brain className="size-10 text-primary mx-auto mb-3" />
-            <h2 className="text-xl font-bold tracking-tight mb-1">{hero.title}</h2>
-            <p className="text-sm text-muted-foreground">{hero.subtitle}</p>
+        {/* Center hero text */}
+        <div className="relative z-[2] flex flex-col items-center justify-center min-h-[70vh] text-center px-4">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium mb-6">
+              <Brain className="size-3.5" />
+              SayKnowMind
+            </div>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text">
+              {hero.title}
+            </h1>
+            <p className="text-lg md:text-xl text-muted-foreground font-medium mb-3">
+              {hero.subtitle}
+            </p>
+            <p className="text-sm text-muted-foreground/70 max-w-lg mx-auto">
+              {hero.desc}
+            </p>
           </div>
         </div>
       </div>
 
       {/* Trending cards — i18n */}
-      <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">{hero.trending}</h3>
+      <div className="pt-8">
+        <h3 className="text-sm font-medium text-muted-foreground mb-4">{hero.trending}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {cards.map((card, i) => {
             const Icon = CARD_ICONS[i % CARD_ICONS.length];
@@ -460,6 +492,6 @@ function EmptyHero({ onSignup }: { onSignup: () => void }) {
           })}
         </div>
       </div>
-    </div>
+    </>
   );
 }
