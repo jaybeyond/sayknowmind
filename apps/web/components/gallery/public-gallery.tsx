@@ -152,6 +152,13 @@ export function PublicGallery() {
       {/* Neural background — always visible */}
       <NeuralBackground />
 
+      {/* Hero CTA — above search, hide when searching */}
+      {!activeSearch && !loading && (
+        <div className="pt-16">
+          <HeroCTA />
+        </div>
+      )}
+
       {/* Grid */}
       <main className="max-w-7xl mx-auto px-4 md:px-6 pb-16">
         {loading ? (
@@ -172,9 +179,6 @@ export function PublicGallery() {
           </div>
         ) : (
           <>
-            {/* Hero CTA — hide when searching */}
-            {!activeSearch && <HeroCTA />}
-
             {/* Search bar */}
             <div className="flex flex-col items-center gap-4 py-6">
               {!activeSearch && (
