@@ -149,63 +149,6 @@ export function PublicGallery() {
         </div>
       </header>
 
-      {/* Search bar */}
-      <section className="max-w-5xl mx-auto px-4 md:px-6 pt-6 pb-4">
-        <div className="flex flex-col items-center gap-6 mb-4">
-          {!activeSearch && (
-            <img src="/logo-text.svg" alt="SayknowMind" className="h-6 md:h-8 invert dark:invert-0" />
-          )}
-          <div className="relative w-full max-w-3xl">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder={t("gallery.searchPlaceholder")}
-              className={`pl-11 pr-10 rounded-full border-muted-foreground/20 ${
-                !loading && items.length === 0 && !activeSearch ? "h-12 text-base" : "h-10"
-              }`}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => { setSearchQuery(""); setActiveSearch(""); }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Category pills */}
-        {categories.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-2">
-            <button
-              onClick={() => setSelectedCategory(null)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                !selectedCategory
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t("filter.all")}
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  selectedCategory === cat.id
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
       {/* Neural background — always visible */}
       <NeuralBackground />
 
@@ -229,13 +172,63 @@ export function PublicGallery() {
           </div>
         ) : (
           <>
-            {/* Hero CTA + Mock trending cards — hide when searching */}
-            {!activeSearch && (
-              <>
-                <HeroCTA />
-                <TrendingCards />
-              </>
-            )}
+            {/* Hero CTA — hide when searching */}
+            {!activeSearch && <HeroCTA />}
+
+            {/* Search bar */}
+            <div className="flex flex-col items-center gap-4 py-6">
+              {!activeSearch && (
+                <img src="/logo-text.svg" alt="SayknowMind" className="h-6 md:h-8 invert dark:invert-0" />
+              )}
+              <div className="relative w-full max-w-3xl mx-auto">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  placeholder={t("gallery.searchPlaceholder")}
+                  className="pl-11 pr-10 h-11 rounded-full border-muted-foreground/20"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => { setSearchQuery(""); setActiveSearch(""); }}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
+              </div>
+              {/* Category pills */}
+              {categories.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    onClick={() => setSelectedCategory(null)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      !selectedCategory
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t("filter.all")}
+                  </button>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        selectedCategory === cat.id
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Mock trending cards — hide when searching */}
+            {!activeSearch && <TrendingCards />}
 
             {/* Real gallery items — below trending */}
             {items.length > 0 && (
