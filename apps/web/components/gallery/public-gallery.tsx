@@ -357,26 +357,30 @@ const CARD_COLORS = [
   "from-teal-500/10 to-emerald-500/10",
 ];
 
-const HERO_TEXT: Record<string, { title: string; subtitle: string; desc: string; trending: string }> = {
+const HERO_TEXT: Record<string, { badge: string; title: string; subtitle: string; desc: string; trending: string }> = {
   en: {
+    badge: "Say it. Know it. Mind it.",
     title: "Every thought, connected.",
     subtitle: "The AI-native knowledge engine that thinks with you.",
     desc: "Capture anything. Let AI find the meaning. Build a living network of everything you know.",
     trending: "Explore Knowledge",
   },
   ko: {
+    badge: "말하고, 알고, 기억하다.",
     title: "모든 생각이 연결됩니다.",
     subtitle: "당신과 함께 사고하는 AI 네이티브 지식 엔진.",
     desc: "무엇이든 저장하세요. AI가 의미를 찾습니다. 당신이 아는 모든 것의 살아있는 네트워크를 구축하세요.",
     trending: "지식 탐색",
   },
   zh: {
+    badge: "言之、知之、铭之。",
     title: "每个想法，皆有连接。",
     subtitle: "与你共同思考的AI原生知识引擎。",
     desc: "捕获一切，让AI发现意义，构建你所知一切的活知识网络。",
     trending: "探索知识",
   },
   ja: {
+    badge: "語り、知り、心に刻む。",
     title: "すべての思考が、つながる。",
     subtitle: "あなたと共に考えるAIネイティブ知識エンジン。",
     desc: "何でも保存。AIが意味を見つけ、知識のネットワークを構築します。",
@@ -475,9 +479,8 @@ function EmptyHero({ onSignup }: { onSignup: () => void }) {
       {/* Hero text */}
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 -mt-8">
         <div className="max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium mb-6 backdrop-blur-sm">
-            <Brain className="size-3.5" />
-            SayKnowMind
+          <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium mb-6 backdrop-blur-sm">
+            {hero.badge}
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text">
             {hero.title}
