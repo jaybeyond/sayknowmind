@@ -347,78 +347,164 @@ const HERO_TEXT: Record<string, { badge: string; title: string; subtitle: string
 };
 
 function NeuralBackground() {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animId: number;
+    let w = 0;
+    let h = 0;
+    const NODE_COUNT = 120;
+    const CONNECT_DIST = 150;
+    const MOUSE = { x: -1000, y: -1000 };
+
+    interface Node {
+      x: number; y: number;
+      vx: number; vy: number;
+      r: number;
+      baseAlpha: number;
+    }
+
+    const nodes: Node[] = [];
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas!.width = w * dpr;
+      canvas!.height = h * dpr;
+      canvas!.style.width = `${w}px`;
+      canvas!.style.height = `${h}px`;
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function init() {
+      resize();
+      nodes.length = 0;
+      for (let i = 0; i < NODE_COUNT; i++) {
+        nodes.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: (Math.random() - 0.5) * 0.3,
+          r: 1 + Math.random() * 2,
+          baseAlpha: 0.15 + Math.random() * 0.35,
+        });
+      }
+    }
+
+    function draw() {
+      ctx!.clearRect(0, 0, w, h);
+
+      // Get primary color from CSS
+      const style = getComputedStyle(document.documentElement);
+      const primary = style.getPropertyValue("--primary").trim();
+      // Parse HSL: "220 70% 50%" → components
+      const [pH, pS, pL] = primary.split(" ").map((s) => parseFloat(s));
+
+      // Update positions
+      for (const n of nodes) {
+        n.x += n.vx;
+        n.y += n.vy;
+        if (n.x < -20) n.x = w + 20;
+        if (n.x > w + 20) n.x = -20;
+        if (n.y < -20) n.y = h + 20;
+        if (n.y > h + 20) n.y = -20;
+      }
+
+      // Draw connections
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < CONNECT_DIST) {
+            const alpha = (1 - dist / CONNECT_DIST) * 0.12;
+            ctx!.beginPath();
+            ctx!.moveTo(nodes[i].x, nodes[i].y);
+            ctx!.lineTo(nodes[j].x, nodes[j].y);
+            ctx!.strokeStyle = `hsla(${pH}, ${pS}%, ${pL}%, ${alpha})`;
+            ctx!.lineWidth = 0.5;
+            ctx!.stroke();
+          }
+        }
+      }
+
+      // Mouse proximity glow
+      const mx = MOUSE.x;
+      const my = MOUSE.y;
+
+      // Draw nodes
+      for (const n of nodes) {
+        const dxM = n.x - mx;
+        const dyM = n.y - my;
+        const distM = Math.sqrt(dxM * dxM + dyM * dyM);
+        const mouseFactor = distM < 200 ? 1 + (1 - distM / 200) * 2 : 1;
+        const alpha = n.baseAlpha * mouseFactor;
+
+        // Glow
+        if (n.r > 2 || mouseFactor > 1.5) {
+          ctx!.beginPath();
+          ctx!.arc(n.x, n.y, n.r * 4 * mouseFactor, 0, Math.PI * 2);
+          const grad = ctx!.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r * 4 * mouseFactor);
+          grad.addColorStop(0, `hsla(${pH}, ${pS}%, ${pL}%, ${alpha * 0.3})`);
+          grad.addColorStop(1, `hsla(${pH}, ${pS}%, ${pL}%, 0)`);
+          ctx!.fillStyle = grad;
+          ctx!.fill();
+        }
+
+        // Node dot
+        ctx!.beginPath();
+        ctx!.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx!.fillStyle = `hsla(${pH}, ${pS}%, ${Math.min(pL + 20, 90)}%, ${alpha})`;
+        ctx!.fill();
+      }
+
+      // Vignette overlay
+      const vGrad = ctx!.createRadialGradient(w / 2, h / 2, w * 0.25, w / 2, h / 2, w * 0.7);
+      vGrad.addColorStop(0, "rgba(0,0,0,0)");
+      vGrad.addColorStop(1, "rgba(0,0,0,0.85)");
+      ctx!.fillStyle = vGrad;
+      ctx!.fillRect(0, 0, w, h);
+
+      animId = requestAnimationFrame(draw);
+    }
+
+    function onMouseMove(e: MouseEvent) {
+      MOUSE.x = e.clientX;
+      MOUSE.y = e.clientY;
+    }
+
+    function onMouseLeave() {
+      MOUSE.x = -1000;
+      MOUSE.y = -1000;
+    }
+
+    init();
+    draw();
+
+    window.addEventListener("resize", init);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseleave", onMouseLeave);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", init);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseleave", onMouseLeave);
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-      {/* Base dark */}
-      <div className="absolute inset-0 bg-background" />
-
-      <style>{`
-        @keyframes aurora-float {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(var(--mx1), var(--my1)) scale(var(--ms1)); }
-          66% { transform: translate(var(--mx2), var(--my2)) scale(var(--ms2)); }
-        }
-        @keyframes aurora-rotate {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
-
-      {/* Slow rotating gradient mesh */}
-      <div
-        className="absolute -inset-[50%] opacity-30"
-        style={{ animation: "aurora-rotate 120s linear infinite" }}
-      >
-        <div
-          className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full"
-          style={{
-            background: "radial-gradient(circle, hsl(var(--primary) / 0.4) 0%, transparent 70%)",
-            filter: "blur(100px)",
-            animation: "aurora-float 20s ease-in-out infinite",
-            "--mx1": "80px", "--my1": "-60px", "--ms1": "1.1",
-            "--mx2": "-40px", "--my2": "50px", "--ms2": "0.95",
-          } as React.CSSProperties}
-        />
-        <div
-          className="absolute top-1/3 right-1/4 w-[500px] h-[500px] rounded-full"
-          style={{
-            background: "radial-gradient(circle, hsl(250 80% 60% / 0.35) 0%, transparent 70%)",
-            filter: "blur(120px)",
-            animation: "aurora-float 25s ease-in-out infinite",
-            animationDelay: "-8s",
-            "--mx1": "-70px", "--my1": "40px", "--ms1": "1.05",
-            "--mx2": "60px", "--my2": "-80px", "--ms2": "1.1",
-          } as React.CSSProperties}
-        />
-        <div
-          className="absolute bottom-1/4 left-1/3 w-[450px] h-[450px] rounded-full"
-          style={{
-            background: "radial-gradient(circle, hsl(190 80% 50% / 0.3) 0%, transparent 70%)",
-            filter: "blur(110px)",
-            animation: "aurora-float 22s ease-in-out infinite",
-            animationDelay: "-14s",
-            "--mx1": "50px", "--my1": "70px", "--ms1": "0.9",
-            "--mx2": "-60px", "--my2": "-40px", "--ms2": "1.15",
-          } as React.CSSProperties}
-        />
-      </div>
-
-      {/* Subtle noise texture */}
-      <div
-        className="absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-          backgroundRepeat: "repeat",
-          backgroundSize: "256px 256px",
-        }}
-      />
-
-      {/* Vignette */}
-      <div
-        className="absolute inset-0"
-        style={{ background: "radial-gradient(ellipse 70% 50% at 50% 50%, transparent 0%, black 100%)" }}
-      />
-    </div>
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 -z-10 pointer-events-none"
+      style={{ background: "hsl(var(--background))" }}
+    />
   );
 }
 
