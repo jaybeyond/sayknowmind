@@ -209,9 +209,6 @@ export function PublicGallery() {
       {/* Neural background — always visible */}
       <NeuralBackground />
 
-      {/* Hero CTA — hide when searching */}
-      {!activeSearch && !loading && <HeroCTA />}
-
       {/* Grid */}
       <main className="max-w-7xl mx-auto px-4 md:px-6 pb-16">
         {loading ? (
@@ -232,8 +229,13 @@ export function PublicGallery() {
           </div>
         ) : (
           <>
-            {/* Mock trending cards — hide when searching */}
-            {!activeSearch && <TrendingCards />}
+            {/* Hero CTA + Mock trending cards — hide when searching */}
+            {!activeSearch && (
+              <>
+                <HeroCTA />
+                <TrendingCards />
+              </>
+            )}
 
             {/* Real gallery items — below trending */}
             {items.length > 0 && (
@@ -472,7 +474,7 @@ function HeroCTA() {
   const hero = HERO_TEXT[lang];
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[40vh] text-center px-4 max-w-7xl mx-auto">
+    <div className="flex flex-col items-center justify-center py-16 text-center px-4">
       <div className="max-w-2xl">
         <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium mb-6 backdrop-blur-sm">
           {hero.badge}
