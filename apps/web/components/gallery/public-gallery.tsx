@@ -387,9 +387,11 @@ const HERO_TEXT: Record<string, { title: string; subtitle: string; desc: string;
 function NeuralBackground() {
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-      {/* Gradient overlays */}
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-background" />
-      <div className="absolute inset-0 bg-gradient-to-r from-violet-500/3 via-transparent to-cyan-500/3" />
+      {/* Vignette — bright center, dark edges */}
+      <div
+        className="absolute inset-0"
+        style={{ background: "radial-gradient(ellipse 50% 50% at 50% 45%, transparent 0%, hsl(var(--background)) 100%)" }}
+      />
 
       {/* Inline keyframes for floating animation */}
       <style>{`
