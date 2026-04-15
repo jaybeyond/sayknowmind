@@ -263,50 +263,8 @@ export function PublicGallery() {
 }
 
 // ---------------------------------------------------------------------------
-// Empty Hero — full-page neural network + i18n mock cards
+// Aurora gradient orb background — modern Linear/Vercel style
 // ---------------------------------------------------------------------------
-
-// Generate ultra-dense neural nodes (250+)
-function generateNeuralNodes(count: number) {
-  const nodes: { x: number; y: number; size: number; color: string }[] = [];
-  const colors = [
-    "bg-primary", "bg-primary", "bg-primary",
-    "bg-muted-foreground", "bg-muted-foreground",
-    "bg-primary/80", "bg-primary/60",
-  ];
-  let seed = 42;
-  const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return (seed - 1) / 2147483646; };
-
-  for (let i = 0; i < count; i++) {
-    nodes.push({
-      x: 1 + rand() * 98,
-      y: 1 + rand() * 98,
-      size: 1.5 + rand() * 4.5,
-      color: colors[Math.floor(rand() * colors.length)],
-    });
-  }
-  return nodes;
-}
-
-function generateNeuralEdges(nodeCount: number) {
-  const edges: [number, number][] = [];
-  let seed = 99;
-  const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return (seed - 1) / 2147483646; };
-
-  for (let i = 0; i < nodeCount; i++) {
-    const connections = 1 + Math.floor(rand() * 4);
-    for (let c = 0; c < connections; c++) {
-      // Prefer connecting to nearby nodes for cluster effect
-      const offset = 1 + Math.floor(rand() * Math.min(20, nodeCount));
-      const target = (i + offset) % nodeCount;
-      if (target !== i) edges.push([i, target]);
-    }
-  }
-  return edges;
-}
-
-const NEURAL_NODES = generateNeuralNodes(250);
-const NEURAL_EDGES = generateNeuralEdges(NEURAL_NODES.length);
 
 const MOCK_CARDS_I18N: Record<string, { title: string; tags: string[]; minutes: number }[]> = {
   en: [
@@ -387,76 +345,75 @@ const HERO_TEXT: Record<string, { badge: string; title: string; subtitle: string
 function NeuralBackground() {
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-      {/* Vignette — bright center, dark edges */}
+      {/* Base dark */}
+      <div className="absolute inset-0 bg-background" />
+
+      <style>{`
+        @keyframes aurora-float {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(var(--mx1), var(--my1)) scale(var(--ms1)); }
+          66% { transform: translate(var(--mx2), var(--my2)) scale(var(--ms2)); }
+        }
+        @keyframes aurora-rotate {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      {/* Slow rotating gradient mesh */}
+      <div
+        className="absolute -inset-[50%] opacity-30"
+        style={{ animation: "aurora-rotate 120s linear infinite" }}
+      >
+        <div
+          className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full"
+          style={{
+            background: "radial-gradient(circle, hsl(var(--primary) / 0.4) 0%, transparent 70%)",
+            filter: "blur(100px)",
+            animation: "aurora-float 20s ease-in-out infinite",
+            "--mx1": "80px", "--my1": "-60px", "--ms1": "1.1",
+            "--mx2": "-40px", "--my2": "50px", "--ms2": "0.95",
+          } as React.CSSProperties}
+        />
+        <div
+          className="absolute top-1/3 right-1/4 w-[500px] h-[500px] rounded-full"
+          style={{
+            background: "radial-gradient(circle, hsl(250 80% 60% / 0.35) 0%, transparent 70%)",
+            filter: "blur(120px)",
+            animation: "aurora-float 25s ease-in-out infinite",
+            animationDelay: "-8s",
+            "--mx1": "-70px", "--my1": "40px", "--ms1": "1.05",
+            "--mx2": "60px", "--my2": "-80px", "--ms2": "1.1",
+          } as React.CSSProperties}
+        />
+        <div
+          className="absolute bottom-1/4 left-1/3 w-[450px] h-[450px] rounded-full"
+          style={{
+            background: "radial-gradient(circle, hsl(190 80% 50% / 0.3) 0%, transparent 70%)",
+            filter: "blur(110px)",
+            animation: "aurora-float 22s ease-in-out infinite",
+            animationDelay: "-14s",
+            "--mx1": "50px", "--my1": "70px", "--ms1": "0.9",
+            "--mx2": "-60px", "--my2": "-40px", "--ms2": "1.15",
+          } as React.CSSProperties}
+        />
+      </div>
+
+      {/* Subtle noise texture */}
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "repeat",
+          backgroundSize: "256px 256px",
+        }}
+      />
+
+      {/* Vignette */}
       <div
         className="absolute inset-0"
         style={{ background: "radial-gradient(ellipse 70% 50% at 50% 50%, transparent 0%, black 100%)" }}
       />
-
-      {/* Inline keyframes for floating animation */}
-      <style>{`
-        @keyframes neural-drift {
-          0%, 100% { transform: translate(-50%, -50%) translate(0px, 0px); }
-          25% { transform: translate(-50%, -50%) translate(var(--dx1), var(--dy1)); }
-          50% { transform: translate(-50%, -50%) translate(var(--dx2), var(--dy2)); }
-          75% { transform: translate(-50%, -50%) translate(var(--dx3), var(--dy3)); }
-        }
-      `}</style>
-
-      {/* SVG edges — they move with nodes via CSS */}
-      <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-        {NEURAL_EDGES.map(([from, to], i) => (
-          <line
-            key={i}
-            x1={`${NEURAL_NODES[from].x}%`}
-            y1={`${NEURAL_NODES[from].y}%`}
-            x2={`${NEURAL_NODES[to].x}%`}
-            y2={`${NEURAL_NODES[to].y}%`}
-            className="stroke-primary/[0.07]"
-            strokeWidth="0.5"
-          />
-        ))}
-      </svg>
-
-      {/* Floating nodes */}
-      {NEURAL_NODES.map((node, i) => {
-        // Each node gets unique drift offsets
-        const seed = i * 7 + 13;
-        const dx1 = ((seed * 3) % 30) - 15;
-        const dy1 = ((seed * 5) % 24) - 12;
-        const dx2 = ((seed * 7) % 26) - 13;
-        const dy2 = ((seed * 11) % 20) - 10;
-        const dx3 = ((seed * 13) % 28) - 14;
-        const dy3 = ((seed * 17) % 22) - 11;
-
-        return (
-          <div
-            key={i}
-            className="absolute"
-            style={{
-              left: `${node.x}%`,
-              top: `${node.y}%`,
-              animation: `neural-drift ${8 + (i % 7) * 2}s ease-in-out infinite`,
-              animationDelay: `${(i * 137) % 5000}ms`,
-              "--dx1": `${dx1}px`,
-              "--dy1": `${dy1}px`,
-              "--dx2": `${dx2}px`,
-              "--dy2": `${dy2}px`,
-              "--dx3": `${dx3}px`,
-              "--dy3": `${dy3}px`,
-            } as React.CSSProperties}
-          >
-            <div
-              className={`rounded-full ${node.color}`}
-              style={{
-                width: `${node.size * 2}px`,
-                height: `${node.size * 2}px`,
-                opacity: 0.15 + (node.size / 6) * 0.45,
-              }}
-            />
-          </div>
-        );
-      })}
     </div>
   );
 }
