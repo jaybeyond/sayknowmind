@@ -150,7 +150,7 @@ export function PublicGallery() {
       </header>
 
       {/* Search engine style — centered when no results, top when results exist */}
-      <section className={`max-w-2xl mx-auto px-4 md:px-6 transition-all duration-500 ${
+      <section className={`max-w-5xl mx-auto px-4 md:px-6 transition-all duration-500 ${
         !loading && items.length === 0 && !activeSearch ? "pt-[20vh] pb-8" : "pt-6 pb-4"
       }`}>
         {/* Logo + Search */}
@@ -163,7 +163,7 @@ export function PublicGallery() {
 
           {/* Search bar */}
           <div className={`relative w-full transition-all duration-300 ${
-            !loading && items.length === 0 && !activeSearch ? "max-w-lg" : "max-w-xl"
+            !loading && items.length === 0 && !activeSearch ? "max-w-2xl" : "max-w-3xl"
           }`}>
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
             <Input
