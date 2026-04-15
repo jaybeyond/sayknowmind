@@ -278,7 +278,11 @@ export function MemoryContent() {
 
   // Show gallery view when "gallery" collection is selected
   if (selectedCollection === "gallery") {
-    return <GalleryView />;
+    return (
+      <div className="flex-1 w-full overflow-auto">
+        <GalleryView />
+      </div>
+    );
   }
 
   return (
