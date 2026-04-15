@@ -152,6 +152,9 @@ export function PublicGallery() {
       {/* Search bar */}
       <section className="max-w-5xl mx-auto px-4 md:px-6 pt-6 pb-4">
         <div className="flex flex-col items-center gap-6 mb-4">
+          {!activeSearch && (
+            <img src="/logo-text.svg" alt="SayknowMind" className="h-6 md:h-8 invert dark:invert-0" />
+          )}
           <div className="relative w-full max-w-3xl">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
             <Input
@@ -229,9 +232,12 @@ export function PublicGallery() {
           </div>
         ) : (
           <>
-            {/* Real gallery items */}
+            {/* Mock trending cards — hide when searching */}
+            {!activeSearch && <TrendingCards />}
+
+            {/* Real gallery items — below trending */}
             {items.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-6">
                 {items.map((item) => (
                   <GalleryCard key={item.shareToken} item={item} />
                 ))}
@@ -247,9 +253,6 @@ export function PublicGallery() {
 
             {/* Sentinel for infinite scroll */}
             {hasMore && <div ref={sentinelRef} className="h-1" />}
-
-            {/* Mock trending cards — hide when searching */}
-            {!activeSearch && <TrendingCards />}
           </>
         )}
       </main>
