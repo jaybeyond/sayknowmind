@@ -364,11 +364,12 @@ export async function shareDocument(
 
   // 3. Store share metadata in PostgreSQL (expiry computed DB-side to avoid timezone mismatch)
   const expiryHours = options.expiryHours ?? 0;
+  const shareTokenValue = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
   const result = await pool.query(
-    `INSERT INTO shared_content (document_id, user_id, ipfs_cid, access_conditions, encryption_method, expires_at)
-     VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 > 0 THEN NOW() + ($6 || ' hours')::interval ELSE NULL END)
+    `INSERT INTO shared_content (document_id, user_id, ipfs_cid, access_conditions, encryption_method, expires_at, share_token)
+     VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 > 0 THEN NOW() + ($6 || ' hours')::interval ELSE NULL END, $7)
      RETURNING id, share_token`,
-    [documentId, userId, ipfsCid, JSON.stringify(accessConditions), encryptionMethod, expiryHours],
+    [documentId, userId, ipfsCid, JSON.stringify(accessConditions), encryptionMethod, expiryHours, shareTokenValue],
   );
   const sharedContentId = result.rows[0].id;
   const shareToken = result.rows[0].share_token;
