@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
     await ensureSharedColumns();
 
     const countResult = await pool.query(
-      `SELECT COUNT(*) FROM shared_content WHERE user_id = $1`,
+      `SELECT COUNT(*) FROM shared_content WHERE user_id = $1 AND share_token IS NOT NULL`,
       [userId],
     );
     const total = parseInt(countResult.rows[0].count, 10);
@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
               d.title, d.summary, d.url, d.source_type, d.metadata
        FROM shared_content sc
        JOIN documents d ON d.id = sc.document_id
-       WHERE sc.user_id = $1
+       WHERE sc.user_id = $1 AND sc.share_token IS NOT NULL
        ORDER BY sc.created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, limit, offset],

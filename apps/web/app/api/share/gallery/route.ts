@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     // Base WHERE clause
     const baseWhere = `
       sc.is_revoked = false
+      AND sc.share_token IS NOT NULL
       AND (sc.expires_at IS NULL OR sc.expires_at > NOW())
       AND sc.access_conditions->>'type' = 'public'
     `;
