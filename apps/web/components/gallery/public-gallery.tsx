@@ -149,22 +149,10 @@ export function PublicGallery() {
         </div>
       </header>
 
-      {/* Search engine style — centered when no results, top when results exist */}
-      <section className={`max-w-5xl mx-auto px-4 md:px-6 transition-all duration-500 ${
-        !loading && items.length === 0 && !activeSearch ? "pt-[20vh] pb-8" : "pt-6 pb-4"
-      }`}>
-        {/* Logo + Search */}
-        <div className={`flex flex-col items-center gap-6 transition-all duration-500 ${
-          !loading && items.length === 0 && !activeSearch ? "mb-8" : "mb-4"
-        }`}>
-          {(!loading && items.length === 0 && !activeSearch) && (
-            <img src="/logo-text.svg" alt="SayknowMind" className="h-8 md:h-10 invert dark:invert-0" />
-          )}
-
-          {/* Search bar */}
-          <div className={`relative w-full transition-all duration-300 ${
-            !loading && items.length === 0 && !activeSearch ? "max-w-2xl" : "max-w-3xl"
-          }`}>
+      {/* Search bar */}
+      <section className="max-w-5xl mx-auto px-4 md:px-6 pt-6 pb-4">
+        <div className="flex flex-col items-center gap-6 mb-4">
+          <div className="relative w-full max-w-3xl">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
             <Input
               value={searchQuery}
@@ -215,6 +203,12 @@ export function PublicGallery() {
         )}
       </section>
 
+      {/* Neural background — always visible */}
+      <NeuralBackground />
+
+      {/* Hero CTA — hide when searching */}
+      {!activeSearch && !loading && <HeroCTA />}
+
       {/* Grid */}
       <main className="max-w-7xl mx-auto px-4 md:px-6 pb-16">
         {loading ? (
@@ -222,7 +216,7 @@ export function PublicGallery() {
             {Array.from({ length: 8 }).map((_, i) => (
               <div
                 key={i}
-                className="rounded-xl border bg-card overflow-hidden animate-pulse"
+                className="rounded-xl border bg-card/80 backdrop-blur-sm overflow-hidden animate-pulse"
               >
                 <div className="h-32 bg-muted" />
                 <div className="p-4 space-y-2">
@@ -233,15 +227,16 @@ export function PublicGallery() {
               </div>
             ))}
           </div>
-        ) : items.length === 0 ? (
-          <EmptyHero onSignup={openSignup} />
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {items.map((item) => (
-                <GalleryCard key={item.shareToken} item={item} />
-              ))}
-            </div>
+            {/* Real gallery items */}
+            {items.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {items.map((item) => (
+                  <GalleryCard key={item.shareToken} item={item} />
+                ))}
+              </div>
+            )}
 
             {/* Loading more indicator */}
             {loadingMore && (
@@ -252,6 +247,9 @@ export function PublicGallery() {
 
             {/* Sentinel for infinite scroll */}
             {hasMore && <div ref={sentinelRef} className="h-1" />}
+
+            {/* Mock trending cards — hide when searching */}
+            {!activeSearch && <TrendingCards />}
           </>
         )}
       </main>
@@ -465,69 +463,70 @@ function NeuralBackground() {
   );
 }
 
-function EmptyHero({ onSignup }: { onSignup: () => void }) {
+function HeroCTA() {
+  const { locale } = useI18nStore();
+  const lang = HERO_TEXT[locale] ? locale : "en";
+  const hero = HERO_TEXT[lang];
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[40vh] text-center px-4 max-w-7xl mx-auto">
+      <div className="max-w-2xl">
+        <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium mb-6 backdrop-blur-sm">
+          {hero.badge}
+        </div>
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text">
+          {hero.title}
+        </h1>
+        <p className="text-lg md:text-xl text-muted-foreground font-medium mb-3">
+          {hero.subtitle}
+        </p>
+        <p className="text-sm text-muted-foreground/70 max-w-lg mx-auto">
+          {hero.desc}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function TrendingCards() {
   const { locale } = useI18nStore();
   const lang = HERO_TEXT[locale] ? locale : "en";
   const hero = HERO_TEXT[lang];
   const cards = MOCK_CARDS_I18N[lang] ?? MOCK_CARDS_I18N.en;
 
   return (
-    <>
-      {/* Full-page fixed neural network background */}
-      <NeuralBackground />
-
-      {/* Hero text */}
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 -mt-8">
-        <div className="max-w-2xl">
-          <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium mb-6 backdrop-blur-sm">
-            {hero.badge}
-          </div>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text">
-            {hero.title}
-          </h1>
-          <p className="text-lg md:text-xl text-muted-foreground font-medium mb-3">
-            {hero.subtitle}
-          </p>
-          <p className="text-sm text-muted-foreground/70 max-w-lg mx-auto">
-            {hero.desc}
-          </p>
-        </div>
-      </div>
-
-      {/* Trending cards — i18n */}
-      <div className="pt-8 relative">
-        <h3 className="text-sm font-medium text-muted-foreground mb-4">{hero.trending}</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {cards.map((card, i) => {
-            const Icon = CARD_ICONS[i % CARD_ICONS.length];
-            const color = CARD_COLORS[i % CARD_COLORS.length];
-            return (
-              <div
-                key={i}
-                className="group relative rounded-xl border bg-card/80 backdrop-blur-sm overflow-hidden opacity-70 hover:opacity-100 transition-opacity cursor-default"
-              >
-                <div className={`h-24 bg-gradient-to-br ${color} flex items-center justify-center`}>
-                  <Icon className="size-8 text-muted-foreground/20" />
-                </div>
-                <div className="p-3 space-y-1.5">
-                  <h4 className="text-sm font-medium line-clamp-1">{card.title}</h4>
-                  <div className="flex items-center gap-1.5">
-                    {card.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground">{card.minutes} min read</p>
-                </div>
+    <div className="pt-10 relative">
+      <h3 className="text-sm font-medium text-muted-foreground mb-4">{hero.trending}</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {cards.map((card, i) => {
+          const Icon = CARD_ICONS[i % CARD_ICONS.length];
+          const color = CARD_COLORS[i % CARD_COLORS.length];
+          return (
+            <div
+              key={i}
+              className="group relative rounded-xl border bg-card/80 backdrop-blur-sm overflow-hidden opacity-70 hover:opacity-100 transition-opacity cursor-default"
+            >
+              <div className={`h-24 bg-gradient-to-br ${color} flex items-center justify-center`}>
+                <Icon className="size-8 text-muted-foreground/20" />
               </div>
-            );
-          })}
-        </div>
+              <div className="p-3 space-y-1.5">
+                <h4 className="text-sm font-medium line-clamp-1">{card.title}</h4>
+                <div className="flex items-center gap-1.5">
+                  {card.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground">{card.minutes} min read</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
-    </>
+    </div>
   );
 }
