@@ -390,7 +390,7 @@ function NeuralBackground() {
       {/* Vignette — bright center, dark edges */}
       <div
         className="absolute inset-0"
-        style={{ background: "radial-gradient(ellipse 20% 20% at 50% 45%, transparent 0%, black 45%)" }}
+        style={{ background: "radial-gradient(ellipse 70% 50% at 50% 50%, transparent 0%, black 100%)" }}
       />
 
       {/* Inline keyframes for floating animation */}
