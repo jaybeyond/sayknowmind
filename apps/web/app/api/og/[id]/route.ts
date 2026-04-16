@@ -10,23 +10,34 @@ const PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" he
 </svg>`;
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: documentId } = await params;
+  const debug = request.nextUrl.searchParams.get("debug") === "1";
+  const trace: Record<string, unknown> = { documentId };
 
   const doc = await getDocument(documentId);
   if (!doc) {
+    trace.error = "document not found";
+    if (debug) return NextResponse.json(trace);
     return servePlaceholder();
   }
 
   const meta = (doc.metadata ?? {}) as Record<string, unknown>;
+  trace.docUrl = doc.url;
+  trace.ogImage = meta.ogImage;
+  trace.ogImageOriginal = meta.ogImageOriginal;
+  trace.hasBase64 = typeof meta.ogImageBase64 === "string";
+
   const contentType = typeof meta.ogImageContentType === "string" ? meta.ogImageContentType : "image/png";
 
   // Try disk first (uploads/{docId}/og.*)
   const ext = contentType.split("/")[1]?.split(";")[0]?.replace("jpeg", "jpg") || "png";
   const file = await getFile(`${documentId}/og.${ext}`);
   if (file) {
+    trace.source = "disk";
+    if (debug) return NextResponse.json(trace);
     return new NextResponse(new Uint8Array(file.buffer), {
       headers: {
         "Content-Type": contentType,
@@ -39,6 +50,8 @@ export async function GET(
   // Fallback: base64 from metadata (Railway ephemeral FS)
   const base64 = typeof meta.ogImageBase64 === "string" ? meta.ogImageBase64 : null;
   if (base64) {
+    trace.source = "base64";
+    if (debug) return NextResponse.json(trace);
     const buffer = Buffer.from(base64, "base64");
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
@@ -51,12 +64,18 @@ export async function GET(
 
   // Find external URL or re-fetch from document page
   const docUrl = doc.url as string | null;
-  const externalUrl = findExternalUrl(meta) ?? await fetchOgImageFromPage(docUrl);
-  console.log(`[og-proxy] ${documentId}: docUrl=${docUrl}, externalUrl=${externalUrl}`);
+  const fromMeta = findExternalUrl(meta);
+  const fromPage = fromMeta ? null : await fetchOgImageFromPage(docUrl);
+  const externalUrl = fromMeta ?? fromPage;
+  trace.fromMeta = fromMeta;
+  trace.fromPage = fromPage;
+  trace.externalUrl = externalUrl;
 
   if (externalUrl) {
     try {
       const result = await downloadOgImage(documentId, externalUrl);
+      trace.downloadResult = result ? { contentType: result.contentType, size: result.base64.length } : null;
+
       if (result) {
         // Cache for next time
         updateDocument(documentId, {
@@ -68,6 +87,9 @@ export async function GET(
           },
         }).catch(() => {});
 
+        trace.source = "downloaded";
+        if (debug) return NextResponse.json(trace);
+
         const buffer = Buffer.from(result.base64, "base64");
         return new NextResponse(new Uint8Array(buffer), {
           headers: {
@@ -78,10 +100,12 @@ export async function GET(
         });
       }
     } catch (err) {
-      console.error(`[og-proxy] download failed for ${documentId}:`, err);
+      trace.downloadError = String(err);
     }
   }
 
+  trace.source = "placeholder";
+  if (debug) return NextResponse.json(trace);
   return servePlaceholder();
 }
 
