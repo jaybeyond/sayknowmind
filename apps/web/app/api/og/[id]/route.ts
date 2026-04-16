@@ -50,8 +50,9 @@ export async function GET(
   }
 
   // Find external URL or re-fetch from document page
-  const externalUrl = findExternalUrl(meta)
-    ?? await fetchOgImageFromPage(doc.url as string | null);
+  const docUrl = doc.url as string | null;
+  const externalUrl = findExternalUrl(meta) ?? await fetchOgImageFromPage(docUrl);
+  console.log(`[og-proxy] ${documentId}: docUrl=${docUrl}, externalUrl=${externalUrl}`);
 
   if (externalUrl) {
     try {
@@ -76,8 +77,8 @@ export async function GET(
           },
         });
       }
-    } catch {
-      // Download failed — serve placeholder
+    } catch (err) {
+      console.error(`[og-proxy] download failed for ${documentId}:`, err);
     }
   }
 
@@ -120,7 +121,7 @@ function servePlaceholder() {
   return new NextResponse(PLACEHOLDER_SVG, {
     headers: {
       "Content-Type": "image/svg+xml",
-      "Cache-Control": "public, max-age=3600",
+      "Cache-Control": "public, max-age=60",
     },
   });
 }
