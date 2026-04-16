@@ -14,8 +14,9 @@ export function isDesktop(): boolean {
   if (typeof window === "undefined") return false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any;
-  // Check Tauri internals (local URL mode) or injected env (cloud URL mode)
-  return !!(w.__TAURI_INTERNALS__ || w.__SAYKNOW_ENV__);
+  // Check multiple Tauri indicators (v1: __TAURI__, v2: __TAURI_INTERNALS__, __TAURI_IPC__)
+  // or injected env from our Rust code (cloud URL mode)
+  return !!(w.__TAURI_INTERNALS__ || w.__TAURI__ || w.__TAURI_IPC__ || w.__SAYKNOW_ENV__);
 }
 
 /** Resolved environment — works on both server and client */
@@ -38,8 +39,23 @@ if (typeof window !== "undefined") {
   window.addEventListener("sayknow-env-ready", () => {
     useEnvironmentStore.setState({ desktop: isDesktop(), cloud: isCloud() });
   });
-  // Also check after short delay in case event was missed
-  setTimeout(() => {
-    useEnvironmentStore.setState({ desktop: isDesktop(), cloud: isCloud() });
-  }, 4000);
+
+  // Also probe local API server — if reachable, we're in desktop mode
+  const probeDesktop = () => {
+    if (isDesktop()) {
+      useEnvironmentStore.setState({ desktop: true, cloud: false });
+      return;
+    }
+    fetch("http://127.0.0.1:3458/env", { signal: AbortSignal.timeout(2000) })
+      .then((res) => {
+        if (res.ok) {
+          useEnvironmentStore.setState({ desktop: true, cloud: false });
+        }
+      })
+      .catch(() => { /* not in desktop */ });
+  };
+
+  // Probe after short delays to handle race conditions
+  setTimeout(probeDesktop, 1000);
+  setTimeout(probeDesktop, 4000);
 }

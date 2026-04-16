@@ -42,7 +42,7 @@ export function SettingsPage() {
 
   return (
     <main className="flex-1 overflow-auto">
-      <div className="max-w-2xl mx-auto p-6 md:p-8 space-y-6">
+      <div className="max-w-5xl mx-auto p-6 md:p-8 space-y-6">
         <div>
           <h1 className="text-2xl font-bold">{t("settings.title")}</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -56,7 +56,7 @@ export function SettingsPage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors whitespace-nowrap shrink-0",
+                "px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors whitespace-nowrap shrink-0",
                 activeTab === tab.id
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
