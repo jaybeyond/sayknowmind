@@ -80,7 +80,7 @@ function formatDate(iso: string): string {
 
 // ─── Component ──────────────────────────────────────────────
 
-export function OllamaModels({ ollamaRunning: _ollamaRunning }: { ollamaRunning?: boolean } = {}) {
+export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}) {
   const { t } = useTranslation();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [online, setOnline] = useState<boolean | null>(null);
@@ -175,6 +175,14 @@ export function OllamaModels({ ollamaRunning: _ollamaRunning }: { ollamaRunning?
   useEffect(() => {
     fetchConfig();
   }, [fetchConfig]);
+
+  // Auto-enable when environment detection says Ollama is running
+  useEffect(() => {
+    if (ollamaRunning && enabled !== true) {
+      setEnabled(true);
+      setOnline(true);
+    }
+  }, [ollamaRunning, enabled]);
 
   // Fetch health & models when enabled state is known and true
   useEffect(() => {
