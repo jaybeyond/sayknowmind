@@ -13,7 +13,6 @@
     "windows": [
       {
         "title": "SayknowMind - Agentic Second Brain",
-        "url": "https://mind.sayknow.ai",
         "width": 1280,
         "height": 800,
         "resizable": true,
