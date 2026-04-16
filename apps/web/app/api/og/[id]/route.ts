@@ -49,8 +49,9 @@ export async function GET(
     });
   }
 
-  // Find external URL: ogImageOriginal > ogImage (if http) > reconstruct from doc URL
-  const externalUrl = findExternalUrl(meta, doc.url as string | null);
+  // Find external URL or re-fetch from document page
+  const externalUrl = findExternalUrl(meta)
+    ?? await fetchOgImageFromPage(doc.url as string | null);
 
   if (externalUrl) {
     try {
@@ -76,24 +77,43 @@ export async function GET(
         });
       }
     } catch {
-      // Download failed (rate limit, network error) — serve placeholder
+      // Download failed — serve placeholder
     }
   }
 
   return servePlaceholder();
 }
 
-function findExternalUrl(meta: Record<string, unknown>, docUrl: string | null): string | null {
-  // 1. Explicitly saved original
+function findExternalUrl(meta: Record<string, unknown>): string | null {
   if (typeof meta.ogImageOriginal === "string" && meta.ogImageOriginal.startsWith("http")) {
     return meta.ogImageOriginal;
   }
-  // 2. ogImage is still an external URL
   if (typeof meta.ogImage === "string" && meta.ogImage.startsWith("http")) {
     return meta.ogImage;
   }
-  // 3. No external URL found
   return null;
+}
+
+/** Fetch the document's page and extract og:image from HTML meta tags */
+async function fetchOgImageFromPage(docUrl: string | null): Promise<string | null> {
+  if (!docUrl || !docUrl.startsWith("http")) return null;
+  try {
+    const res = await fetch(docUrl, {
+      headers: { "User-Agent": "SayknowMind-Bot/1.0" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    // Extract og:image or twitter:image
+    const match = html.match(
+      /<meta[^>]+(?:property=["']og:image["']|name=["']twitter:image["'])[^>]+content=["']([^"']+)["']/i
+    ) ?? html.match(
+      /<meta[^>]+content=["']([^"']+)["'][^>]+(?:property=["']og:image["']|name=["']twitter:image["'])/i
+    );
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function servePlaceholder() {
