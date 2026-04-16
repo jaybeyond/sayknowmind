@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
 import { useRuntimeStore, type EnvironmentInfo } from "@/store/runtime-store";
-import { Download, Check, Loader2, AlertCircle, Play, Square, HardDrive, Trash2 } from "lucide-react";
+import { Download, Check, Loader2, AlertCircle, Play, Square, HardDrive, Trash2, Cpu } from "lucide-react";
+import { OllamaModels } from "./ollama-models";
 
 export function LocalRuntimeTab() {
   const { t } = useTranslation();
@@ -121,6 +122,18 @@ export function LocalRuntimeTab() {
           </div>
         </div>
       )}
+
+      {/* Local Models (Ollama) */}
+      <div className="rounded-lg border p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Cpu className="size-4 text-muted-foreground" />
+          <div>
+            <h3 className="text-sm font-medium">{t("ai.localModels")}</h3>
+            <p className="text-xs text-muted-foreground">{t("ai.localModelsDesc")}</p>
+          </div>
+        </div>
+        <OllamaModels />
+      </div>
 
       {/* Info */}
       <div className="rounded-lg border p-4 bg-muted/30 space-y-2">

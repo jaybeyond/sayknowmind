@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { ProfileTab } from "./profile-tab";
 import { AppearanceTab } from "./appearance-tab";
 import { AITab } from "./ai-tab";
-import { ModelsTab } from "./models-tab";
+// ModelsTab merged into LocalRuntimeTab
 import { PrivacyTab } from "./privacy-tab";
 import { PromptEditor } from "./prompt-editor";
 import { IntegrationsTab } from "./integrations-tab";
@@ -15,7 +15,7 @@ import { McpConnectTab } from "./mcp-connect-tab";
 import { useTranslation } from "@/lib/i18n";
 import { useEnvironmentStore } from "@/lib/environment";
 
-type TabId = "profile" | "appearance" | "ai" | "models" | "prompts" | "privacy" | "integrations" | "services" | "mcp" | "runtime";
+type TabId = "profile" | "appearance" | "ai" | "prompts" | "privacy" | "integrations" | "services" | "mcp" | "runtime";
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -28,14 +28,12 @@ export function SettingsPage() {
       { id: "profile", label: t("settings.tabProfile") },
       { id: "appearance", label: t("settings.tabAppearance") },
       { id: "ai", label: t("settings.tabAi") },
-      // Models tab only shown in desktop mode or when not explicitly cloud
-      ...(!cloud ? [{ id: "models" as TabId, label: t("settings.tabModels") }] : []),
       { id: "prompts", label: t("settings.tabPrompts") },
       { id: "privacy", label: t("settings.tabPrivacy") },
       { id: "integrations", label: t("settings.tabIntegrations") },
       { id: "services", label: t("settings.tabServices") },
       { id: "mcp", label: "MCP" },
-      ...(desktop ? [{ id: "runtime" as TabId, label: t("settings.tabRuntime") }] : []),
+      ...(!cloud || desktop ? [{ id: "runtime" as TabId, label: t("settings.tabLocal") ?? "로컬" }] : []),
     ];
     return all;
   }, [t, cloud, desktop]);
@@ -80,7 +78,7 @@ export function SettingsPage() {
         {activeTab === "profile" && <ProfileTab />}
         {activeTab === "appearance" && <AppearanceTab />}
         {activeTab === "ai" && <AITab />}
-        {activeTab === "models" && !cloud && <ModelsTab />}
+        {/* ModelsTab merged into LocalRuntimeTab */}
         {activeTab === "prompts" && (
           <div className="space-y-4">
             <div>
