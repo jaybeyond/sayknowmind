@@ -226,9 +226,9 @@ describe("Per-document / per-category privacy resolution", () => {
     expect(resolveDocumentPrivacy(undefined, "private")).toBe("private");
   });
 
-  it("defaults to private when no privacy level set", () => {
+  it("defaults to shared when no privacy level set and not in private mode", () => {
     process.env.PRIVATE_MODE = "false";
-    expect(resolveDocumentPrivacy(undefined, undefined)).toBe("private");
+    expect(resolveDocumentPrivacy(undefined, undefined)).toBe("shared");
   });
 
   it("resolveCategoryPrivacy respects global mode", () => {
@@ -244,7 +244,7 @@ describe("Per-document / per-category privacy resolution", () => {
     expect(canShare("private")).toBe(false);
     expect(canShare("shared")).toBe(true);
     expect(canShare(undefined, "shared")).toBe(true);
-    expect(canShare(undefined, undefined)).toBe(false);
+    expect(canShare(undefined, undefined)).toBe(true);
   });
 
   it("canShare always false when global PRIVATE_MODE=true", () => {

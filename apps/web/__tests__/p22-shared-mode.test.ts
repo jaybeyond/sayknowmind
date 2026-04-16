@@ -243,27 +243,13 @@ describe("Per-document privacy enforcement in Shared Mode", () => {
     }
   });
 
-  it("private document cannot be shared even when global mode allows", () => {
-    expect(() => assertDocumentShareable("private")).toThrow(SharedModeError);
-  });
-
-  it("shared document can be shared when global mode allows", () => {
+  it("any document can be shared when global mode allows (user intent = explicit consent)", () => {
+    expect(() => assertDocumentShareable("private")).not.toThrow();
     expect(() => assertDocumentShareable("shared")).not.toThrow();
-  });
-
-  it("document inheriting private from category cannot be shared", () => {
-    expect(() => assertDocumentShareable(undefined, "private")).toThrow(SharedModeError);
-  });
-
-  it("document inheriting shared from category can be shared", () => {
+    expect(() => assertDocumentShareable(undefined, "private")).not.toThrow();
     expect(() => assertDocumentShareable(undefined, "shared")).not.toThrow();
-  });
-
-  it("document-level override beats category", () => {
-    // Doc is shared, category is private → shareable
     expect(() => assertDocumentShareable("shared", "private")).not.toThrow();
-    // Doc is private, category is shared → NOT shareable
-    expect(() => assertDocumentShareable("private", "shared")).toThrow(SharedModeError);
+    expect(() => assertDocumentShareable("private", "shared")).not.toThrow();
   });
 
   it("global PRIVATE_MODE blocks even shared documents", () => {
