@@ -358,8 +358,8 @@ function NeuralBackground() {
     let animId: number;
     let w = 0;
     let h = 0;
-    const NODE_COUNT = 120;
-    const CONNECT_DIST = 150;
+    const NODE_COUNT = 250;
+    const CONNECT_DIST = 130;
     const MOUSE = { x: -1000, y: -1000 };
 
     interface Node {
@@ -400,11 +400,18 @@ function NeuralBackground() {
     function draw() {
       ctx!.clearRect(0, 0, w, h);
 
-      // Get primary color from CSS
-      const style = getComputedStyle(document.documentElement);
-      const primary = style.getPropertyValue("--primary").trim();
-      // Parse HSL: "220 70% 50%" → components
-      const [pH, pS, pL] = primary.split(" ").map((s) => parseFloat(s));
+      // Get primary color as RGB from computed style
+      const probe = document.createElement("div");
+      probe.style.color = "hsl(var(--primary))";
+      probe.style.display = "none";
+      document.body.appendChild(probe);
+      const computed = getComputedStyle(probe).color;
+      document.body.removeChild(probe);
+      // Parse "rgb(r, g, b)" or "oklch(...)" → fallback to cyan-blue
+      const rgbMatch = computed.match(/(\d+),\s*(\d+),\s*(\d+)/);
+      const pR = rgbMatch ? +rgbMatch[1] : 100;
+      const pG = rgbMatch ? +rgbMatch[2] : 160;
+      const pB = rgbMatch ? +rgbMatch[3] : 255;
 
       // Update positions
       for (const n of nodes) {
@@ -427,7 +434,7 @@ function NeuralBackground() {
             ctx!.beginPath();
             ctx!.moveTo(nodes[i].x, nodes[i].y);
             ctx!.lineTo(nodes[j].x, nodes[j].y);
-            ctx!.strokeStyle = `hsla(${pH}, ${pS}%, ${pL}%, ${alpha})`;
+            ctx!.strokeStyle = `rgba(${pR}, ${pG}, ${pB}, ${alpha})`;
             ctx!.lineWidth = 0.5;
             ctx!.stroke();
           }
@@ -451,8 +458,8 @@ function NeuralBackground() {
           ctx!.beginPath();
           ctx!.arc(n.x, n.y, n.r * 4 * mouseFactor, 0, Math.PI * 2);
           const grad = ctx!.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r * 4 * mouseFactor);
-          grad.addColorStop(0, `hsla(${pH}, ${pS}%, ${pL}%, ${alpha * 0.3})`);
-          grad.addColorStop(1, `hsla(${pH}, ${pS}%, ${pL}%, 0)`);
+          grad.addColorStop(0, `rgba(${pR}, ${pG}, ${pB}, ${alpha * 0.3})`);
+          grad.addColorStop(1, `rgba(${pR}, ${pG}, ${pB}, 0)`);
           ctx!.fillStyle = grad;
           ctx!.fill();
         }
@@ -460,7 +467,7 @@ function NeuralBackground() {
         // Node dot
         ctx!.beginPath();
         ctx!.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-        ctx!.fillStyle = `hsla(${pH}, ${pS}%, ${Math.min(pL + 20, 90)}%, ${alpha})`;
+        ctx!.fillStyle = `rgba(${pR}, ${pG}, ${pB}, ${alpha})`;
         ctx!.fill();
       }
 
