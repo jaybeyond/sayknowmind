@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     // Fetch paginated items with categories
     const result = await pool.query(
       `SELECT sc.share_token, sc.created_at AS shared_at,
-              d.title, d.summary, d.url, d.source_type, d.metadata,
+              d.id AS document_id, d.title, d.summary, d.url, d.source_type, d.metadata,
               COALESCE(
                 (SELECT json_agg(json_build_object('id', c.id, 'name', c.name))
                  FROM document_categories dc
@@ -74,13 +74,19 @@ export async function GET(request: NextRequest) {
     const items = result.rows.map((row: Record<string, unknown>) => {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
       const cats = (Array.isArray(row.categories) ? row.categories : []) as { id: string; name: string }[];
+      // Always use local proxy to avoid external rate limits (GitHub OG etc.)
+      const hasOgImage = typeof meta.ogImage === "string" && meta.ogImage.length > 0;
+      const docId = row.document_id as string;
+      const ogImage = hasOgImage
+        ? (meta.ogImage as string).startsWith("/api/og/") ? meta.ogImage as string : `/api/og/${docId}`
+        : null;
       return {
         shareToken: row.share_token,
         title: row.title,
         summary: row.summary,
         url: row.url,
         sourceType: row.source_type,
-        ogImage: typeof meta.ogImage === "string" ? meta.ogImage : null,
+        ogImage,
         aiSummary: typeof meta.summary === "string" ? meta.summary : null,
         whatItSolves: typeof meta.what_it_solves === "string" ? meta.what_it_solves : null,
         keyPoints: Array.isArray(meta.key_points) ? meta.key_points : null,

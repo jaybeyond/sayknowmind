@@ -166,7 +166,9 @@ export async function GET(request: NextRequest) {
         summary: row.summary,
         url: row.url,
         sourceType: row.source_type,
-        ogImage: typeof meta.ogImage === "string" ? meta.ogImage : null,
+        ogImage: typeof meta.ogImage === "string" && meta.ogImage.length > 0
+          ? (meta.ogImage.startsWith("/api/og/") ? meta.ogImage : `/api/og/${row.document_id}`)
+          : null,
         tags: [...new Set([
           ...(Array.isArray(meta.aiTags) ? meta.aiTags : []),
           ...(Array.isArray(meta.userTags) ? meta.userTags : []),

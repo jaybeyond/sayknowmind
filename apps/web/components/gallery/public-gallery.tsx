@@ -112,8 +112,7 @@ export function PublicGallery() {
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between px-4 md:px-6 h-14">
           <div className="flex items-center gap-2">
-            <img src="/logo-icon.svg" alt="SayknowMind" className="size-7 rounded-lg" />
-            <img src="/logo-text.svg" alt="SayknowMind" className="h-4 hidden sm:block invert dark:invert-0" />
+            <img src="/logo-text.svg" alt="SayknowMind" className="h-4 invert dark:invert-0" />
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -523,6 +522,9 @@ function HeroCTA() {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center px-4">
       <div className="max-w-2xl">
+        <div className="mb-6">
+          <img src="/logo-icon.svg" alt="SayknowMind" className="size-16 md:size-20 mx-auto mb-4 rounded-2xl shadow-lg shadow-primary/20 animate-pulse" />
+        </div>
         <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium mb-6 backdrop-blur-sm">
           {hero.badge}
         </div>
@@ -543,42 +545,34 @@ function HeroCTA() {
 function TrendingCards() {
   const { locale } = useI18nStore();
   const lang = HERO_TEXT[locale] ? locale : "en";
-  const hero = HERO_TEXT[lang];
   const cards = MOCK_CARDS_I18N[lang] ?? MOCK_CARDS_I18N.en;
 
   return (
-    <div className="pt-10 relative">
-      <h3 className="text-sm font-medium text-muted-foreground mb-4">{hero.trending}</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {cards.map((card, i) => {
-          const Icon = CARD_ICONS[i % CARD_ICONS.length];
-          const color = CARD_COLORS[i % CARD_COLORS.length];
-          return (
-            <div
-              key={i}
-              className="group relative rounded-xl border bg-card/80 backdrop-blur-sm overflow-hidden opacity-70 hover:opacity-100 transition-opacity cursor-default"
-            >
-              <div className={`h-24 bg-gradient-to-br ${color} flex items-center justify-center`}>
-                <Icon className="size-8 text-muted-foreground/20" />
+    <div className="flex flex-wrap justify-center gap-2 max-w-3xl mx-auto">
+      {cards.map((card, i) => {
+        const Icon = CARD_ICONS[i % CARD_ICONS.length];
+        return (
+          <div
+            key={i}
+            className="group relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-card/60 backdrop-blur-sm text-xs text-muted-foreground hover:text-foreground hover:bg-card hover:border-primary/30 transition-all cursor-default"
+          >
+            <Icon className="size-3.5 shrink-0" />
+            <span className="font-medium">{card.title}</span>
+            {/* Hover tooltip */}
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-56 p-3 rounded-xl border bg-card shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+              <p className="text-xs font-medium text-foreground mb-1.5 line-clamp-2">{card.title}</p>
+              <div className="flex items-center gap-1 mb-1">
+                {card.tags.map((tag) => (
+                  <span key={tag} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary">
+                    {tag}
+                  </span>
+                ))}
               </div>
-              <div className="p-3 space-y-1.5">
-                <h4 className="text-sm font-medium line-clamp-1">{card.title}</h4>
-                <div className="flex items-center gap-1.5">
-                  {card.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <p className="text-[10px] text-muted-foreground">{card.minutes} min read</p>
-              </div>
+              <p className="text-[10px] text-muted-foreground">{card.minutes} min read</p>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
