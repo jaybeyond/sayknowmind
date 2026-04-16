@@ -132,7 +132,7 @@ export function LocalRuntimeTab() {
             <p className="text-xs text-muted-foreground">{t("ai.localModelsDesc")}</p>
           </div>
         </div>
-        <OllamaModels />
+        <OllamaModels ollamaRunning={environment?.ollama?.running ?? false} />
       </div>
 
       {/* Info */}

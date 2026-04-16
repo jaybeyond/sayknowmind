@@ -339,6 +339,38 @@ fn handle_api_request(mut stream: TcpStream) {
         return;
     }
 
+    // Ollama proxy: forward /ollama/* to localhost:11434/api/*
+    if first_line.contains("/ollama/") {
+        let path = first_line.split_whitespace().nth(1).unwrap_or("/");
+        let ollama_path = path.replace("/ollama/", "/api/");
+        let method = first_line.split_whitespace().next().unwrap_or("GET");
+
+        // Extract request body for POST/DELETE
+        let body_start = request.find("\r\n\r\n").map(|i| i + 4).unwrap_or(n);
+        let req_body = if body_start < n { &request[body_start..] } else { "" };
+
+        let ollama_url = format!("http://127.0.0.1:11434{}", ollama_path);
+
+        match proxy_to_ollama(method, &ollama_url, req_body) {
+            Ok((status, resp_body)) => {
+                let response = format!(
+                    "HTTP/1.1 {}\r\n{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                    status, cors, resp_body.len(), resp_body
+                );
+                let _ = stream.write_all(response.as_bytes());
+            }
+            Err(e) => {
+                let err_body = format!(r#"{{"error":"{}"}}"#, e);
+                let response = format!(
+                    "HTTP/1.1 502 Bad Gateway\r\n{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                    cors, err_body.len(), err_body
+                );
+                let _ = stream.write_all(response.as_bytes());
+            }
+        }
+        return;
+    }
+
     let (status, body) = if first_line.contains("/env") {
         let env = detect_environment();
         ("200 OK", serde_json::to_string(&env).unwrap_or_else(|_| "{}".to_string()))
@@ -466,6 +498,50 @@ fn do_download_runtime() -> (&'static str, String) {
     }
 
     ("200 OK", r#"{"status":"complete"}"#.to_string())
+}
+
+/// Proxy HTTP request to local Ollama (bypasses browser CORS)
+fn proxy_to_ollama(method: &str, url: &str, body: &str) -> Result<(&'static str, String), String> {
+    use std::io::{BufRead, BufReader};
+
+    let parsed = url.replace("http://127.0.0.1:11434", "");
+    let mut conn = TcpStream::connect_timeout(
+        &"127.0.0.1:11434".parse().unwrap(),
+        Duration::from_millis(2000),
+    ).map_err(|e| format!("Ollama not reachable: {}", e))?;
+
+    let request = if body.is_empty() {
+        format!("{} {} HTTP/1.1\r\nHost: 127.0.0.1:11434\r\nConnection: close\r\n\r\n", method, parsed)
+    } else {
+        format!(
+            "{} {} HTTP/1.1\r\nHost: 127.0.0.1:11434\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            method, parsed, body.len(), body
+        )
+    };
+
+    conn.write_all(request.as_bytes()).map_err(|e| format!("Write failed: {}", e))?;
+    conn.set_read_timeout(Some(Duration::from_secs(30))).ok();
+
+    let mut reader = BufReader::new(conn);
+    let mut response = String::new();
+
+    // Read all data
+    loop {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => response.push_str(&line),
+            Err(_) => break,
+        }
+    }
+
+    // Split headers from body
+    if let Some(idx) = response.find("\r\n\r\n") {
+        let body = response[idx + 4..].to_string();
+        Ok(("200 OK", body))
+    } else {
+        Ok(("200 OK", response))
+    }
 }
 
 fn find_node(app_data: &str) -> Option<String> {

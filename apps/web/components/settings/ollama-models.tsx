@@ -21,6 +21,7 @@ import { useTranslation } from "@/lib/i18n";
 import { isDesktop, useEnvironmentStore } from "@/lib/environment";
 
 const OLLAMA_LOCAL = "http://localhost:11434";
+const OLLAMA_PROXY = "http://127.0.0.1:3458/ollama"; // Rust proxy bypasses CORS
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -82,7 +83,7 @@ function formatDate(iso: string): string {
 
 // ─── Component ──────────────────────────────────────────────
 
-export function OllamaModels() {
+export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}) {
   const { t } = useTranslation();
   const { desktop } = useEnvironmentStore();
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -155,9 +156,18 @@ export function OllamaModels() {
   const checkHealth = useCallback(async () => {
     try {
       if (desktop) {
-        // Desktop: check Ollama directly on user's machine
-        const res = await fetch(OLLAMA_LOCAL, { signal: AbortSignal.timeout(2000) });
-        setOnline(res.ok);
+        // Desktop: trust Rust-detected environment (avoids CORS issues)
+        if (ollamaRunning) {
+          setOnline(true);
+          return;
+        }
+        // Fallback: try direct check
+        try {
+          const res = await fetch(OLLAMA_LOCAL, { signal: AbortSignal.timeout(2000) });
+          setOnline(res.ok);
+        } catch {
+          setOnline(false);
+        }
       } else {
         const res = await fetch("/api/models/health");
         const data = await res.json();
@@ -166,14 +176,14 @@ export function OllamaModels() {
     } catch {
       setOnline(false);
     }
-  }, [desktop]);
+  }, [desktop, ollamaRunning]);
 
   const fetchModels = useCallback(async () => {
     setLoading(true);
     try {
       if (desktop) {
         // Desktop: fetch models directly from user's Ollama
-        const res = await fetch(`${OLLAMA_LOCAL}/api/tags`, { signal: AbortSignal.timeout(3000) });
+        const res = await fetch(`${OLLAMA_PROXY}/tags`, { signal: AbortSignal.timeout(3000) });
         const data = await res.json();
         setModels(data.models ?? []);
       } else {
@@ -212,7 +222,7 @@ export function OllamaModels() {
     try {
       if (desktop) {
         // Desktop: pull directly from user's Ollama
-        const res = await fetch(`${OLLAMA_LOCAL}/api/pull`, {
+        const res = await fetch(`${OLLAMA_PROXY}/pull`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, stream: true }),
@@ -296,7 +306,7 @@ export function OllamaModels() {
     setDeleting(name);
     try {
       if (desktop) {
-        const res = await fetch(`${OLLAMA_LOCAL}/api/delete`, {
+        const res = await fetch(`${OLLAMA_PROXY}/delete`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name }),
