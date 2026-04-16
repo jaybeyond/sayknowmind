@@ -1,3 +1,5 @@
+import { create } from "zustand";
+
 export type DeployMode = "cloud" | "desktop" | "auto";
 
 /** Server & client: read the build-time env var */
@@ -23,4 +25,21 @@ export function isCloud(): boolean {
   if (mode === "desktop") return false;
   // auto: cloud when no Tauri runtime detected
   return !isDesktop();
+}
+
+/** Reactive desktop detection — updates when Tauri injects env */
+export const useEnvironmentStore = create<{ desktop: boolean; cloud: boolean }>(() => ({
+  desktop: isDesktop(),
+  cloud: isCloud(),
+}));
+
+// Re-check when Tauri injects env (fires after page load)
+if (typeof window !== "undefined") {
+  window.addEventListener("sayknow-env-ready", () => {
+    useEnvironmentStore.setState({ desktop: isDesktop(), cloud: isCloud() });
+  });
+  // Also check after short delay in case event was missed
+  setTimeout(() => {
+    useEnvironmentStore.setState({ desktop: isDesktop(), cloud: isCloud() });
+  }, 4000);
 }

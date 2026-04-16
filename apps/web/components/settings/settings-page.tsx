@@ -13,7 +13,7 @@ import { ServicesTab } from "./services-tab";
 import { LocalRuntimeTab } from "./local-runtime-tab";
 import { McpConnectTab } from "./mcp-connect-tab";
 import { useTranslation } from "@/lib/i18n";
-import { isCloud, isDesktop } from "@/lib/environment";
+import { useEnvironmentStore } from "@/lib/environment";
 
 type TabId = "profile" | "appearance" | "ai" | "models" | "prompts" | "privacy" | "integrations" | "services" | "mcp" | "runtime";
 
@@ -21,8 +21,7 @@ export function SettingsPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
-  const cloud = isCloud();
-  const desktop = isDesktop();
+  const { cloud, desktop } = useEnvironmentStore();
 
   const tabs = useMemo(() => {
     const all: { id: TabId; label: string }[] = [
@@ -51,13 +50,13 @@ export function SettingsPage() {
           </p>
         </div>
 
-        <div className="flex gap-1 border-b">
+        <div className="flex gap-1 border-b overflow-x-auto scrollbar-none">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors",
+                "px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors whitespace-nowrap shrink-0",
                 activeTab === tab.id
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"

@@ -54,21 +54,20 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   checkRuntime: async () => {
     set({ status: "checking", error: null });
     try {
-      // Priority 1: Local API server on port 3458 (most accurate, runs on user's machine)
-      let data: Record<string, unknown> | null = null;
-      try {
-        const res = await fetch(`${LOCAL_API}/env`, { signal: AbortSignal.timeout(2000) });
-        if (res.ok) data = await res.json();
-      } catch { /* local API not available */ }
+      // Priority 1: Injected env from Tauri webview eval (immediate, no network)
+      let data: Record<string, unknown> | null = getInjectedEnv();
 
-      // Priority 2: Injected env from Tauri webview eval
+      // Priority 2: Local API server on port 3458 (runs on user's machine via Tauri)
       if (!data) {
-        data = getInjectedEnv();
+        try {
+          const res = await fetch(`${LOCAL_API}/env`, { signal: AbortSignal.timeout(3000) });
+          if (res.ok) data = await res.json();
+        } catch { /* local API not available — expected when not in desktop app */ }
       }
 
-      // No cloud fallback — cloud API returns server env, not user's machine
+      // No data means not running in desktop environment
       if (!data) {
-        set({ status: "not-installed", environment: null });
+        set({ status: "not-installed", environment: null, error: null });
         return;
       }
 
@@ -106,7 +105,11 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         set({ status: "ready", downloadProgress: 100, downloadLabel: "Complete" });
       }
     } catch (err) {
-      set({ status: "error", error: (err as Error).message, downloadProgress: 0 });
+      const msg = (err as Error).message;
+      const userMsg = msg === "Load failed" || msg === "Failed to fetch"
+        ? "데스크탑 앱에서만 사용 가능합니다. Tauri 앱을 실행해주세요."
+        : msg;
+      set({ status: "error", error: userMsg, downloadProgress: 0 });
     }
   },
 
@@ -117,7 +120,11 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       if (data.error) throw new Error(data.error);
       set({ status: "running", serverPort: data.port });
     } catch (err) {
-      set({ status: "error", error: (err as Error).message });
+      const msg = (err as Error).message;
+      const userMsg = msg === "Load failed" || msg === "Failed to fetch"
+        ? "로컬 API 서버에 연결할 수 없습니다."
+        : msg;
+      set({ status: "error", error: userMsg });
     }
   },
 
