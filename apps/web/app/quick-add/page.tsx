@@ -52,15 +52,26 @@ export default function QuickAddPage() {
     finally { setLoading(false); }
   };
 
-  const close = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any;
-    if (w.__TAURI_INTERNALS__) {
-      // Tauri v2: invoke close on current window
-      w.__TAURI_INTERNALS__.invoke("plugin:window|close", { label: "quick-add" }).catch(() => {});
-    } else {
-      window.close();
-    }
+  const close = async () => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const w = window as any;
+      // Tauri v2
+      if (w.__TAURI_INTERNALS__) {
+        await w.__TAURI_INTERNALS__.invoke("plugin:window|close", { label: "quick-add" });
+        return;
+      }
+      // Tauri v2 alt
+      if (w.__TAURI__?.window) {
+        const win = w.__TAURI__.window.getCurrent?.() ?? w.__TAURI__.window.Window?.getByLabel?.("quick-add");
+        if (win) { await win.close(); return; }
+      }
+    } catch {}
+    // Fallback: hide via eval from Rust side
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).__TAURI_INTERNALS__?.invoke("plugin:window|hide", { label: "quick-add" });
+    } catch {}
   };
 
   const tabs: { id: Tab; icon: typeof Link }[] = [
