@@ -282,12 +282,30 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                     }
                 }
                 "add_clipboard" => {
-                    // Open app and trigger AddMemoryDialog
-                    if let Some(w) = app.get_webview_window("main") {
-                        let _ = w.show();
-                        let _ = w.set_focus();
-                        // Navigate to home and dispatch event to open add dialog
-                        let _ = w.eval("window.dispatchEvent(new CustomEvent('sayknow-open-add-memory'))");
+                    // Show quick-add popup window near tray
+                    if let Some(existing) = app.get_webview_window("quick-add") {
+                        let _ = existing.show();
+                        let _ = existing.set_focus();
+                    } else {
+                        let url = if cfg!(debug_assertions) {
+                            "http://localhost:3000/quick-add"
+                        } else {
+                            "https://mind.sayknow.ai/quick-add"
+                        };
+                        let _ = tauri::WebviewWindowBuilder::new(
+                            app,
+                            "quick-add",
+                            tauri::WebviewUrl::External(url.parse().unwrap()),
+                        )
+                        .title("메모리 추가")
+                        .inner_size(340.0, 360.0)
+                        .resizable(false)
+                        .minimizable(false)
+                        .maximizable(false)
+                        .always_on_top(true)
+                        .decorations(false)
+                        .center()
+                        .build();
                     }
                 }
                 "quick_search" => {
