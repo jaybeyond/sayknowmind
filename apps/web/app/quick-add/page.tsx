@@ -72,8 +72,8 @@ export default function QuickAddPage() {
   return (
     <html>
       <body style={{ margin: 0, padding: 0, background: "transparent" }}>
-        <div className="h-screen flex flex-col overflow-hidden rounded-2xl"
-          style={{ background: "rgba(20,20,20,0.97)", backdropFilter: "blur(60px)", WebkitBackdropFilter: "blur(60px)", boxShadow: "0 8px 32px rgba(0,0,0,0.6), inset 0 0 0 0.5px rgba(255,255,255,0.08)" }}>
+        <div className="h-screen flex flex-col overflow-hidden rounded-2xl bg-black dark:bg-black text-white
+          [@media(prefers-color-scheme:light)]:bg-white [@media(prefers-color-scheme:light)]:text-black">
 
           {/* Drag + close */}
           <div className="flex items-center justify-end px-2 h-6" data-tauri-drag-region>
@@ -106,7 +106,7 @@ export default function QuickAddPage() {
                 onChange={(e) => setUrl(e.target.value)} autoFocus
                 onKeyDown={(e) => e.key === "Enter" && submit()}
                 className="w-full px-3 py-2 rounded-xl text-sm text-white placeholder:text-white/20 outline-none"
-                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
+                className="bg-white/5 border border-white/10 dark:bg-white/5 dark:border-white/10 [@media(prefers-color-scheme:light)]:bg-black/5 [@media(prefers-color-scheme:light)]:border-black/10"
               />
             )}
             {tab === "text" && (
@@ -114,7 +114,7 @@ export default function QuickAddPage() {
                 placeholder="..." value={text}
                 onChange={(e) => setText(e.target.value)} rows={3} autoFocus
                 className="w-full px-3 py-2 rounded-xl text-sm text-white placeholder:text-white/20 outline-none resize-none"
-                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
+                className="bg-white/5 border border-white/10 dark:bg-white/5 dark:border-white/10 [@media(prefers-color-scheme:light)]:bg-black/5 [@media(prefers-color-scheme:light)]:border-black/10"
               />
             )}
             {tab === "file" && (
