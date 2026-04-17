@@ -305,6 +305,7 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                         .always_on_top(true)
                         .decorations(false)
                         .transparent(true)
+                        .shadow(false)
                         .position(
                             {
                                 // Position near top-right (below tray area)
