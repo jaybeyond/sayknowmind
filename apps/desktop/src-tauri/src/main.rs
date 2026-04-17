@@ -244,7 +244,7 @@ fn get_cache_dir() -> PathBuf {
 // ---------------------------------------------------------------------------
 
 fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
-    let add_clipboard = MenuItem::with_id(app, "add_clipboard", "클립보드에서 메모리 추가", true, None::<&str>)?;
+    let add_clipboard = MenuItem::with_id(app, "add_clipboard", "메모리 추가", true, None::<&str>)?;
     let quick_search = MenuItem::with_id(app, "quick_search", "빠른 검색", true, None::<&str>)?;
     let open_chat = MenuItem::with_id(app, "open_chat", "채팅 열기", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
@@ -282,46 +282,12 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                     }
                 }
                 "add_clipboard" => {
-                    // Read clipboard and ingest directly via API
+                    // Open app and trigger AddMemoryDialog
                     if let Some(w) = app.get_webview_window("main") {
                         let _ = w.show();
                         let _ = w.set_focus();
-                        let js = r#"
-                        (async () => {
-                            try {
-                                const text = await navigator.clipboard.readText();
-                                if (!text || !text.trim()) {
-                                    alert('클립보드가 비어있습니다');
-                                    return;
-                                }
-                                const isUrl = /^https?:\/\//i.test(text.trim());
-                                const endpoint = isUrl ? '/api/ingest/url' : '/api/ingest/text';
-                                const body = isUrl
-                                    ? { url: text.trim() }
-                                    : { content: text.trim(), title: text.trim().slice(0, 50) };
-                                const res = await fetch(endpoint, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(body),
-                                });
-                                if (res.ok) {
-                                    const data = await res.json();
-                                    window.dispatchEvent(new CustomEvent('sayknow-memory-added', { detail: data }));
-                                    // Show brief toast-like notification
-                                    const div = document.createElement('div');
-                                    div.textContent = isUrl ? '🔗 URL 메모리 추가됨' : '📝 텍스트 메모리 추가됨';
-                                    div.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;padding:12px 20px;border-radius:8px;background:#1d1d1d;color:white;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
-                                    document.body.appendChild(div);
-                                    setTimeout(() => div.remove(), 3000);
-                                } else {
-                                    alert('메모리 추가 실패: ' + res.status);
-                                }
-                            } catch (e) {
-                                alert('클립보드 접근 실패: ' + e.message);
-                            }
-                        })();
-                        "#;
-                        let _ = w.eval(js);
+                        // Navigate to home and dispatch event to open add dialog
+                        let _ = w.eval("window.dispatchEvent(new CustomEvent('sayknow-open-add-memory'))");
                     }
                 }
                 "quick_search" => {

@@ -51,6 +51,13 @@ interface MemoryHeaderProps {
 
 export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   const [addOpen, setAddOpen] = React.useState(false);
+
+  // Listen for tray menu "add memory" event
+  React.useEffect(() => {
+    const handler = () => setAddOpen(true);
+    window.addEventListener("sayknow-open-add-memory", handler);
+    return () => window.removeEventListener("sayknow-open-add-memory", handler);
+  }, []);
   const [usageOpen, setUsageOpen] = React.useState(false);
   const {
     viewMode,
