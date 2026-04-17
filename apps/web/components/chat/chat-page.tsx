@@ -9,6 +9,9 @@ import { ChatInput } from "./chat-input";
 import type { ThinkingPhase } from "./thinking-indicator";
 import type { SourceCardData } from "./source-card";
 import { useTranslation } from "@/lib/i18n";
+import { useEnvironmentStore } from "@/lib/environment";
+
+const OLLAMA_PROXY = "http://127.0.0.1:3458/ollama";
 
 // Provider keys are now stored server-side in DB (AES-256-GCM encrypted).
 // No API keys in localStorage or request body.
@@ -312,6 +315,19 @@ export function ChatPage() {
       );
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
+
+      // Desktop fallback: try local Ollama via Rust proxy
+      const { desktop } = useEnvironmentStore.getState();
+      if (desktop) {
+        try {
+          await ollamaFallbackChat(message, assistantMsg.id, setMessages);
+          fetchConversations();
+          return;
+        } catch {
+          // Ollama also failed — show error
+        }
+      }
+
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsg.id
@@ -441,5 +457,56 @@ function EmptyChat() {
         {t("chat.emptySubtitle")}
       </p>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Desktop Ollama fallback — direct chat via Rust proxy when server AI fails
+// ---------------------------------------------------------------------------
+
+async function ollamaFallbackChat(
+  message: string,
+  assistantMsgId: string,
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+): Promise<void> {
+  // Get active chat model
+  let model = "qwen3:1.7b";
+  try {
+    const configRes = await fetch("/api/models/active");
+    if (configRes.ok) {
+      const cfg = await configRes.json();
+      if (cfg.chat) model = cfg.chat;
+    }
+  } catch { /* use default */ }
+
+  // Update phase
+  setMessages((prev) =>
+    prev.map((m) =>
+      m.id === assistantMsgId ? { ...m, phase: "answering" as const, content: "" } : m,
+    ),
+  );
+
+  // Call Ollama via Rust proxy (non-streaming for simplicity)
+  const res = await fetch(`${OLLAMA_PROXY}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: message }],
+      stream: false,
+    }),
+  });
+
+  if (!res.ok) throw new Error("Ollama fallback failed");
+
+  const data = await res.json();
+  const content = data?.message?.content ?? data?.response ?? "";
+
+  setMessages((prev) =>
+    prev.map((m) =>
+      m.id === assistantMsgId
+        ? { ...m, content, isStreaming: false, phase: "done" as const }
+        : m,
+    ),
   );
 }
