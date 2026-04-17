@@ -73,7 +73,7 @@ export default function QuickAddPage() {
     <html>
       <body style={{ margin: 0, padding: 0, background: "transparent" }}>
         <div className="h-screen flex flex-col overflow-hidden rounded-2xl"
-          style={{ background: "rgba(25,25,25,0.75)", backdropFilter: "blur(60px) saturate(2)", WebkitBackdropFilter: "blur(60px) saturate(2)", boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.1)" }}>
+          style={{ background: "rgba(20,20,20,0.97)", backdropFilter: "blur(60px)", WebkitBackdropFilter: "blur(60px)", boxShadow: "0 8px 32px rgba(0,0,0,0.6), inset 0 0 0 0.5px rgba(255,255,255,0.08)" }}>
 
           {/* Drag + close */}
           <div className="flex items-center justify-end px-2 h-6" data-tauri-drag-region>
