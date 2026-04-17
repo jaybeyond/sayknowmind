@@ -523,7 +523,7 @@ function HeroCTA() {
     <div className="flex flex-col items-center justify-center py-16 text-center px-4">
       <div className="max-w-2xl">
         <div className="mb-6">
-          <img src="/logo-icon.svg" alt="SayknowMind" className="size-16 md:size-20 mx-auto mb-4 rounded-2xl shadow-lg shadow-primary/20 animate-pulse" />
+          <img src="/logo-icon.png" alt="SayknowMind" className="size-16 md:size-20 mx-auto mb-4 rounded-2xl shadow-lg shadow-primary/20 animate-pulse" />
         </div>
         <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium mb-6 backdrop-blur-sm">
           {hero.badge}
