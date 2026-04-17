@@ -125,6 +125,13 @@ export function GraphCanvas({
     return () => observer.disconnect();
   }, []);
 
+  // Re-fit graph when dimensions change
+  useEffect(() => {
+    if (fgRef.current && dimensions.width > 0 && dimensions.height > 0) {
+      setTimeout(() => fgRef.current?.zoomToFit(300, 40), 100);
+    }
+  }, [dimensions.width, dimensions.height]);
+
   // Build graph data — useMemo keeps stable references so d3-force doesn't restart on re-render
   const data = useMemo(() => {
     const nodeIds = new Set<string>();
