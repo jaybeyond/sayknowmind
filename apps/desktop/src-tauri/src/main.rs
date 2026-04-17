@@ -253,6 +253,14 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     TrayIconBuilder::new()
         .menu(&menu)
         .tooltip("SayknowMind — Agentic Second Brain")
+        .on_tray_icon_event(|tray, event| {
+            if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+                if let Some(w) = tray.app_handle().get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
+        })
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => {
                 if let Some(w) = app.get_webview_window("main") {
