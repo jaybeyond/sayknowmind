@@ -298,12 +298,13 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                             tauri::WebviewUrl::External(url.parse().unwrap()),
                         )
                         .title("메모리 추가")
-                        .inner_size(300.0, 260.0)
+                        .inner_size(260.0, 200.0)
                         .resizable(false)
                         .minimizable(false)
                         .maximizable(false)
                         .always_on_top(true)
                         .decorations(false)
+                        .transparent(true)
                         .position(
                             {
                                 // Position near top-right (below tray area)

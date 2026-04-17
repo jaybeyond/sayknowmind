@@ -10,6 +10,7 @@
     "beforeDevCommand": ""
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "SayknowMind - Agentic Second Brain",
