@@ -244,39 +244,13 @@ fn get_cache_dir() -> PathBuf {
 // ---------------------------------------------------------------------------
 
 fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
-    // ── Quick Actions ──
-    let add_clipboard = MenuItem::with_id(app, "add_clipboard", "📋 클립보드에서 메모리 추가", true, None::<&str>)?;
-    let quick_search = MenuItem::with_id(app, "quick_search", "🔍 빠른 검색", true, None::<&str>)?;
-    let open_chat = MenuItem::with_id(app, "open_chat", "💬 채팅 열기", true, None::<&str>)?;
-
-    // ── Models ──
-    let env = detect_environment();
-    let ollama_status = if env.get("ollama").and_then(|v| v.get("running")).and_then(|v| v.as_bool()).unwrap_or(false) {
-        "● 실행 중"
-    } else {
-        "○ 오프라인"
-    };
-    let model_status = MenuItem::with_id(app, "model_status", &format!("Ollama: {}", ollama_status), false, None::<&str>)?;
-
-    // Get installed models from Ollama
-    let mut model_items: Vec<MenuItem<R>> = vec![model_status];
-    if let Ok(models) = get_ollama_models() {
-        for m in models.iter().take(6) {
-            let item = MenuItem::with_id(app, &format!("model_{}", m), &format!("  {}", m), true, None::<&str>)?;
-            model_items.push(item);
-        }
-    }
-
-    let model_refs: Vec<&dyn tauri::menu::IsMenuItem<R>> = model_items.iter().map(|i| i as &dyn tauri::menu::IsMenuItem<R>).collect();
-    let models_sub = Submenu::with_items(app, "🧠 모델", true, &model_refs)?;
-
-    // ── Navigation ──
-    let open_settings = MenuItem::with_id(app, "open_settings", "⚙️ 설정", true, None::<&str>)?;
-    let open_app = MenuItem::with_id(app, "open", "🏠 앱 열기", true, None::<&str>)?;
-
+    let add_clipboard = MenuItem::with_id(app, "add_clipboard", "클립보드에서 메모리 추가", true, None::<&str>)?;
+    let quick_search = MenuItem::with_id(app, "quick_search", "빠른 검색", true, None::<&str>)?;
+    let open_chat = MenuItem::with_id(app, "open_chat", "채팅 열기", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
+    let open_settings = MenuItem::with_id(app, "open_settings", "설정", true, None::<&str>)?;
+    let open_app = MenuItem::with_id(app, "open", "앱 열기", true, None::<&str>)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
-    let sep3 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
 
     let menu = Menu::with_items(app, &[
@@ -284,25 +258,20 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
         &quick_search,
         &open_chat,
         &sep1,
-        &models_sub,
-        &sep2,
         &open_settings,
         &open_app,
-        &sep3,
+        &sep2,
         &quit,
     ])?;
 
+    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))
+        .expect("failed to load tray icon");
+
     TrayIconBuilder::new()
+        .icon(tray_icon)
         .menu(&menu)
         .tooltip("SayknowMind — Agentic Second Brain")
-        .on_tray_icon_event(|tray, event| {
-            if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
-                if let Some(w) = tray.app_handle().get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
-            }
-        })
+        .menu_on_left_click(true)
         .on_menu_event(|app, event| {
             let id = event.id.0.as_str();
             match id {
