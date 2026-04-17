@@ -18,7 +18,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
-import { isDesktop } from "@/lib/environment";
+import { isDesktop, useEnvironmentStore } from "@/lib/environment";
+
+// Rust local API proxy — bypasses CORS when desktop loads cloud URL
+const OLLAMA_PROXY = "http://127.0.0.1:3458/ollama";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -82,6 +85,7 @@ function formatDate(iso: string): string {
 
 export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}) {
   const { t } = useTranslation();
+  const { desktop } = useEnvironmentStore();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [online, setOnline] = useState<boolean | null>(null);
   const [models, setModels] = useState<InstalledModel[]>([]);
@@ -151,26 +155,38 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
 
   const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch("/api/models/health");
-      const data = await res.json();
-      setOnline(data.online);
+      if (desktop) {
+        // Production desktop: probe Ollama via Rust proxy (CORS-safe)
+        const res = await fetch(`${OLLAMA_PROXY}/tags`, { signal: AbortSignal.timeout(2000) });
+        setOnline(res.ok);
+      } else {
+        const res = await fetch("/api/models/health");
+        const data = await res.json();
+        setOnline(data.online);
+      }
     } catch {
       setOnline(false);
     }
-  }, []);
+  }, [desktop]);
 
   const fetchModels = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/models");
-      const data = await res.json();
-      setModels(data.models ?? []);
+      if (desktop) {
+        const res = await fetch(`${OLLAMA_PROXY}/tags`, { signal: AbortSignal.timeout(3000) });
+        const data = await res.json();
+        setModels(data.models ?? []);
+      } else {
+        const res = await fetch("/api/models");
+        const data = await res.json();
+        setModels(data.models ?? []);
+      }
     } catch {
       setModels([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [desktop]);
 
   useEffect(() => {
     fetchConfig();
@@ -197,38 +213,48 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
     setPullProgress({ status: "Starting download...", pct: 0 });
 
     try {
-      const res = await fetch("/api/models/pull", {
+      const url = desktop ? `${OLLAMA_PROXY}/pull` : "/api/models/pull";
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, ...(desktop ? { stream: false } : {}) }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error ?? "Failed to pull model");
       }
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No stream");
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6).trim();
-          if (payload === "[DONE]") continue;
-          try {
-            const evt = JSON.parse(payload);
-            const status = evt.status ?? "";
-            let pct = 0;
-            if (evt.total && evt.completed) {
-              pct = Math.round((evt.completed / evt.total) * 100);
-            }
-            setPullProgress({ status, pct });
-          } catch { /* ignore */ }
+
+      if (desktop) {
+        // Rust proxy returns full response (non-streaming)
+        setPullProgress({ status: "Downloading...", pct: 50 });
+        await res.json();
+        setPullProgress({ status: "Complete", pct: 100 });
+      } else {
+        // Server API returns SSE stream
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No stream");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (payload === "[DONE]") continue;
+            try {
+              const evt = JSON.parse(payload);
+              const status = evt.status ?? "";
+              let pct = 0;
+              if (evt.total && evt.completed) {
+                pct = Math.round((evt.completed / evt.total) * 100);
+              }
+              setPullProgress({ status, pct });
+            } catch { /* ignore */ }
+          }
         }
       }
 
@@ -248,11 +274,20 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
     if (!confirm(t("ollama.deleteConfirm").replace("{{name}}", name))) return;
     setDeleting(name);
     try {
-      const res = await fetch(
-        `/api/models/${encodeURIComponent(name)}`,
-        { method: "DELETE" }
-      );
-      if (!res.ok) throw new Error("Delete failed");
+      if (desktop) {
+        const res = await fetch(`${OLLAMA_PROXY}/delete`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        if (!res.ok) throw new Error("Delete failed");
+      } else {
+        const res = await fetch(
+          `/api/models/${encodeURIComponent(name)}`,
+          { method: "DELETE" }
+        );
+        if (!res.ok) throw new Error("Delete failed");
+      }
       toast.success(t("ollama.deleted").replace("{{name}}", name));
       setModels((prev) => prev.filter((m) => m.name !== name));
     } catch {
