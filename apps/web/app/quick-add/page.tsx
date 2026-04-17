@@ -13,11 +13,9 @@ export default function QuickAddPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [url, setUrl] = React.useState("");
   const [text, setText] = React.useState("");
-  const [title, setTitle] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
-  // Auto-fill from clipboard on mount
   React.useEffect(() => {
     navigator.clipboard.readText().then((clip) => {
       if (clip && /^https?:\/\//i.test(clip.trim())) {
@@ -27,161 +25,106 @@ export default function QuickAddPage() {
     }).catch(() => {});
   }, []);
 
-  const reset = () => {
-    setUrl(""); setText(""); setTitle(""); setFile(null);
-    setError(null); setSuccess(false);
-  };
-
   const submit = async () => {
     setLoading(true); setError(null); setSuccess(false);
     try {
       let res: Response;
       if (tab === "url") {
-        if (!url.trim()) { setError("URL을 입력하세요"); setLoading(false); return; }
+        if (!url.trim()) { setError("URL"); setLoading(false); return; }
         res = await fetch("/api/ingest/url", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: url.trim() }),
         });
       } else if (tab === "text") {
-        if (!text.trim()) { setError("텍스트를 입력하세요"); setLoading(false); return; }
+        if (!text.trim()) { setError("Text"); setLoading(false); return; }
         res = await fetch("/api/ingest/text", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: text.trim(), title: title.trim() || undefined }),
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: text.trim() }),
         });
       } else {
-        if (!file) { setError("파일을 선택하세요"); setLoading(false); return; }
-        const fd = new FormData();
-        fd.append("file", file);
+        if (!file) { setError("File"); setLoading(false); return; }
+        const fd = new FormData(); fd.append("file", file);
         res = await fetch("/api/ingest/file", { method: "POST", body: fd });
       }
-
-      if (!res!.ok) {
-        const data = await res!.json().catch(() => ({}));
-        setError((data as { message?: string }).message || `Error ${res!.status}`);
-      } else {
-        setSuccess(true);
-        reset();
-        // Notify main window
-        window.dispatchEvent(new CustomEvent("sayknow-memory-added"));
-        setTimeout(() => setSuccess(false), 2000);
-      }
-    } catch {
-      setError("네트워크 오류");
-    } finally {
-      setLoading(false);
-    }
+      if (!res!.ok) { setError("Failed"); }
+      else { setSuccess(true); setUrl(""); setText(""); setFile(null); setTimeout(() => setSuccess(false), 2000); }
+    } catch { setError("Error"); }
+    finally { setLoading(false); }
   };
 
-  const close = () => {
-    // Close this window via Tauri
-    try {
-      // @ts-expect-error Tauri API
-      window.__TAURI__?.window?.getCurrent()?.close();
-    } catch {
-      window.close();
-    }
-  };
+  const close = () => { try { window.close(); } catch {} };
+
+  const tabs: { id: Tab; icon: typeof Link }[] = [
+    { id: "url", icon: Link },
+    { id: "text", icon: FileText },
+    { id: "file", icon: FileUp },
+  ];
 
   return (
-    <div className="h-screen bg-[#1a1a1a] text-white flex flex-col select-none" data-tauri-drag-region>
-      {/* Title bar */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10" data-tauri-drag-region>
-        <span className="text-xs font-medium text-white/70">메모리 추가</span>
-        <button onClick={close} className="text-white/40 hover:text-white">
-          <X className="size-3.5" />
+    <div className="h-screen bg-[#1a1a1a] text-white flex flex-col overflow-hidden rounded-xl">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 h-8 border-b border-white/10" data-tauri-drag-region>
+        <div className="flex gap-0.5">
+          {tabs.map(({ id, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => { setTab(id); setError(null); }}
+              className={cn(
+                "p-1.5 rounded transition-colors",
+                tab === id ? "bg-white/15 text-white" : "text-white/40 hover:text-white/70"
+              )}
+            >
+              <Icon className="size-3.5" />
+            </button>
+          ))}
+        </div>
+        <button onClick={close} className="text-white/30 hover:text-white p-1">
+          <X className="size-3" />
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-2 border-b border-white/10">
-        {([
-          { id: "url" as Tab, label: "URL", icon: Link },
-          { id: "text" as Tab, label: "텍스트", icon: FileText },
-          { id: "file" as Tab, label: "파일", icon: FileUp },
-        ]).map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => { setTab(id); setError(null); }}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1 py-1.5 rounded text-xs font-medium transition-colors",
-              tab === id ? "bg-white/15 text-white" : "text-white/50 hover:text-white/80"
-            )}
-          >
-            <Icon className="size-3" />
-            {label}
-          </button>
-        ))}
-      </div>
-
       {/* Content */}
-      <div className="flex-1 p-3 space-y-2 overflow-auto">
+      <div className="flex-1 p-3">
         {tab === "url" && (
           <input
-            type="url"
-            placeholder="https://..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            autoFocus
-            className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/30"
+            type="url" placeholder="https://..." value={url}
+            onChange={(e) => setUrl(e.target.value)} autoFocus
             onKeyDown={(e) => e.key === "Enter" && submit()}
+            className="w-full px-3 py-2 rounded-lg bg-white/8 border border-white/10 text-sm text-white placeholder:text-white/25 outline-none focus:border-white/25"
           />
         )}
-
         {tab === "text" && (
-          <>
-            <input
-              placeholder="제목 (선택)"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-xs text-white placeholder:text-white/30 outline-none focus:border-white/30"
-            />
-            <textarea
-              placeholder="텍스트 내용..."
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={4}
-              autoFocus
-              className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/30 resize-none"
-            />
-          </>
+          <textarea
+            placeholder="..." value={text}
+            onChange={(e) => setText(e.target.value)} rows={6} autoFocus
+            className="w-full px-3 py-2 rounded-lg bg-white/8 border border-white/10 text-sm text-white placeholder:text-white/25 outline-none focus:border-white/25 resize-none"
+          />
         )}
-
         {tab === "file" && (
           <div
             onClick={() => fileRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}
-            className="flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-white/15 hover:border-white/30 p-6 cursor-pointer transition-colors"
+            onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); }}
+            className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 hover:border-white/30 p-8 cursor-pointer"
           >
-            <FileUp className="size-6 text-white/30" />
-            {file ? (
-              <p className="text-xs text-white/80">{file.name}</p>
-            ) : (
-              <p className="text-xs text-white/40">클릭 또는 드래그</p>
-            )}
+            <FileUp className="size-5 text-white/25" />
+            <p className="text-xs text-white/40">{file ? file.name : "Drop"}</p>
             <input ref={fileRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); }} />
           </div>
         )}
 
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        {success && (
-          <div className="flex items-center gap-1 text-xs text-green-400">
-            <Check className="size-3" /> 추가됨
-          </div>
-        )}
+        {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
+        {success && <p className="text-xs text-green-400 mt-2 flex items-center gap-1"><Check className="size-3" />Done</p>}
       </div>
 
       {/* Submit */}
-      <div className="p-2 border-t border-white/10">
+      <div className="px-3 pb-3">
         <button
-          onClick={submit}
-          disabled={loading}
-          className="w-full py-2 rounded-lg bg-white/15 hover:bg-white/25 text-sm font-medium text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+          onClick={submit} disabled={loading}
+          className="w-full py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-medium text-white/80 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
         >
-          {loading ? <Loader2 className="size-3.5 animate-spin" /> : null}
-          {loading ? "저장 중..." : "추가"}
+          {loading && <Loader2 className="size-3 animate-spin" />}
+          {success ? <Check className="size-3" /> : "+"}
         </button>
       </div>
     </div>
