@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::fs;
 use std::io::{Read as IoRead, Write as IoWrite};
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, Submenu, PredefinedMenuItem},
     tray::TrayIconBuilder,
     Manager, Runtime,
 };
@@ -244,11 +244,53 @@ fn get_cache_dir() -> PathBuf {
 // ---------------------------------------------------------------------------
 
 fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Open SayknowMind", true, None::<&str>)?;
-    let start = MenuItem::with_id(app, "start_services", "Start Services", true, None::<&str>)?;
-    let stop = MenuItem::with_id(app, "stop_services", "Stop Services", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &start, &stop, &quit])?;
+    // ── Quick Actions ──
+    let add_clipboard = MenuItem::with_id(app, "add_clipboard", "📋 클립보드에서 메모리 추가", true, None::<&str>)?;
+    let quick_search = MenuItem::with_id(app, "quick_search", "🔍 빠른 검색", true, None::<&str>)?;
+    let open_chat = MenuItem::with_id(app, "open_chat", "💬 채팅 열기", true, None::<&str>)?;
+
+    // ── Models ──
+    let env = detect_environment();
+    let ollama_status = if env.get("ollama").and_then(|v| v.get("running")).and_then(|v| v.as_bool()).unwrap_or(false) {
+        "● 실행 중"
+    } else {
+        "○ 오프라인"
+    };
+    let model_status = MenuItem::with_id(app, "model_status", &format!("Ollama: {}", ollama_status), false, None::<&str>)?;
+
+    // Get installed models from Ollama
+    let mut model_items: Vec<MenuItem<R>> = vec![model_status];
+    if let Ok(models) = get_ollama_models() {
+        for m in models.iter().take(6) {
+            let item = MenuItem::with_id(app, &format!("model_{}", m), &format!("  {}", m), true, None::<&str>)?;
+            model_items.push(item);
+        }
+    }
+
+    let model_refs: Vec<&dyn tauri::menu::IsMenuItem<R>> = model_items.iter().map(|i| i as &dyn tauri::menu::IsMenuItem<R>).collect();
+    let models_sub = Submenu::with_items(app, "🧠 모델", true, &model_refs)?;
+
+    // ── Navigation ──
+    let open_settings = MenuItem::with_id(app, "open_settings", "⚙️ 설정", true, None::<&str>)?;
+    let open_app = MenuItem::with_id(app, "open", "🏠 앱 열기", true, None::<&str>)?;
+
+    let sep1 = PredefinedMenuItem::separator(app)?;
+    let sep2 = PredefinedMenuItem::separator(app)?;
+    let sep3 = PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
+
+    let menu = Menu::with_items(app, &[
+        &add_clipboard,
+        &quick_search,
+        &open_chat,
+        &sep1,
+        &models_sub,
+        &sep2,
+        &open_settings,
+        &open_app,
+        &sep3,
+        &quit,
+    ])?;
 
     TrayIconBuilder::new()
         .menu(&menu)
@@ -261,25 +303,101 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                 }
             }
         })
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "open" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
+        .on_menu_event(|app, event| {
+            let id = event.id.0.as_str();
+            match id {
+                "open" | "open_app" => {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                    }
+                }
+                "add_clipboard" => {
+                    // Open app and trigger clipboard ingest via JS
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                        let _ = w.eval("window.dispatchEvent(new CustomEvent('sayknow-clipboard-ingest'))");
+                    }
+                }
+                "quick_search" => {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                        let _ = w.eval("window.location.href = '/'");
+                    }
+                }
+                "open_chat" => {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                        let _ = w.eval("window.location.href = '/chat'");
+                    }
+                }
+                "open_settings" => {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                        let _ = w.eval("window.location.href = '/settings'");
+                    }
+                }
+                "quit" => app.exit(0),
+                _ => {
+                    // Model switch: model_xxx
+                    if id.starts_with("model_") {
+                        let model_name = &id[6..];
+                        eprintln!("[tray] Switching chat model to: {}", model_name);
+                        // Set active model via local API
+                        if let Some(w) = app.get_webview_window("main") {
+                            let js = format!(
+                                "fetch('/api/models/active', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ model: '{}', role: 'chat' }}) }})",
+                                model_name
+                            );
+                            let _ = w.eval(&js);
+                        }
+                    }
                 }
             }
-            "start_services" => {
-                std::thread::spawn(|| { let _ = start_local_services(); });
-            }
-            "stop_services" => {
-                std::thread::spawn(|| { let _ = stop_local_services(); });
-            }
-            "quit" => app.exit(0),
-            _ => {}
         })
         .build(app)?;
 
     Ok(())
+}
+
+/// Get installed Ollama model names
+fn get_ollama_models() -> Result<Vec<String>, String> {
+    let mut conn = TcpStream::connect_timeout(
+        &"127.0.0.1:11434".parse().unwrap(),
+        Duration::from_millis(1000),
+    ).map_err(|e| format!("{}", e))?;
+
+    let req = "GET /api/tags HTTP/1.1\r\nHost: 127.0.0.1:11434\r\nConnection: close\r\n\r\n";
+    conn.write_all(req.as_bytes()).map_err(|e| format!("{}", e))?;
+    conn.set_read_timeout(Some(Duration::from_secs(3))).ok();
+
+    let mut response = String::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        match conn.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => response.push_str(&String::from_utf8_lossy(&buf[..n])),
+            Err(_) => break,
+        }
+    }
+
+    // Parse JSON body from HTTP response
+    if let Some(idx) = response.find("\r\n\r\n") {
+        let body = &response[idx + 4..];
+        // Find "models" array and extract names
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
+            if let Some(models) = json.get("models").and_then(|m| m.as_array()) {
+                return Ok(models.iter()
+                    .filter_map(|m| m.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                    .collect());
+            }
+        }
+    }
+    Ok(vec![])
 }
 
 fn setup_global_shortcut<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
