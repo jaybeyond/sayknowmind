@@ -52,7 +52,16 @@ export default function QuickAddPage() {
     finally { setLoading(false); }
   };
 
-  const close = () => { try { window.close(); } catch {} };
+  const close = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    if (w.__TAURI_INTERNALS__) {
+      // Tauri v2: invoke close on current window
+      w.__TAURI_INTERNALS__.invoke("plugin:window|close", { label: "quick-add" }).catch(() => {});
+    } else {
+      window.close();
+    }
+  };
 
   const tabs: { id: Tab; icon: typeof Link }[] = [
     { id: "url", icon: Link },
@@ -61,81 +70,82 @@ export default function QuickAddPage() {
   ];
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden rounded-2xl"
-      style={{ background: "rgba(30,30,30,0.65)", backdropFilter: "blur(40px) saturate(1.8)", WebkitBackdropFilter: "blur(40px) saturate(1.8)" }}>
+    <html>
+      <body style={{ margin: 0, padding: 0, background: "transparent" }}>
+        <div className="h-screen flex flex-col overflow-hidden rounded-2xl"
+          style={{ background: "rgba(25,25,25,0.85)", backdropFilter: "blur(50px) saturate(1.8)", WebkitBackdropFilter: "blur(50px) saturate(1.8)" }}>
 
-      {/* Drag region + close */}
-      <div className="flex items-center justify-end px-2 h-7" data-tauri-drag-region>
-        <button onClick={close} className="text-white/20 hover:text-white/60 transition-colors p-0.5 rounded-full hover:bg-white/10">
-          <X className="size-3" />
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex justify-center gap-1 px-3 pb-2">
-        {tabs.map(({ id, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => { setTab(id); setError(null); }}
-            className={cn(
-              "p-2 rounded-full transition-all",
-              tab === id
-                ? "bg-white/15 text-white shadow-[0_0_12px_rgba(255,255,255,0.1)]"
-                : "text-white/25 hover:text-white/50 hover:bg-white/5"
-            )}
-          >
-            <Icon className="size-4" />
-          </button>
-        ))}
-      </div>
-
-      {/* Input */}
-      <div className="flex-1 px-3 pb-2">
-        {tab === "url" && (
-          <input
-            type="url" placeholder="https://..." value={url}
-            onChange={(e) => setUrl(e.target.value)} autoFocus
-            onKeyDown={(e) => e.key === "Enter" && submit()}
-            className="w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-white/20 outline-none"
-            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
-          />
-        )}
-        {tab === "text" && (
-          <textarea
-            placeholder="..." value={text}
-            onChange={(e) => setText(e.target.value)} rows={5} autoFocus
-            className="w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-white/20 outline-none resize-none"
-            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
-          />
-        )}
-        {tab === "file" && (
-          <div
-            onClick={() => fileRef.current?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); }}
-            className="flex flex-col items-center justify-center gap-1 rounded-xl p-8 cursor-pointer transition-colors"
-            style={{ border: "1px dashed rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)" }}
-          >
-            <FileUp className="size-5 text-white/20" />
-            <p className="text-[11px] text-white/30">{file ? file.name : "drop"}</p>
-            <input ref={fileRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); }} />
+          {/* Drag + close */}
+          <div className="flex items-center justify-end px-2 h-6" data-tauri-drag-region>
+            <button onClick={close} className="text-white/30 hover:text-white/70 transition-colors p-0.5">
+              <X className="size-3" />
+            </button>
           </div>
-        )}
-      </div>
 
-      {/* Status + Submit */}
-      <div className="px-3 pb-3 flex items-center gap-2">
-        {error && <span className="text-[10px] text-red-400/70">failed</span>}
-        {success && <span className="text-[10px] text-green-400/70 flex items-center gap-0.5"><Check className="size-2.5" />saved</span>}
-        <div className="flex-1" />
-        <button
-          onClick={submit} disabled={loading}
-          className="px-4 py-1.5 rounded-full text-[11px] font-medium text-white/70 hover:text-white transition-all disabled:opacity-40"
-          style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.08)" }}
-        >
-          {loading ? <Loader2 className="size-3 animate-spin" /> : "+"}
-        </button>
-      </div>
-    </div>
+          {/* Tabs */}
+          <div className="flex justify-center gap-1 px-3 pb-2">
+            {tabs.map(({ id, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => { setTab(id); setError(null); }}
+                className={cn(
+                  "p-2 rounded-full transition-all",
+                  tab === id ? "bg-white/15 text-white" : "text-white/25 hover:text-white/50"
+                )}
+              >
+                <Icon className="size-3.5" />
+              </button>
+            ))}
+          </div>
+
+          {/* Input */}
+          <div className="flex-1 px-3 pb-1">
+            {tab === "url" && (
+              <input
+                type="url" placeholder="https://..." value={url}
+                onChange={(e) => setUrl(e.target.value)} autoFocus
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                className="w-full px-3 py-2 rounded-xl text-sm text-white placeholder:text-white/20 outline-none"
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
+              />
+            )}
+            {tab === "text" && (
+              <textarea
+                placeholder="..." value={text}
+                onChange={(e) => setText(e.target.value)} rows={3} autoFocus
+                className="w-full px-3 py-2 rounded-xl text-sm text-white placeholder:text-white/20 outline-none resize-none"
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
+              />
+            )}
+            {tab === "file" && (
+              <div
+                onClick={() => fileRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); }}
+                className="flex items-center justify-center gap-1 rounded-xl p-6 cursor-pointer"
+                style={{ border: "1px dashed rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)" }}
+              >
+                <FileUp className="size-4 text-white/20" />
+                <p className="text-[11px] text-white/30">{file ? file.name : "drop"}</p>
+                <input ref={fileRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); }} />
+              </div>
+            )}
+            {error && <p className="text-[10px] text-red-400/70 mt-1">failed</p>}
+            {success && <p className="text-[10px] text-green-400/70 mt-1 flex items-center gap-0.5"><Check className="size-2.5" />saved</p>}
+          </div>
+
+          {/* Submit */}
+          <div className="px-3 pb-2">
+            <button
+              onClick={submit} disabled={loading}
+              className="w-full py-1.5 rounded-full text-[11px] font-medium text-white/60 hover:text-white transition-all disabled:opacity-40"
+              style={{ background: "rgba(255,255,255,0.08)" }}
+            >
+              {loading ? <Loader2 className="size-3 animate-spin mx-auto" /> : "+"}
+            </button>
+          </div>
+        </div>
+      </body>
+    </html>
   );
 }
