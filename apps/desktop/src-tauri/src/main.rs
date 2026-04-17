@@ -282,11 +282,46 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                     }
                 }
                 "add_clipboard" => {
-                    // Open app and trigger clipboard ingest via JS
+                    // Read clipboard and ingest directly via API
                     if let Some(w) = app.get_webview_window("main") {
                         let _ = w.show();
                         let _ = w.set_focus();
-                        let _ = w.eval("window.dispatchEvent(new CustomEvent('sayknow-clipboard-ingest'))");
+                        let js = r#"
+                        (async () => {
+                            try {
+                                const text = await navigator.clipboard.readText();
+                                if (!text || !text.trim()) {
+                                    alert('클립보드가 비어있습니다');
+                                    return;
+                                }
+                                const isUrl = /^https?:\/\//i.test(text.trim());
+                                const endpoint = isUrl ? '/api/ingest/url' : '/api/ingest/text';
+                                const body = isUrl
+                                    ? { url: text.trim() }
+                                    : { content: text.trim(), title: text.trim().slice(0, 50) };
+                                const res = await fetch(endpoint, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(body),
+                                });
+                                if (res.ok) {
+                                    const data = await res.json();
+                                    window.dispatchEvent(new CustomEvent('sayknow-memory-added', { detail: data }));
+                                    // Show brief toast-like notification
+                                    const div = document.createElement('div');
+                                    div.textContent = isUrl ? '🔗 URL 메모리 추가됨' : '📝 텍스트 메모리 추가됨';
+                                    div.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;padding:12px 20px;border-radius:8px;background:#1d1d1d;color:white;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+                                    document.body.appendChild(div);
+                                    setTimeout(() => div.remove(), 3000);
+                                } else {
+                                    alert('메모리 추가 실패: ' + res.status);
+                                }
+                            } catch (e) {
+                                alert('클립보드 접근 실패: ' + e.message);
+                            }
+                        })();
+                        "#;
+                        let _ = w.eval(js);
                     }
                 }
                 "quick_search" => {
