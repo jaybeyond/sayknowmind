@@ -298,7 +298,7 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
                             tauri::WebviewUrl::External(url.parse().unwrap()),
                         )
                         .title("메모리 추가")
-                        .inner_size(320.0, 280.0)
+                        .inner_size(300.0, 260.0)
                         .resizable(false)
                         .minimizable(false)
                         .maximizable(false)

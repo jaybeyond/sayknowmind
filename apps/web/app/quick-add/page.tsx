@@ -30,25 +30,25 @@ export default function QuickAddPage() {
     try {
       let res: Response;
       if (tab === "url") {
-        if (!url.trim()) { setError("URL"); setLoading(false); return; }
+        if (!url.trim()) return;
         res = await fetch("/api/ingest/url", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: url.trim() }),
         });
       } else if (tab === "text") {
-        if (!text.trim()) { setError("Text"); setLoading(false); return; }
+        if (!text.trim()) return;
         res = await fetch("/api/ingest/text", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content: text.trim() }),
         });
       } else {
-        if (!file) { setError("File"); setLoading(false); return; }
+        if (!file) return;
         const fd = new FormData(); fd.append("file", file);
         res = await fetch("/api/ingest/file", { method: "POST", body: fd });
       }
-      if (!res!.ok) { setError("Failed"); }
+      if (!res!.ok) setError("!");
       else { setSuccess(true); setUrl(""); setText(""); setFile(null); setTimeout(() => setSuccess(false), 2000); }
-    } catch { setError("Error"); }
+    } catch { setError("!"); }
     finally { setLoading(false); }
   };
 
@@ -61,43 +61,51 @@ export default function QuickAddPage() {
   ];
 
   return (
-    <div className="h-screen bg-[#1a1a1a] text-white flex flex-col overflow-hidden rounded-xl">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 h-8 border-b border-white/10" data-tauri-drag-region>
-        <div className="flex gap-0.5">
-          {tabs.map(({ id, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => { setTab(id); setError(null); }}
-              className={cn(
-                "p-1.5 rounded transition-colors",
-                tab === id ? "bg-white/15 text-white" : "text-white/40 hover:text-white/70"
-              )}
-            >
-              <Icon className="size-3.5" />
-            </button>
-          ))}
-        </div>
-        <button onClick={close} className="text-white/30 hover:text-white p-1">
+    <div className="h-screen flex flex-col overflow-hidden rounded-2xl"
+      style={{ background: "rgba(30,30,30,0.65)", backdropFilter: "blur(40px) saturate(1.8)", WebkitBackdropFilter: "blur(40px) saturate(1.8)" }}>
+
+      {/* Drag region + close */}
+      <div className="flex items-center justify-end px-2 h-7" data-tauri-drag-region>
+        <button onClick={close} className="text-white/20 hover:text-white/60 transition-colors p-0.5 rounded-full hover:bg-white/10">
           <X className="size-3" />
         </button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 p-3">
+      {/* Tabs */}
+      <div className="flex justify-center gap-1 px-3 pb-2">
+        {tabs.map(({ id, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => { setTab(id); setError(null); }}
+            className={cn(
+              "p-2 rounded-full transition-all",
+              tab === id
+                ? "bg-white/15 text-white shadow-[0_0_12px_rgba(255,255,255,0.1)]"
+                : "text-white/25 hover:text-white/50 hover:bg-white/5"
+            )}
+          >
+            <Icon className="size-4" />
+          </button>
+        ))}
+      </div>
+
+      {/* Input */}
+      <div className="flex-1 px-3 pb-2">
         {tab === "url" && (
           <input
             type="url" placeholder="https://..." value={url}
             onChange={(e) => setUrl(e.target.value)} autoFocus
             onKeyDown={(e) => e.key === "Enter" && submit()}
-            className="w-full px-3 py-2 rounded-lg bg-white/8 border border-white/10 text-sm text-white placeholder:text-white/25 outline-none focus:border-white/25"
+            className="w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-white/20 outline-none"
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
           />
         )}
         {tab === "text" && (
           <textarea
             placeholder="..." value={text}
-            onChange={(e) => setText(e.target.value)} rows={6} autoFocus
-            className="w-full px-3 py-2 rounded-lg bg-white/8 border border-white/10 text-sm text-white placeholder:text-white/25 outline-none focus:border-white/25 resize-none"
+            onChange={(e) => setText(e.target.value)} rows={5} autoFocus
+            className="w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-white/20 outline-none resize-none"
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
           />
         )}
         {tab === "file" && (
@@ -105,26 +113,27 @@ export default function QuickAddPage() {
             onClick={() => fileRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); }}
-            className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 hover:border-white/30 p-8 cursor-pointer"
+            className="flex flex-col items-center justify-center gap-1 rounded-xl p-8 cursor-pointer transition-colors"
+            style={{ border: "1px dashed rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)" }}
           >
-            <FileUp className="size-5 text-white/25" />
-            <p className="text-xs text-white/40">{file ? file.name : "Drop"}</p>
+            <FileUp className="size-5 text-white/20" />
+            <p className="text-[11px] text-white/30">{file ? file.name : "drop"}</p>
             <input ref={fileRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); }} />
           </div>
         )}
-
-        {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
-        {success && <p className="text-xs text-green-400 mt-2 flex items-center gap-1"><Check className="size-3" />Done</p>}
       </div>
 
-      {/* Submit */}
-      <div className="px-3 pb-3">
+      {/* Status + Submit */}
+      <div className="px-3 pb-3 flex items-center gap-2">
+        {error && <span className="text-[10px] text-red-400/70">failed</span>}
+        {success && <span className="text-[10px] text-green-400/70 flex items-center gap-0.5"><Check className="size-2.5" />saved</span>}
+        <div className="flex-1" />
         <button
           onClick={submit} disabled={loading}
-          className="w-full py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-medium text-white/80 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+          className="px-4 py-1.5 rounded-full text-[11px] font-medium text-white/70 hover:text-white transition-all disabled:opacity-40"
+          style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.08)" }}
         >
-          {loading && <Loader2 className="size-3 animate-spin" />}
-          {success ? <Check className="size-3" /> : "+"}
+          {loading ? <Loader2 className="size-3 animate-spin" /> : "+"}
         </button>
       </div>
     </div>
