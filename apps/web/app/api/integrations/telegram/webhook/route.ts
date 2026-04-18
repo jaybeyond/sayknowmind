@@ -817,45 +817,27 @@ export async function POST(request: NextRequest) {
       } else if (userId) {
         await sendMessage(botToken, chatId, msg("startAlready", L));
       } else {
-        // Auto-create account for new Telegram users
+        // Generate a 6-digit verification code and store as pending link
         try {
-          // Clean up any stale/orphaned links for this Telegram user
+          const code = String(Math.floor(100000 + Math.random() * 900000));
+          // Remove any existing pending entries for this telegram user
           await pool.query(
-            `DELETE FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1`,
+            `DELETE FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1 AND user_id LIKE 'pending:%'`,
             [tgUserId],
           ).catch(() => {});
-
-          const newUserId = crypto.randomUUID();
-          const tgUsername = message.from.username ?? `tg_${tgUserId}`;
-          const displayName = message.from.first_name || tgUsername;
-          const autoEmail = `tg_${tgUserId}@telegram.sayknowmind.local`;
-
+          // Store pending record — user_id encodes the code for easy lookup
           await pool.query(
-            `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-             VALUES ($1, $2, $3, FALSE, NOW(), NOW())
-             ON CONFLICT (email) DO NOTHING`,
-            [newUserId, displayName, autoEmail],
+            `INSERT INTO channel_links (user_id, channel, link_code, channel_user_id, channel_username, linked_at)
+             VALUES ($1, 'telegram', $2, $3, $4, NOW())
+             ON CONFLICT DO NOTHING`,
+            [`pending:${code}`, "telegram", code, tgUserId, message.from.username ?? null],
           );
-
-          // Check if insert succeeded or user already exists
-          const userRow = await pool.query(
-            `SELECT id FROM "user" WHERE email = $1`,
-            [autoEmail],
+          await sendMessage(
+            botToken, chatId,
+            `🔑 인증 코드: <b>${code}</b>\n\nSayKnowMind 설정 > 연동 > 텔레그램에서 이 코드를 입력하세요.\n\n<i>코드는 10분 후 만료됩니다.</i>`,
           );
-          const actualUserId = userRow.rows[0]?.id ?? newUserId;
-
-          // Create channel_links entry (single link per Telegram user)
-          await pool.query(
-            `INSERT INTO channel_links (user_id, channel, channel_user_id, channel_username, linked_at)
-             VALUES ($1, 'telegram', $2, $3, NOW())
-             ON CONFLICT (user_id, channel) DO UPDATE
-             SET channel_user_id = $2, channel_username = $3, linked_at = NOW()`,
-            [actualUserId, tgUserId, message.from.username ?? null],
-          );
-
-          await sendMessage(botToken, chatId, msg("startAutoCreated", L));
         } catch (err) {
-          console.error("[telegram] Auto-registration failed:", err);
+          console.error("[telegram] Code generation failed:", err);
           await sendMessage(botToken, chatId, msg("startWelcome", L, { tgId: tgUserId }));
         }
       }
@@ -999,44 +981,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ── Auto-register unlinked users for content operations ──
+  // ── Guard: require linked account for content operations ──
 
   if (!userId) {
-    try {
-      // Clean up any stale/orphaned links for this Telegram user first
-      await pool.query(
-        `DELETE FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1`,
-        [tgUserId],
-      ).catch(() => {});
-
-      const newUserId = crypto.randomUUID();
-      const tgUsername = message.from.username ?? `tg_${tgUserId}`;
-      const displayName = message.from.first_name || tgUsername;
-      const autoEmail = `tg_${tgUserId}@telegram.sayknowmind.local`;
-
-      await pool.query(
-        `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, FALSE, NOW(), NOW())
-         ON CONFLICT (email) DO NOTHING`,
-        [newUserId, displayName, autoEmail],
-      );
-      const userRow = await pool.query(`SELECT id FROM "user" WHERE email = $1`, [autoEmail]);
-      const actualUserId = userRow.rows[0]?.id ?? newUserId;
-
-      await pool.query(
-        `INSERT INTO channel_links (user_id, channel, channel_user_id, channel_username, linked_at)
-         VALUES ($1, 'telegram', $2, $3, NOW())
-         ON CONFLICT (user_id, channel) DO UPDATE
-         SET channel_user_id = $2, channel_username = $3, linked_at = NOW()`,
-        [actualUserId, tgUserId, message.from.username ?? null],
-      );
-
-      userId = actualUserId;
-    } catch (err) {
-      console.error("[telegram] Auto-registration failed:", err);
-      await sendMessage(botToken, chatId, msg("linkFirstShort", L, { tgId: tgUserId }));
-      return NextResponse.json({ ok: true });
-    }
+    await sendMessage(
+      botToken, chatId,
+      `계정이 연결되지 않았습니다.\n\n/start 를 보내면 인증 코드를 받을 수 있습니다.`,
+    );
+    return NextResponse.json({ ok: true });
   }
 
   // Final guard — should never reach here, but satisfies TypeScript

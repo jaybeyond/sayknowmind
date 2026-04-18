@@ -76,6 +76,15 @@ export async function GET(
       const botInfo = await verifyTelegramToken(token).catch(() => null);
       botName = botInfo?.botUsername ?? null;
     }
+    // Auto-setup webhook if token exists but webhook is not active
+    if (!webhookActive) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+      if (appUrl) {
+        const webhookUrl = `${appUrl}/api/integrations/telegram/webhook`;
+        const ok = await setupTelegramWebhook(token, webhookUrl).catch(() => false);
+        if (ok) webhookActive = true;
+      }
+    }
   }
 
   const status: ChannelStatus = {
@@ -230,6 +239,63 @@ export async function POST(
     }
 
     return NextResponse.json({ ok: true });
+  }
+
+  // Verify 6-digit code sent from Telegram bot
+  if (action === "verifyCode") {
+    const code = body.code as string;
+    if (!code || !/^\d{6}$/.test(code)) {
+      return NextResponse.json({ error: "Invalid code format" }, { status: 400 });
+    }
+
+    if (channel !== "telegram") {
+      return NextResponse.json({ error: "Code verification only supported for telegram" }, { status: 400 });
+    }
+
+    // Find the pending record (expires after 10 minutes)
+    const pendingRow = await pool.query(
+      `SELECT user_id, channel_user_id, channel_username, linked_at
+       FROM channel_links
+       WHERE channel = 'telegram' AND link_code = $1 AND user_id LIKE 'pending:%'
+       LIMIT 1`,
+      [code],
+    ).catch(() => ({ rows: [] }));
+
+    if (!pendingRow.rows[0]) {
+      return NextResponse.json({ ok: false, error: "Invalid or expired code" }, { status: 400 });
+    }
+
+    const row = pendingRow.rows[0];
+    const linkedAt: Date = row.linked_at;
+    const ageMs = Date.now() - new Date(linkedAt).getTime();
+    if (ageMs > 10 * 60 * 1000) {
+      // Clean up expired record
+      await pool.query(
+        `DELETE FROM channel_links WHERE channel = 'telegram' AND link_code = $1 AND user_id LIKE 'pending:%'`,
+        [code],
+      ).catch(() => {});
+      return NextResponse.json({ ok: false, error: "Code has expired. Send /start again to get a new code." }, { status: 400 });
+    }
+
+    const tgUserId = row.channel_user_id as string;
+    const tgUsername = row.channel_username as string | null;
+
+    // Delete the pending record
+    await pool.query(
+      `DELETE FROM channel_links WHERE channel = 'telegram' AND link_code = $1 AND user_id LIKE 'pending:%'`,
+      [code],
+    ).catch(() => {});
+
+    // Link the telegram user to the current web user
+    await pool.query(
+      `INSERT INTO channel_links (user_id, channel, channel_user_id, channel_username, linked_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (user_id, channel)
+       DO UPDATE SET channel_user_id = $3, channel_username = $4, linked_at = NOW(), link_code = NULL`,
+      [userId, channel, tgUserId, tgUsername],
+    );
+
+    return NextResponse.json({ ok: true, linked: true, username: tgUsername });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

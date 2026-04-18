@@ -70,6 +70,8 @@ export function IntegrationsTab() {
   const [busy, setBusy] = useState<string | null>(null);
   const [codes, setCodes] = useState<Record<string, string>>({});
   const [tokens, setTokens] = useState<Record<string, string>>({});
+  const [verifyCodeInput, setVerifyCodeInput] = useState("");
+  const [verifyCodeResult, setVerifyCodeResult] = useState<{ ok: boolean; error?: string } | null>(null);
   const [verifyResults, setVerifyResults] = useState<Record<string, VerifyResult>>({});
   const [polling, setPolling] = useState(false);
   const [pollCount, setPollCount] = useState(0);
@@ -321,49 +323,116 @@ export function IntegrationsTab() {
                         </div>
                         {!linked && (
                           <div className="space-y-3">
-                            {/* Method 1: Link code */}
-                            <div className="space-y-2">
-                              <p className="text-xs text-muted-foreground">{t("integrations.linkMethod1")}</p>
-                              <button onClick={() => doAction(ch.id, "generateLinkCode")} disabled={busy === `${ch.id}-generateLinkCode`} className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{t("integrations.generateCode")}</button>
-                              {code && (
-                                <div className="rounded bg-muted p-2">
-                                  <p className="text-xs text-muted-foreground mb-1">{t("integrations.linkInstructions")}</p>
-                                  <code className="text-xs font-mono select-all">/start {code}</code>
+                            {ch.id === "telegram" ? (
+                              <>
+                                {/* Primary: code from Telegram bot */}
+                                <div className="space-y-2">
+                                  <p className="text-xs text-muted-foreground">
+                                    텔레그램에서 <b>@sayknow_mind_bot</b>에게 <code>/start</code>를 보내세요.
+                                    봇이 6자리 인증 코드를 보내줍니다.
+                                  </p>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="text"
+                                      placeholder="인증 코드 6자리"
+                                      maxLength={6}
+                                      value={verifyCodeInput}
+                                      onChange={(e) => {
+                                        setVerifyCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6));
+                                        setVerifyCodeResult(null);
+                                      }}
+                                      className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs font-mono tracking-widest"
+                                    />
+                                    <button
+                                      onClick={async () => {
+                                        if (verifyCodeInput.length !== 6) return;
+                                        setBusy(`${ch.id}-verifyCode`);
+                                        setVerifyCodeResult(null);
+                                        try {
+                                          const res = await fetch(`/api/integrations/${ch.id}`, {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ action: "verifyCode", code: verifyCodeInput }),
+                                          });
+                                          const data = await res.json();
+                                          if (data.ok) {
+                                            setVerifyCodeInput("");
+                                            await fetchStatuses();
+                                          } else {
+                                            setVerifyCodeResult({ ok: false, error: data.error ?? "Invalid code" });
+                                          }
+                                        } catch {
+                                          setVerifyCodeResult({ ok: false, error: "Network error" });
+                                        } finally { setBusy(null); }
+                                      }}
+                                      disabled={busy === `${ch.id}-verifyCode` || verifyCodeInput.length !== 6}
+                                      className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                    >
+                                      {busy === `${ch.id}-verifyCode` ? "확인 중..." : "인증"}
+                                    </button>
+                                  </div>
+                                  {verifyCodeResult && !verifyCodeResult.ok && (
+                                    <p className="text-xs text-red-500">{verifyCodeResult.error}</p>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                            {/* Method 2: Direct ID input */}
-                            <div className="space-y-2 border-t pt-2">
-                              <p className="text-xs text-muted-foreground">{t("integrations.linkMethod2")}</p>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  placeholder={t("integrations.userIdPlaceholder")}
-                                  value={tokens[`${ch.id}-uid`] ?? ""}
-                                  onChange={(e) => setTokens((prev) => ({ ...prev, [`${ch.id}-uid`]: e.target.value }))}
-                                  className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs"
-                                />
-                                <button
-                                  onClick={async () => {
-                                    const uid = tokens[`${ch.id}-uid`];
-                                    if (!uid) return;
-                                    setBusy(`${ch.id}-linkById`);
-                                    try {
-                                      await fetch(`/api/integrations/${ch.id}`, {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify({ action: "linkByUserId", channelUserId: uid }),
-                                      });
-                                      await fetchStatuses();
-                                    } catch { /* silent */ } finally { setBusy(null); }
-                                  }}
-                                  disabled={busy === `${ch.id}-linkById` || !tokens[`${ch.id}-uid`]}
-                                  className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                                >
-                                  {t("integrations.linkById")}
-                                </button>
-                              </div>
-                            </div>
+                                {/* Secondary: legacy link code */}
+                                <div className="space-y-2 border-t pt-2">
+                                  <p className="text-xs text-muted-foreground">{t("integrations.linkMethod1")}</p>
+                                  <button onClick={() => doAction(ch.id, "generateLinkCode")} disabled={busy === `${ch.id}-generateLinkCode`} className="rounded-md bg-secondary px-3 py-1.5 text-xs text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50">{t("integrations.generateCode")}</button>
+                                  {code && (
+                                    <div className="rounded bg-muted p-2">
+                                      <p className="text-xs text-muted-foreground mb-1">{t("integrations.linkInstructions")}</p>
+                                      <code className="text-xs font-mono select-all">/start {code}</code>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {/* Non-telegram channels: Method 1 + Method 2 */}
+                                <div className="space-y-2">
+                                  <p className="text-xs text-muted-foreground">{t("integrations.linkMethod1")}</p>
+                                  <button onClick={() => doAction(ch.id, "generateLinkCode")} disabled={busy === `${ch.id}-generateLinkCode`} className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{t("integrations.generateCode")}</button>
+                                  {code && (
+                                    <div className="rounded bg-muted p-2">
+                                      <p className="text-xs text-muted-foreground mb-1">{t("integrations.linkInstructions")}</p>
+                                      <code className="text-xs font-mono select-all">/start {code}</code>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="space-y-2 border-t pt-2">
+                                  <p className="text-xs text-muted-foreground">{t("integrations.linkMethod2")}</p>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="text"
+                                      placeholder={t("integrations.userIdPlaceholder")}
+                                      value={tokens[`${ch.id}-uid`] ?? ""}
+                                      onChange={(e) => setTokens((prev) => ({ ...prev, [`${ch.id}-uid`]: e.target.value }))}
+                                      className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs"
+                                    />
+                                    <button
+                                      onClick={async () => {
+                                        const uid = tokens[`${ch.id}-uid`];
+                                        if (!uid) return;
+                                        setBusy(`${ch.id}-linkById`);
+                                        try {
+                                          await fetch(`/api/integrations/${ch.id}`, {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ action: "linkByUserId", channelUserId: uid }),
+                                          });
+                                          await fetchStatuses();
+                                        } catch { /* silent */ } finally { setBusy(null); }
+                                      }}
+                                      disabled={busy === `${ch.id}-linkById` || !tokens[`${ch.id}-uid`]}
+                                      className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                    >
+                                      {t("integrations.linkById")}
+                                    </button>
+                                  </div>
+                                </div>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
