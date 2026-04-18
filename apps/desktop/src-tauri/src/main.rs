@@ -717,6 +717,18 @@ fn main() {
                     // Wait for page to load
                     std::thread::sleep(Duration::from_secs(3));
                     let _ = w.eval(&js);
+                    // Open external links in system browser
+                    let _ = w.eval(r#"
+                        document.addEventListener('click', (e) => {
+                            const a = e.target.closest('a[href]');
+                            if (!a) return;
+                            const href = a.getAttribute('href');
+                            if (href && (href.startsWith('http://') || href.startsWith('https://')) && !href.includes(window.location.host)) {
+                                e.preventDefault();
+                                window.__TAURI__?.shell?.open(href) ?? window.open(href, '_blank');
+                            }
+                        }, true);
+                    "#);
                     eprintln!("[desktop] Environment injected into webview");
                 });
 
