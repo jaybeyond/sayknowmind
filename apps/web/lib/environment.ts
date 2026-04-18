@@ -39,22 +39,10 @@ if (typeof window !== "undefined") {
     useEnvironmentStore.setState({ desktop: isDesktop(), cloud: isCloud() });
   });
 
-  // Also probe local API server — if reachable, we're in desktop mode
-  const probeDesktop = () => {
+  // Re-check after delay in case Tauri env injection was late
+  setTimeout(() => {
     if (isDesktop()) {
       useEnvironmentStore.setState({ desktop: true, cloud: false });
-      return;
     }
-    fetch("http://127.0.0.1:3458/env", { signal: AbortSignal.timeout(2000) })
-      .then((res) => {
-        if (res.ok) {
-          useEnvironmentStore.setState({ desktop: true, cloud: false });
-        }
-      })
-      .catch(() => { /* not in desktop */ });
-  };
-
-  // Probe after short delays to handle race conditions
-  setTimeout(probeDesktop, 1000);
-  setTimeout(probeDesktop, 4000);
+  }, 2000);
 }
