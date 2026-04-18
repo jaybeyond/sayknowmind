@@ -312,7 +312,7 @@ export function IntegrationsTab() {
                           {linked ? (
                             <div className="flex items-center gap-2">
                               <span className="h-2 w-2 rounded-full bg-green-500" />
-                              <span className="text-xs">@{st?.username ?? "linked"}</span>
+                              <span className="text-xs">{st?.username ? `@${st.username}` : t("integrations.connected")}</span>
                               <button onClick={() => unlinkChannel(ch.id)} disabled={busy === `${ch.id}-unlink`} className="text-xs text-red-500 hover:underline">{t("integrations.unlink")}</button>
                             </div>
                           ) : (
