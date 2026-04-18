@@ -375,17 +375,6 @@ export function IntegrationsTab() {
                                     <p className="text-xs text-red-500">{verifyCodeResult.error}</p>
                                   )}
                                 </div>
-                                {/* Secondary: legacy link code */}
-                                <div className="space-y-2 border-t pt-2">
-                                  <p className="text-xs text-muted-foreground">{t("integrations.linkMethod1")}</p>
-                                  <button onClick={() => doAction(ch.id, "generateLinkCode")} disabled={busy === `${ch.id}-generateLinkCode`} className="rounded-md bg-secondary px-3 py-1.5 text-xs text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50">{t("integrations.generateCode")}</button>
-                                  {code && (
-                                    <div className="rounded bg-muted p-2">
-                                      <p className="text-xs text-muted-foreground mb-1">{t("integrations.linkInstructions")}</p>
-                                      <code className="text-xs font-mono select-all">/start {code}</code>
-                                    </div>
-                                  )}
-                                </div>
                               </>
                             ) : (
                               <>
