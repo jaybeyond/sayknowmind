@@ -834,7 +834,7 @@ export async function POST(request: NextRequest) {
           );
           await sendMessage(
             botToken, chatId,
-            `🔑 인증 코드: <b>${code}</b>\n\nSayKnowMind 설정 > 연동 > 텔레그램에서 이 코드를 입력하세요.\n\n<i>코드는 10분 후 만료됩니다.</i>`,
+            `🔑 Verification code: <b>${code}</b>\n\nEnter this code in SayKnowMind Settings → Integrations → Telegram.\n\n<i>Code expires in 10 minutes.</i>`,
           );
         } catch (err) {
           console.error("[telegram] Code generation failed:", err);
