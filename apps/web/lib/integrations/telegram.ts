@@ -175,11 +175,19 @@ export async function sendMessage(
 }
 
 export async function sendTyping(botToken: string, chatId: number): Promise<void> {
-  await fetch(`${TELEGRAM_API}${botToken}/sendChatAction`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, action: "typing" }),
-  }).catch(() => {});
+  try {
+    const res = await fetch(`${TELEGRAM_API}${botToken}/sendChatAction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, action: "typing" }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error(`[telegram] sendTyping failed: ${res.status} ${body}`);
+    }
+  } catch (err) {
+    console.error("[telegram] sendTyping error:", err);
+  }
 }
 
 export async function answerCallbackQuery(
