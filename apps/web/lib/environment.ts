@@ -12,8 +12,7 @@ export function getDeployMode(): DeployMode {
 /** Client-only: true when running inside Tauri v2 shell */
 export function isDesktop(): boolean {
   if (typeof window === "undefined") return false;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const w = window as any;
+  const w = window as Record<string, unknown>;
   // Check multiple Tauri indicators (v1: __TAURI__, v2: __TAURI_INTERNALS__, __TAURI_IPC__)
   // or injected env from our Rust code (cloud URL mode)
   return !!(w.__TAURI_INTERNALS__ || w.__TAURI__ || w.__TAURI_IPC__ || w.__SAYKNOW_ENV__);

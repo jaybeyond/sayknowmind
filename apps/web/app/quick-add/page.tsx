@@ -67,10 +67,9 @@ export default function QuickAddPage() {
         if (win) { await win.close(); return; }
       }
     } catch {}
-    // Fallback: hide via eval from Rust side
+    // Fallback: hide
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).__TAURI_INTERNALS__?.invoke("plugin:window|hide", { label: "quick-add" });
+      (window as unknown as Record<string, unknown> & { __TAURI_INTERNALS__?: { invoke: (cmd: string, args: unknown) => Promise<void> } }).__TAURI_INTERNALS__?.invoke("plugin:window|hide", { label: "quick-add" });
     } catch {}
   };
 
@@ -116,16 +115,14 @@ export default function QuickAddPage() {
                 type="url" placeholder="https://..." value={url}
                 onChange={(e) => setUrl(e.target.value)} autoFocus
                 onKeyDown={(e) => e.key === "Enter" && submit()}
-                className="w-full px-3 py-2 rounded-xl text-sm text-white placeholder:text-white/20 outline-none"
-                className="bg-white/5 border border-white/10 dark:bg-white/5 dark:border-white/10 [@media(prefers-color-scheme:light)]:bg-black/5 [@media(prefers-color-scheme:light)]:border-black/10"
+                className="w-full px-3 py-2 rounded-xl text-sm text-white placeholder:text-white/20 outline-none bg-white/5 border border-white/10 [@media(prefers-color-scheme:light)]:bg-black/5 [@media(prefers-color-scheme:light)]:border-black/10"
               />
             )}
             {tab === "text" && (
               <textarea
                 placeholder="..." value={text}
                 onChange={(e) => setText(e.target.value)} rows={3} autoFocus
-                className="w-full px-3 py-2 rounded-xl text-sm text-white placeholder:text-white/20 outline-none resize-none"
-                className="bg-white/5 border border-white/10 dark:bg-white/5 dark:border-white/10 [@media(prefers-color-scheme:light)]:bg-black/5 [@media(prefers-color-scheme:light)]:border-black/10"
+                className="w-full px-3 py-2 rounded-xl text-sm text-white placeholder:text-white/20 outline-none resize-none bg-white/5 border border-white/10 [@media(prefers-color-scheme:light)]:bg-black/5 [@media(prefers-color-scheme:light)]:border-black/10"
               />
             )}
             {tab === "file" && (
