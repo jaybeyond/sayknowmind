@@ -830,7 +830,7 @@ export async function POST(request: NextRequest) {
             `INSERT INTO channel_links (user_id, channel, link_code, channel_user_id, channel_username, linked_at)
              VALUES ($1, 'telegram', $2, $3, $4, NOW())
              ON CONFLICT DO NOTHING`,
-            [`pending:${code}`, "telegram", code, tgUserId, message.from.username ?? null],
+            [`pending:${code}`, code, tgUserId, message.from.username ?? null],
           );
           await sendMessage(
             botToken, chatId,
