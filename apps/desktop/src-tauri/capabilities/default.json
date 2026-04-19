@@ -1,0 +1,12 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for SayknowMind",
+  "windows": ["main", "quick-add"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open",
+    "shell:default",
+    "global-shortcut:default",
+    "updater:default"
+  ]
+}
