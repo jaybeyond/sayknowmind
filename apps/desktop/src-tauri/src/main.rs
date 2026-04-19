@@ -717,7 +717,7 @@ fn main() {
                     // Wait for page to load
                     std::thread::sleep(Duration::from_secs(3));
                     let _ = w.eval(&js);
-                    // Open external links in system browser
+                    // Open external links in system browser via Tauri shell plugin
                     let _ = w.eval(r#"
                         document.addEventListener('click', (e) => {
                             const a = e.target.closest('a[href]');
@@ -725,7 +725,9 @@ fn main() {
                             const href = a.getAttribute('href');
                             if (href && (href.startsWith('http://') || href.startsWith('https://')) && !href.includes(window.location.host)) {
                                 e.preventDefault();
-                                window.__TAURI__?.shell?.open(href) ?? window.open(href, '_blank');
+                                if (window.__TAURI_INTERNALS__) {
+                                    window.__TAURI_INTERNALS__.invoke('plugin:shell|open', { path: href });
+                                }
                             }
                         }, true);
                     "#);
