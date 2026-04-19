@@ -468,6 +468,21 @@ fn handle_api_request(mut stream: TcpStream) {
     let (status, body) = if first_line.contains("/env") {
         let env = detect_environment();
         ("200 OK", serde_json::to_string(&env).unwrap_or_else(|_| "{}".to_string()))
+    } else if first_line.contains("/open?url=") {
+        // Open URL in system browser
+        if let Some(url_start) = first_line.find("/open?url=") {
+            let after = &first_line[url_start + 10..];
+            let encoded = after.split_whitespace().next().unwrap_or("");
+            let url = urlencoding_decode(encoded);
+            if url.starts_with("http") {
+                let _ = Command::new("open").arg(&url).spawn();
+                ("200 OK", r#"{"ok":true}"#.to_string())
+            } else {
+                ("400 Bad Request", r#"{"error":"invalid url"}"#.to_string())
+            }
+        } else {
+            ("400 Bad Request", r#"{"error":"missing url"}"#.to_string())
+        }
     } else if first_line.contains("/start") {
         do_start_local_server()
     } else if first_line.contains("/stop") {
@@ -638,6 +653,31 @@ fn proxy_to_ollama(method: &str, url: &str, body: &str) -> Result<(&'static str,
     }
 }
 
+/// Simple percent-decode for URL parameters
+fn urlencoding_decode(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.bytes();
+    while let Some(b) = chars.next() {
+        if b == b'%' {
+            let h = chars.next().unwrap_or(b'0');
+            let l = chars.next().unwrap_or(b'0');
+            let hex = [h, l];
+            if let Ok(s) = std::str::from_utf8(&hex) {
+                if let Ok(v) = u8::from_str_radix(s, 16) {
+                    result.push(v as char);
+                    continue;
+                }
+            }
+            result.push('%');
+            result.push(h as char);
+            result.push(l as char);
+        } else {
+            result.push(b as char);
+        }
+    }
+    result
+}
+
 fn find_node(app_data: &str) -> Option<String> {
     let bundled = format!("{}/node/bin/node", app_data);
     if PathBuf::from(&bundled).exists() {
@@ -717,7 +757,7 @@ fn main() {
                     // Wait for page to load
                     std::thread::sleep(Duration::from_secs(3));
                     let _ = w.eval(&js);
-                    // Open external links in system browser
+                    // Open external links in system browser via local API
                     let _ = w.eval(r#"
                         if (!window.__SKM_LINK_HANDLER__) {
                             window.__SKM_LINK_HANDLER__ = true;
@@ -729,15 +769,7 @@ fn main() {
                                 if (href.includes(window.location.host)) return;
                                 e.preventDefault();
                                 e.stopPropagation();
-                                try {
-                                    if (window.__TAURI_INTERNALS__) {
-                                        window.__TAURI_INTERNALS__.invoke('plugin:shell|open', { path: href });
-                                    } else if (window.__TAURI__) {
-                                        window.__TAURI__.invoke('plugin:shell|open', { path: href });
-                                    }
-                                } catch(err) {
-                                    window.open(href, '_blank');
-                                }
+                                fetch('http://127.0.0.1:3458/open?url=' + encodeURIComponent(href)).catch(() => {});
                             }, true);
                         }
                     "#);
