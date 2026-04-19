@@ -717,19 +717,29 @@ fn main() {
                     // Wait for page to load
                     std::thread::sleep(Duration::from_secs(3));
                     let _ = w.eval(&js);
-                    // Open external links in system browser via Tauri shell plugin
+                    // Open external links in system browser
                     let _ = w.eval(r#"
-                        document.addEventListener('click', (e) => {
-                            const a = e.target.closest('a[href]');
-                            if (!a) return;
-                            const href = a.getAttribute('href');
-                            if (href && (href.startsWith('http://') || href.startsWith('https://')) && !href.includes(window.location.host)) {
+                        if (!window.__SKM_LINK_HANDLER__) {
+                            window.__SKM_LINK_HANDLER__ = true;
+                            document.addEventListener('click', (e) => {
+                                const a = e.target.closest('a[href]');
+                                if (!a) return;
+                                const href = a.getAttribute('href');
+                                if (!href || !href.startsWith('http')) return;
+                                if (href.includes(window.location.host)) return;
                                 e.preventDefault();
-                                if (window.__TAURI_INTERNALS__) {
-                                    window.__TAURI_INTERNALS__.invoke('plugin:shell|open', { path: href });
+                                e.stopPropagation();
+                                try {
+                                    if (window.__TAURI_INTERNALS__) {
+                                        window.__TAURI_INTERNALS__.invoke('plugin:shell|open', { path: href });
+                                    } else if (window.__TAURI__) {
+                                        window.__TAURI__.invoke('plugin:shell|open', { path: href });
+                                    }
+                                } catch(err) {
+                                    window.open(href, '_blank');
                                 }
-                            }
-                        }, true);
+                            }, true);
+                        }
                     "#);
                     eprintln!("[desktop] Environment injected into webview");
                 });
