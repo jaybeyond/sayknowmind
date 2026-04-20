@@ -803,19 +803,23 @@ fn main() {
                     // Wait for page to load
                     std::thread::sleep(Duration::from_secs(3));
                     let _ = w.eval(&js);
-                    // Open external links in system browser via local API
+                    // Open external links in system browser via local API server
                     let _ = w.eval(r#"
                         if (!window.__SKM_LINK_HANDLER__) {
                             window.__SKM_LINK_HANDLER__ = true;
-                            document.addEventListener('click', (e) => {
-                                const a = e.target.closest('a[href]');
-                                if (!a) return;
-                                const href = a.getAttribute('href');
-                                if (!href || !href.startsWith('http')) return;
-                                if (href.includes(window.location.host)) return;
+                            document.addEventListener('click', function(e) {
+                                var a = e.target;
+                                while (a && a.tagName !== 'A') a = a.parentElement;
+                                if (!a || !a.href) return;
+                                var href = a.href;
+                                if (!href.startsWith('http')) return;
+                                var loc = window.location;
+                                if (href.indexOf(loc.hostname) !== -1) return;
                                 e.preventDefault();
                                 e.stopPropagation();
-                                fetch('http://127.0.0.1:3458/open?url=' + encodeURIComponent(href)).catch(() => {});
+                                var x = new XMLHttpRequest();
+                                x.open('GET', 'http://127.0.0.1:3458/open?url=' + encodeURIComponent(href));
+                                x.send();
                             }, true);
                         }
                     "#);
