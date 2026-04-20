@@ -483,6 +483,8 @@ fn handle_api_request(mut stream: TcpStream) {
         } else {
             ("400 Bad Request", r#"{"error":"missing url"}"#.to_string())
         }
+    } else if first_line.contains("/install-ollama") {
+        do_install_ollama()
     } else if first_line.contains("/start") {
         do_start_local_server()
     } else if first_line.contains("/stop") {
@@ -651,6 +653,50 @@ fn proxy_to_ollama(method: &str, url: &str, body: &str) -> Result<(&'static str,
     } else {
         Ok(("200 OK", response))
     }
+}
+
+fn do_install_ollama() -> (&'static str, String) {
+    // Check if already installed
+    let extra_paths = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
+    let already = Command::new("sh")
+        .args(["-c", &format!("PATH={} which ollama", extra_paths)])
+        .output()
+        .ok()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if already {
+        return ("200 OK", r#"{"status":"already_installed"}"#.to_string());
+    }
+
+    // Download Ollama for macOS
+    let tmp_zip = "/tmp/Ollama-darwin.zip";
+    let dl = Command::new("curl")
+        .args(["-fSL", "-o", tmp_zip, "https://ollama.com/download/Ollama-darwin.zip"])
+        .output();
+
+    if dl.is_err() || !dl.unwrap().status.success() {
+        return ("500 Internal Server Error", r#"{"error":"Failed to download Ollama"}"#.to_string());
+    }
+
+    // Unzip to /Applications
+    let unzip = Command::new("unzip")
+        .args(["-o", tmp_zip, "-d", "/Applications/"])
+        .output();
+
+    let _ = std::fs::remove_file(tmp_zip);
+
+    if unzip.is_err() || !unzip.unwrap().status.success() {
+        return ("500 Internal Server Error", r#"{"error":"Failed to install Ollama"}"#.to_string());
+    }
+
+    // Launch Ollama
+    let _ = Command::new("open").arg("/Applications/Ollama.app").spawn();
+
+    // Wait a moment for Ollama to start
+    std::thread::sleep(Duration::from_secs(3));
+
+    ("200 OK", r#"{"status":"installed","message":"Ollama installed and started"}"#.to_string())
 }
 
 /// Simple percent-decode for URL parameters

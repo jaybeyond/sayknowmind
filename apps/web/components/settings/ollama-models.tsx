@@ -575,22 +575,33 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
           {isDesktop() && (
             <div className="space-y-2">
               <h4 className="text-sm font-medium">{t("ollama.setupGuide")}</h4>
-              <ol className="text-xs text-muted-foreground leading-relaxed space-y-1 list-decimal list-inside">
-                <li>{t("ollama.setupStep1")}</li>
-                <li>{t("ollama.setupStep2")}</li>
-                <li>{t("ollama.setupStep3")}</li>
-              </ol>
-              <div className="flex gap-2 pt-1">
-                <a
-                  href="https://ollama.com/download"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                >
-                  <Download className="size-3" />
-                  {t("ollama.downloadOllama")}
-                </a>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Ollama is required to run AI models locally.
+              </p>
+              <button
+                onClick={async () => {
+                  const btn = document.activeElement as HTMLButtonElement;
+                  if (btn) btn.disabled = true;
+                  try {
+                    const res = await fetch("http://127.0.0.1:3458/install-ollama");
+                    const data = await res.json();
+                    if (data.status === "installed" || data.status === "already_installed") {
+                      checkHealth().then(fetchModels);
+                    } else if (data.error) {
+                      alert(data.error);
+                    }
+                  } catch {
+                    // Fallback: open download page
+                    fetch("http://127.0.0.1:3458/open?url=" + encodeURIComponent("https://ollama.com/download")).catch(() => {});
+                  } finally {
+                    if (btn) btn.disabled = false;
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <Download className="size-3" />
+                Install Ollama
+              </button>
             </div>
           )}
           {!isDesktop() && (
