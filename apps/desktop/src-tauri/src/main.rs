@@ -631,7 +631,9 @@ fn proxy_to_ollama(method: &str, url: &str, body: &str) -> Result<(&'static str,
     };
 
     conn.write_all(request.as_bytes()).map_err(|e| format!("Write failed: {}", e))?;
-    conn.set_read_timeout(Some(Duration::from_secs(30))).ok();
+    // Pull/delete operations can take a long time
+    let timeout_secs = if parsed.contains("/pull") || parsed.contains("/delete") { 600 } else { 30 };
+    conn.set_read_timeout(Some(Duration::from_secs(timeout_secs))).ok();
 
     let mut reader = BufReader::new(conn);
     let mut response = String::new();
