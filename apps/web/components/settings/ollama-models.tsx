@@ -218,18 +218,19 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
     setPullProgress({ status: "Starting download...", pct: 0 });
 
     try {
-      const url = desktop ? `${OLLAMA_PROXY}/pull` : "/api/models/pull";
+      const useProxy = desktop || ollamaRunning;
+      const url = useProxy ? `${OLLAMA_PROXY}/pull` : "/api/models/pull";
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, ...(desktop ? { stream: false } : {}) }),
+        body: JSON.stringify({ name, ...(useProxy ? { stream: false } : {}) }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error ?? "Failed to pull model");
       }
 
-      if (desktop) {
+      if (useProxy) {
         // Rust proxy returns full response (non-streaming)
         setPullProgress({ status: "Downloading...", pct: 50 });
         await res.json();
@@ -279,7 +280,7 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
     if (!confirm(t("ollama.deleteConfirm").replace("{{name}}", name))) return;
     setDeleting(name);
     try {
-      if (desktop) {
+      if (desktop || ollamaRunning) {
         const res = await fetch(`${OLLAMA_PROXY}/delete`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
