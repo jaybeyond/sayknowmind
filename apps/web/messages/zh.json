@@ -270,6 +270,7 @@
     "tabPrivacy": "隐私",
     "tabIntegrations": "集成",
     "tabServices": "服务",
+    "tabLocal": "本地",
     "tabRuntime": "本地模式",
     "summaryPrompts": "摘要提示词",
     "summaryPromptsDesc": "自定义 AI 总结保存内容的方式",

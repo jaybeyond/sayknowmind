@@ -270,6 +270,7 @@
     "tabPrivacy": "Privacy",
     "tabIntegrations": "Integrations",
     "tabServices": "Services",
+    "tabLocal": "Local",
     "tabRuntime": "Local Mode",
     "summaryPrompts": "Summary Prompts",
     "summaryPromptsDesc": "Customize how AI summarizes your saved content",

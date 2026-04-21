@@ -270,6 +270,7 @@
     "tabPrivacy": "プライバシー",
     "tabIntegrations": "連携",
     "tabServices": "サービス",
+    "tabLocal": "ローカル",
     "tabRuntime": "ローカルモード",
     "summaryPrompts": "要約プロンプト",
     "summaryPromptsDesc": "AI が保存コンテンツを要約する方法をカスタマイズ",

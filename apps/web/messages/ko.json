@@ -270,6 +270,7 @@
     "tabPrivacy": "개인정보",
     "tabIntegrations": "연동",
     "tabServices": "서비스",
+    "tabLocal": "로컬",
     "tabRuntime": "로컬 모드",
     "summaryPrompts": "요약 프롬프트",
     "summaryPromptsDesc": "AI가 저장된 콘텐츠를 요약하는 방식을 맞춤 설정하세요",
