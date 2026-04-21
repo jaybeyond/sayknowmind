@@ -39,10 +39,30 @@ if (typeof window !== "undefined") {
     useEnvironmentStore.setState({ desktop: isDesktop(), cloud: isCloud() });
   });
 
-  // Re-check after delay in case Tauri env injection was late
-  setTimeout(() => {
+  // Re-check multiple times — Rust injects __SAYKNOW_ENV__ after 3s
+  const recheckDesktop = () => {
     if (isDesktop()) {
       useEnvironmentStore.setState({ desktop: true, cloud: false });
+      return true;
     }
-  }, 2000);
+    return false;
+  };
+  setTimeout(recheckDesktop, 2000);
+  setTimeout(recheckDesktop, 4000);
+  setTimeout(recheckDesktop, 6000);
+
+  // Also probe local API server — if 3458 responds, we're in desktop
+  setTimeout(() => {
+    if (useEnvironmentStore.getState().desktop) return; // already detected
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "http://127.0.0.1:3458/env", true);
+    xhr.timeout = 2000;
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        useEnvironmentStore.setState({ desktop: true, cloud: false });
+      }
+    };
+    xhr.onerror = () => {}; // not in desktop, ignore
+    try { xhr.send(); } catch { /* CSP block, ignore */ }
+  }, 1000);
 }

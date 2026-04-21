@@ -762,28 +762,7 @@ fn main() {
             setup_tray(app)?;
             setup_global_shortcut(app)?;
 
-            // Start embedded Next.js server (PGlite mode)
-            let sidecar = app.shell()
-                .sidecar("start-server")
-                .expect("failed to create sidecar command");
-
-            let (mut _rx, _child) = sidecar
-                .spawn()
-                .expect("failed to spawn Next.js sidecar");
-
-            eprintln!("[desktop] Next.js sidecar started on port 3457");
-
-            // Wait for server to be ready, then show window
-            std::thread::spawn(move || {
-                for _ in 0..30 {
-                    std::thread::sleep(Duration::from_secs(1));
-                    if port_open(3457) {
-                        eprintln!("[desktop] Server ready on port 3457");
-                        return;
-                    }
-                }
-                eprintln!("[desktop] WARNING: Server did not start within 30s");
-            });
+            // Sidecar removed — dev mode uses localhost:3000, production uses mind.sayknow.ai
 
             // Start local API server on port 3458 for frontend communication
             std::thread::spawn(|| {

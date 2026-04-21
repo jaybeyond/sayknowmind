@@ -26,7 +26,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["../sidecar/start-server"],
+    "externalBin": [],
     "macOS": {
       "entitlements": null,
       "exceptionDomain": "",
