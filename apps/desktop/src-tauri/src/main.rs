@@ -790,8 +790,43 @@ fn main() {
                 start_local_api_server(3458);
             });
 
-            // Inject environment info into webview
-            if let Some(window) = app.get_webview_window("main") {
+            // Create main window with navigation handler for external links
+            let url = if cfg!(debug_assertions) {
+                "http://localhost:3000"
+            } else {
+                "https://mind.sayknow.ai"
+            };
+
+            let window = tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::External(url.parse().unwrap()),
+            )
+            .title("SayknowMind - Agentic Second Brain")
+            .inner_size(1280.0, 800.0)
+            .on_navigation(|nav_url| {
+                let host = nav_url.host_str().unwrap_or("");
+                if host == "localhost"
+                    || host == "127.0.0.1"
+                    || host == "mind.sayknow.ai"
+                    || host == "sayknowmind-production.up.railway.app"
+                    || nav_url.scheme() == "tauri"
+                    || nav_url.scheme() == "ipc"
+                {
+                    true // allow internal
+                } else {
+                    // Open external URL in system browser
+                    let _ = std::process::Command::new("open")
+                        .arg(nav_url.as_str())
+                        .spawn();
+                    false // block in webview
+                }
+            })
+            .build()
+            .expect("failed to create main window");
+
+            {
+            let window = window;
                 let env_data = detect_environment();
                 let env_json = serde_json::to_string(&env_data).unwrap_or_else(|_| "{}".to_string());
                 let js = format!(
@@ -803,26 +838,7 @@ fn main() {
                     // Wait for page to load
                     std::thread::sleep(Duration::from_secs(3));
                     let _ = w.eval(&js);
-                    // Open external links in system browser via local API server
-                    let _ = w.eval(r#"
-                        if (!window.__SKM_LINK_HANDLER__) {
-                            window.__SKM_LINK_HANDLER__ = true;
-                            document.addEventListener('click', function(e) {
-                                var a = e.target;
-                                while (a && a.tagName !== 'A') a = a.parentElement;
-                                if (!a || !a.href) return;
-                                var href = a.href;
-                                if (!href.startsWith('http')) return;
-                                var loc = window.location;
-                                if (href.indexOf(loc.hostname) !== -1) return;
-                                e.preventDefault();
-                                e.stopPropagation();
-                                var x = new XMLHttpRequest();
-                                x.open('GET', 'http://127.0.0.1:3458/open?url=' + encodeURIComponent(href));
-                                x.send();
-                            }, true);
-                        }
-                    "#);
+                    // External links handled by on_navigation in window builder
                     eprintln!("[desktop] Environment injected into webview");
                 });
 
