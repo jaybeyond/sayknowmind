@@ -783,6 +783,7 @@ fn main() {
             )
             .title("SayknowMind - Agentic Second Brain")
             .inner_size(1280.0, 800.0)
+            .disable_drag_drop_handler()
             .on_navigation(|nav_url| {
                 let host = nav_url.host_str().unwrap_or("");
                 if host == "localhost"
