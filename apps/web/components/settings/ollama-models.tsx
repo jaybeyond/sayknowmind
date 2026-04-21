@@ -154,6 +154,11 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
   };
 
   const checkHealth = useCallback(async () => {
+    // If environment detection already confirmed Ollama is running, trust it
+    if (ollamaRunning) {
+      setOnline(true);
+      return;
+    }
     try {
       if (desktop) {
         // Production desktop: probe Ollama via Rust proxy (CORS-safe)
@@ -167,12 +172,12 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
     } catch {
       setOnline(false);
     }
-  }, [desktop]);
+  }, [desktop, ollamaRunning]);
 
   const fetchModels = useCallback(async () => {
     setLoading(true);
     try {
-      if (desktop) {
+      if (desktop || ollamaRunning) {
         const res = await fetch(`${OLLAMA_PROXY}/tags`, { signal: AbortSignal.timeout(3000) });
         const data = await res.json();
         setModels(data.models ?? []);
