@@ -60,10 +60,19 @@ CREATE TABLE IF NOT EXISTS jwks (
   "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS "rateLimit" (
+  id TEXT PRIMARY KEY,
+  key TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  "lastRequest" BIGINT NOT NULL,
+  UNIQUE(key)
+);
+
 CREATE INDEX IF NOT EXISTS session_user_id_idx ON session("userId");
 CREATE INDEX IF NOT EXISTS account_user_id_idx ON account("userId");
 CREATE INDEX IF NOT EXISTS session_token_idx ON session(token);
 CREATE INDEX IF NOT EXISTS verification_identifier_idx ON verification(identifier);
+CREATE INDEX IF NOT EXISTS rate_limit_key_idx ON "rateLimit"(key);
 
 -- === App tables ===
 

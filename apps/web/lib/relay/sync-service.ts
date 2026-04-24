@@ -3,7 +3,7 @@
  * Runs as background process on the local server.
  */
 import { createHash } from "node:crypto";
-import { Pool } from "pg";
+import type { Pool } from "pg";
 import { encryptForUser, decryptForUser } from "@/lib/encryption";
 import { RelayClient } from "./client";
 import { detectConflict, resolveConflict } from "./conflict-resolver";

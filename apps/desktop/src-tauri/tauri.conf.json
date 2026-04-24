@@ -5,7 +5,7 @@
   "identifier": "com.sayknowmind.desktop",
   "build": {
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "bash ../scripts/build-desktop.sh",
+    "beforeBuildCommand": "bash scripts/build-desktop.sh",
     "beforeDevCommand": ""
   },
   "app": {
@@ -26,6 +26,9 @@
       "icons/icon.ico"
     ],
     "externalBin": ["binaries/node"],
+    "resources": {
+      "resources/web-standalone": "web-standalone"
+    },
     "macOS": {
       "entitlements": null,
       "exceptionDomain": "",

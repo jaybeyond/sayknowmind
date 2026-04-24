@@ -4,12 +4,7 @@ const isDesktopBuild = process.env.NEXT_PUBLIC_DEPLOY_MODE === "desktop";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  serverExternalPackages: ["pg", "better-auth", "@electric-sql/pglite"],
-  // Desktop build: allow localhost connections
-  ...(isDesktopBuild && {
-    assetPrefix: undefined,
-    trailingSlash: false,
-  }),
+  serverExternalPackages: ["pg"],
   images: {
     remotePatterns: [
       {

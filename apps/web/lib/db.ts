@@ -1,5 +1,3 @@
-import { Pool } from "pg";
-
 // ---------------------------------------------------------------------------
 // PostgreSQL connection pool (singleton)
 // Desktop mode: PGlite (embedded PostgreSQL)
@@ -10,11 +8,12 @@ const globalForDb = globalThis as unknown as { pool: any | undefined };
 
 function createPool() {
   if (process.env.PGLITE_MODE === "true") {
-    // Dynamic import to avoid bundling PGlite in cloud builds
     const { PGlitePool } = require("@/lib/db-pglite");
     return new PGlitePool();
   }
 
+  // Dynamic import — pg has native bindings that can't be bundled by Turbopack
+  const { Pool } = require("pg");
   return new Pool({
     connectionString:
       process.env.DATABASE_URL ??

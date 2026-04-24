@@ -200,6 +200,7 @@ fn start_server(app: &tauri::AppHandle) {
         .env("NODE_ENV", "production")
         .env("PORT", &SERVER_PORT.to_string())
         .env("HOSTNAME", "127.0.0.1")
+        .env("PGLITE_MODE", "true")
         .env("BETTER_AUTH_SECRET", &secret)
         .env("BETTER_AUTH_URL", &format!("http://localhost:{}", SERVER_PORT))
         .env("NEXT_PUBLIC_APP_URL", &format!("http://localhost:{}", SERVER_PORT))

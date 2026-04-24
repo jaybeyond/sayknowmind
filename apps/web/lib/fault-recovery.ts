@@ -6,7 +6,12 @@
  * - Data integrity preservation during recovery
  */
 
-import { Pool, PoolClient } from "pg";
+// Dynamic import — pg has native bindings that Turbopack can't bundle
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pg = require("pg");
+const Pool = pg.Pool as typeof import("pg").Pool;
+type Pool = import("pg").Pool;
+type PoolClient = import("pg").PoolClient;
 
 // ---------------------------------------------------------------------------
 // Configuration
