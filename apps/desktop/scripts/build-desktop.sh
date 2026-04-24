@@ -15,7 +15,9 @@ bash "$SCRIPT_DIR/setup-sidecar.sh"
 echo "=== [desktop-build] Step 2: Build web app (standalone) ==="
 cd "$WEB_DIR"
 rm -rf .next
-NEXT_PUBLIC_DEPLOY_MODE=desktop pnpm build
+NEXT_PUBLIC_DEPLOY_MODE=desktop \
+NEXT_PUBLIC_APP_URL=http://127.0.0.1:3457 \
+pnpm build
 
 echo "=== [desktop-build] Step 3: Copy standalone to resources ==="
 rm -rf "$RESOURCES_DIR/web-standalone"
@@ -79,5 +81,21 @@ if [ -d "$WEB_DIR/public" ]; then
   mkdir -p "$RESOURCES_DIR/web-standalone/public"
   cp -R "$WEB_DIR/public/." "$RESOURCES_DIR/web-standalone/public/"
 fi
+
+echo "=== [desktop-build] Step 5: Link Turbopack hashed externals ==="
+# Turbopack generates hashed names for serverExternalPackages (e.g. pg-53265b4d7b96f656)
+# Create aliases so Node.js can resolve them
+cd "$RESOURCES_DIR/web-standalone"
+npm install --no-save --no-package-lock pg 2>/dev/null
+
+# Find hashed external names and create package aliases
+for hashed in $(grep -roh '[a-z]*-[a-f0-9]\{16\}' .next/server/chunks/\[root-of-the-server\]*.js 2>/dev/null | sort -u); do
+  pkg=$(echo "$hashed" | sed 's/-[a-f0-9]\{16\}$//')
+  if [ -d "node_modules/$pkg" ] && [ ! -d "node_modules/$hashed" ]; then
+    cp -R "node_modules/$pkg" "node_modules/$hashed"
+    echo "[desktop-build] Aliased $hashed -> $pkg"
+  fi
+done
+cd -
 
 echo "=== [desktop-build] Done. Resources at: $RESOURCES_DIR/web-standalone ==="

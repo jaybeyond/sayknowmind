@@ -20,8 +20,7 @@ import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
 import { isDesktop, useEnvironmentStore } from "@/lib/environment";
 
-// Rust local API proxy — bypasses CORS when desktop loads cloud URL
-const OLLAMA_PROXY = "http://127.0.0.1:3458/ollama";
+// All Ollama operations go through /api/models/* routes (works for both cloud and desktop)
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -154,44 +153,31 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
   };
 
   const checkHealth = useCallback(async () => {
-    // If environment detection already confirmed Ollama is running, trust it
     if (ollamaRunning) {
       setOnline(true);
       return;
     }
     try {
-      if (desktop) {
-        // Production desktop: probe Ollama via Rust proxy (CORS-safe)
-        const res = await fetch(`${OLLAMA_PROXY}/tags`, { signal: AbortSignal.timeout(2000) });
-        setOnline(res.ok);
-      } else {
-        const res = await fetch("/api/models/health");
-        const data = await res.json();
-        setOnline(data.online);
-      }
+      const res = await fetch("/api/models/health");
+      const data = await res.json();
+      setOnline(data.online);
     } catch {
       setOnline(false);
     }
-  }, [desktop, ollamaRunning]);
+  }, [ollamaRunning]);
 
   const fetchModels = useCallback(async () => {
     setLoading(true);
     try {
-      if (desktop || ollamaRunning) {
-        const res = await fetch(`${OLLAMA_PROXY}/tags`, { signal: AbortSignal.timeout(3000) });
-        const data = await res.json();
-        setModels(data.models ?? []);
-      } else {
-        const res = await fetch("/api/models");
-        const data = await res.json();
-        setModels(data.models ?? []);
-      }
+      const res = await fetch("/api/models");
+      const data = await res.json();
+      setModels(data.models ?? []);
     } catch {
       setModels([]);
     } finally {
       setLoading(false);
     }
-  }, [desktop]);
+  }, []);
 
   useEffect(() => {
     fetchConfig();
@@ -218,13 +204,12 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
     setPullProgress({ status: "Starting download...", pct: 0 });
 
     try {
-      const useProxy = desktop || ollamaRunning;
-      const url = useProxy ? `${OLLAMA_PROXY}/pull` : "/api/models/pull";
-      const res = await fetch(url, {
+      const res = await fetch("/api/models/pull", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, ...(useProxy ? { stream: false } : {}) }),
+        body: JSON.stringify({ name }),
       });
+      const useProxy = false;
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error ?? "Failed to pull model");
@@ -280,20 +265,11 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
     if (!confirm(t("ollama.deleteConfirm").replace("{{name}}", name))) return;
     setDeleting(name);
     try {
-      if (desktop || ollamaRunning) {
-        const res = await fetch(`${OLLAMA_PROXY}/delete`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        });
-        if (!res.ok) throw new Error("Delete failed");
-      } else {
-        const res = await fetch(
-          `/api/models/${encodeURIComponent(name)}`,
-          { method: "DELETE" }
-        );
-        if (!res.ok) throw new Error("Delete failed");
-      }
+      const res = await fetch(
+        `/api/models/${encodeURIComponent(name)}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) throw new Error("Delete failed");
       toast.success(t("ollama.deleted").replace("{{name}}", name));
       setModels((prev) => prev.filter((m) => m.name !== name));
     } catch {
@@ -589,16 +565,11 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
                   const btn = document.activeElement as HTMLButtonElement;
                   if (btn) btn.disabled = true;
                   try {
-                    const res = await fetch("http://127.0.0.1:3458/install-ollama");
-                    const data = await res.json();
-                    if (data.status === "installed" || data.status === "already_installed") {
-                      checkHealth().then(fetchModels);
-                    } else if (data.error) {
-                      alert(data.error);
-                    }
+                    window.open("https://ollama.com/download", "_blank");
+                    // Re-check after user might have installed
+                    setTimeout(() => checkHealth().then(fetchModels), 10000);
                   } catch {
-                    // Fallback: open download page
-                    fetch("http://127.0.0.1:3458/open?url=" + encodeURIComponent("https://ollama.com/download")).catch(() => {});
+                    window.open("https://ollama.com/download", "_blank");
                   } finally {
                     if (btn) btn.disabled = false;
                   }

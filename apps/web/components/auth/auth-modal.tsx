@@ -105,7 +105,7 @@ function LoginForm() {
           setError(translateAuthError(ctx.error.code, ctx.error.message));
         },
         onSuccess: () => {
-          window.location.reload();
+          window.location.href = "/";
         },
       },
     );
@@ -209,7 +209,7 @@ function SignupForm() {
           setError(translateAuthError(ctx.error.code, ctx.error.message));
         },
         onSuccess: () => {
-          window.location.reload();
+          window.location.href = "/";
         },
       },
     );

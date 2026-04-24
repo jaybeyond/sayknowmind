@@ -1,6 +1,5 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { jwt } from "better-auth/plugins";
 import { pool } from "@/lib/db";
 
 const AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "build-placeholder";
@@ -44,7 +43,7 @@ export const auth = betterAuth({
     },
   },
 
-  plugins: [nextCookies(), jwt()],
+  plugins: [nextCookies()],
 
   trustedOrigins: process.env.TRUSTED_ORIGINS
     ? process.env.TRUSTED_ORIGINS.split(",").map((o) => o.trim())

@@ -1,15 +1,15 @@
 // SayknowMind Desktop Application
 // Local-first architecture:
-// - Bundled Node.js sidecar runs Next.js standalone server
+// - Bundled Node.js runs Next.js standalone server as background process
 // - Tauri webview loads from localhost:3457
-// - Ollama access via direct localhost (no CORS proxy needed)
-// - Auth syncs with cloud (mind.sayknow.ai)
+// - Ollama access via direct localhost
+// - Auth via local PGlite
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::net::TcpStream;
-use std::process::Command;
-use std::sync::Mutex;
+use std::process::{Command, Child, Stdio};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::path::PathBuf;
 use std::fs;
@@ -18,15 +18,14 @@ use tauri::{
     tray::TrayIconBuilder,
     Manager, Runtime,
 };
-use tauri_plugin_shell::ShellExt;
 
 const SERVER_PORT: u16 = 3457;
 
 // ---------------------------------------------------------------------------
-// State: track the sidecar child process
+// State: track the server child process
 // ---------------------------------------------------------------------------
 
-struct ServerProcess(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
+struct ServerState(Arc<Mutex<Option<Child>>>);
 
 // ---------------------------------------------------------------------------
 // Commands
@@ -129,9 +128,33 @@ fn get_cache_dir() -> PathBuf {
         .join("sayknowmind")
 }
 
+/// Read a config value from a file in the data dir, return default if missing
+fn read_config(data_dir: &PathBuf, name: &str, default: &str) -> String {
+    let path = data_dir.join(name);
+    match fs::read_to_string(&path) {
+        Ok(s) => {
+            let trimmed = s.trim().to_string();
+            if trimmed.is_empty() { default.to_string() } else { trimmed }
+        }
+        Err(_) => default.to_string(),
+    }
+}
+
+/// Find the Node.js binary (bundled in MacOS dir next to our binary)
+fn find_node_binary() -> Option<PathBuf> {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let node = exe_dir.join("node");
+            if node.exists() {
+                return Some(node);
+            }
+        }
+    }
+    None
+}
+
 /// Find the web-standalone directory
-fn find_web_standalone(_app: &tauri::AppHandle) -> Option<PathBuf> {
-    // Check next to the binary (production: app bundle)
+fn find_web_standalone() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             // macOS: .app/Contents/MacOS/../Resources/web-standalone
@@ -139,7 +162,6 @@ fn find_web_standalone(_app: &tauri::AppHandle) -> Option<PathBuf> {
             if macos_resource.join("server.js").exists() {
                 return Some(macos_resource);
             }
-            // Linux/Windows: same dir as binary
             let beside = exe_dir.join("web-standalone");
             if beside.join("server.js").exists() {
                 return Some(beside);
@@ -158,11 +180,19 @@ fn find_web_standalone(_app: &tauri::AppHandle) -> Option<PathBuf> {
 }
 
 // ---------------------------------------------------------------------------
-// Server lifecycle
+// Server lifecycle — std::process::Command (no dock icon)
 // ---------------------------------------------------------------------------
 
-fn start_server(app: &tauri::AppHandle) {
-    let standalone_dir = match find_web_standalone(app) {
+fn start_server(state: &ServerState) {
+    let node_bin = match find_node_binary() {
+        Some(p) => p,
+        None => {
+            eprintln!("[desktop] Node binary not found — skipping server start");
+            return;
+        }
+    };
+
+    let standalone_dir = match find_web_standalone() {
         Some(dir) => dir,
         None => {
             eprintln!("[desktop] web-standalone not found — skipping server start");
@@ -189,51 +219,26 @@ fn start_server(app: &tauri::AppHandle) {
         s
     };
 
-    // Spawn Node.js sidecar with the standalone server
-    let shell = app.shell();
     let server_js = standalone_dir.join("server.js");
 
-    let cmd = shell
-        .sidecar("node")
-        .unwrap()
-        .args([server_js.to_string_lossy().as_ref()])
+    // Spawn as background process — no dock icon, no visible window
+    match Command::new(&node_bin)
+        .arg(server_js.to_string_lossy().as_ref())
         .env("NODE_ENV", "production")
         .env("PORT", &SERVER_PORT.to_string())
         .env("HOSTNAME", "127.0.0.1")
-        .env("PGLITE_MODE", "true")
+        .env("DATABASE_URL", &read_config(&data_dir, "database-url", ""))
         .env("BETTER_AUTH_SECRET", &secret)
-        .env("BETTER_AUTH_URL", &format!("http://localhost:{}", SERVER_PORT))
-        .env("NEXT_PUBLIC_APP_URL", &format!("http://localhost:{}", SERVER_PORT))
-        .env("NEXT_PUBLIC_DEPLOY_MODE", "desktop");
-
-    match cmd.spawn() {
-        Ok((rx, child)) => {
-            eprintln!("[desktop] Server started on port {}", SERVER_PORT);
-
-            // Store child for cleanup
-            let state = app.state::<ServerProcess>();
+        .env("BETTER_AUTH_URL", &format!("http://127.0.0.1:{}", SERVER_PORT))
+        .env("NEXT_PUBLIC_APP_URL", &format!("http://127.0.0.1:{}", SERVER_PORT))
+        .env("NEXT_PUBLIC_DEPLOY_MODE", "desktop")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => {
+            eprintln!("[desktop] Server started on port {} (pid: {})", SERVER_PORT, child.id());
             *state.0.lock().unwrap() = Some(child);
-
-            // Log server output in background
-            tauri::async_runtime::spawn(async move {
-                use tauri_plugin_shell::process::CommandEvent;
-                let mut rx = rx;
-                while let Some(event) = rx.recv().await {
-                    match event {
-                        CommandEvent::Stdout(line) => {
-                            eprintln!("[server:out] {}", String::from_utf8_lossy(&line));
-                        }
-                        CommandEvent::Stderr(line) => {
-                            eprintln!("[server:err] {}", String::from_utf8_lossy(&line));
-                        }
-                        CommandEvent::Terminated(status) => {
-                            eprintln!("[server] Terminated: {:?}", status);
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-            });
         }
         Err(e) => {
             eprintln!("[desktop] Failed to start server: {}", e);
@@ -241,12 +246,12 @@ fn start_server(app: &tauri::AppHandle) {
     }
 }
 
-fn stop_server(app: &tauri::AppHandle) {
-    let state = app.state::<ServerProcess>();
+fn stop_server(state: &ServerState) {
     let mut guard = state.0.lock().unwrap();
-    if let Some(child) = guard.take() {
+    if let Some(mut child) = guard.take() {
         eprintln!("[desktop] Stopping server...");
         let _ = child.kill();
+        let _ = child.wait();
     }
 }
 
@@ -372,11 +377,13 @@ fn setup_global_shortcut<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
 // ---------------------------------------------------------------------------
 
 fn main() {
+    let server_state = ServerState(Arc::new(Mutex::new(None)));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
-        .manage(ServerProcess(Mutex::new(None)))
+        .manage(server_state)
         .invoke_handler(tauri::generate_handler![
             get_app_info,
             detect_environment,
@@ -389,23 +396,28 @@ fn main() {
             setup_tray(app)?;
             setup_global_shortcut(app)?;
 
-            let handle = app.handle().clone();
-
-            // Start the bundled Next.js server (non-dev only)
+            // Start the bundled Next.js server (release only)
             if !cfg!(debug_assertions) {
-                start_server(&handle);
-            }
+                let state = app.state::<ServerState>();
+                start_server(&state);
 
-            // Determine server URL
-            let url = format!("http://localhost:{}", if cfg!(debug_assertions) { 3000 } else { SERVER_PORT });
-
-            // Wait for server to be ready before creating window
-            if !cfg!(debug_assertions) {
                 eprintln!("[desktop] Waiting for server...");
                 if !wait_for_server(10_000) {
                     eprintln!("[desktop] Server not ready after 10s — opening anyway");
                 }
             }
+
+            // Determine server URL
+            // Use 127.0.0.1 (not localhost) to match cookie domain from server
+            let url = format!("http://127.0.0.1:{}", if cfg!(debug_assertions) { 3000 } else { SERVER_PORT });
+
+            // Inject desktop env BEFORE page loads — no timing issues
+            let env_data = detect_environment();
+            let env_json = serde_json::to_string(&env_data).unwrap_or_else(|_| "{}".to_string());
+            let init_js = format!(
+                "window.__SAYKNOW_ENV__ = {}; window.__TAURI_DESKTOP__ = true;",
+                env_json
+            );
 
             let window = tauri::WebviewWindowBuilder::new(
                 app,
@@ -415,6 +427,7 @@ fn main() {
             .title("SayknowMind - Agentic Second Brain")
             .inner_size(1280.0, 800.0)
             .disable_drag_drop_handler()
+            .initialization_script(&init_js)
             .on_navigation(|nav_url| {
                 let host = nav_url.host_str().unwrap_or("");
                 if host == "localhost"
@@ -433,30 +446,20 @@ fn main() {
             .build()
             .expect("failed to create main window");
 
-            // Inject desktop environment flag
-            let env_data = detect_environment();
-            let env_json = serde_json::to_string(&env_data).unwrap_or_else(|_| "{}".to_string());
-            let js = format!(
-                "window.__SAYKNOW_ENV__ = {}; window.__TAURI_DESKTOP__ = true; window.dispatchEvent(new CustomEvent('sayknow-env-ready'));",
-                env_json
-            );
-            let w = window.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_secs(1));
-                let _ = w.eval(&js);
-                eprintln!("[desktop] Environment injected into webview");
+            // Cleanup server when window closes
+            let server_arc = Arc::clone(&app.state::<ServerState>().0);
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::Destroyed = event {
+                    eprintln!("[desktop] Stopping server...");
+                    if let Some(mut child) = server_arc.lock().unwrap().take() {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                    }
+                }
             });
 
             #[cfg(debug_assertions)]
             window.open_devtools();
-
-            // Cleanup server on app exit
-            let exit_handle = app.handle().clone();
-            window.on_window_event(move |event| {
-                if let tauri::WindowEvent::Destroyed = event {
-                    stop_server(&exit_handle);
-                }
-            });
 
             Ok(())
         })
