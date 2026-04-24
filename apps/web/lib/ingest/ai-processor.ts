@@ -140,6 +140,7 @@ export async function generateStructuredMetadata(
   content: string,
   language: Language,
   wordCount: number,
+  existingTags: string[] = [],
 ): Promise<StructuredMetadata> {
   const langMap: Record<Language, string> = {
     ko: "Korean", en: "English", ja: "Japanese", zh: "Chinese",
@@ -155,6 +156,12 @@ export async function generateStructuredMetadata(
 - "key_points": ${prompts.keyPoints} (strings) — MUST be written in ${langMap[language]}
 - "tags": ${prompts.tags} — MUST be specific and descriptive, written in ${langMap[language]}. Avoid generic tags like "technology", "information", "article".
 - "reading_time_minutes": estimated reading time as integer
+
+TAG RULES:
+- REUSE existing tags when relevant. Prefer exact matches from the list below.
+- Do NOT create variations of existing tags (e.g. if "react" exists, don't create "reactjs" or "React").
+- Only create a new tag if no existing tag is relevant.
+${existingTags.length > 0 ? `\nExisting tags (REUSE these when applicable):\n${existingTags.join(", ")}` : ""}
 
 IMPORTANT: ALL text output MUST be in ${langMap[language]}. Even if the content is in another language, your output must be in ${langMap[language]}.
 
@@ -214,12 +221,13 @@ export async function suggestCategories(
     system: `You are a strict categorization assistant. Given the content and the user's existing categories, suggest exactly 1 category this content should be assigned to.
 
 STRICT RULES:
-1. You MUST use an existing category if there is even a 50% relevance match. Be generous with matching.
+1. You MUST use an existing category if there is even a 30% relevance match. Be very generous with matching.
 2. NEVER create a new category if there are fewer than 5 existing categories — force-fit into the best existing one.
 3. Only suggest "new" if: the user has 5+ categories AND the content is completely unrelated to ALL existing ones.
 4. New category names must be broad, reusable topic areas (e.g. "AI", "개발", "디자인") — never specific article titles.
-5. Suggest at most 1 category total. Do NOT suggest 2 or more.
-6. Category names must be in ${langMap[language]}.
+5. Do NOT create categories that are synonyms or subsets of existing ones (e.g. if "AI" exists, don't create "인공지능" or "머신러닝").
+6. Suggest at most 1 category total. Do NOT suggest 2 or more.
+7. Category names must be in ${langMap[language]}.
 
 Existing categories:
 ${categoryList}

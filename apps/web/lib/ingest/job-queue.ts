@@ -188,7 +188,16 @@ async function processJob(job: JobRow): Promise<void> {
     };
     try {
       const wordCount = doc.content ? doc.content.split(/\s+/).length : 0;
-      structuredMeta = await generateStructuredMetadata(doc.content ?? "", language, wordCount);
+
+      // Fetch existing tags for this user to enable deduplication
+      const tagResult = await pool.query(
+        `SELECT DISTINCT jsonb_array_elements_text(metadata->'aiTags') AS tag
+         FROM documents WHERE user_id = $1 AND metadata->'aiTags' IS NOT NULL`,
+        [doc.user_id],
+      );
+      const existingTags = tagResult.rows.map((r: { tag: string }) => r.tag);
+
+      structuredMeta = await generateStructuredMetadata(doc.content ?? "", language, wordCount, existingTags);
 
       await updateDocument(documentId, {
         title: structuredMeta.title || undefined,
