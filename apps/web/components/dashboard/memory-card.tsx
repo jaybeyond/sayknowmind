@@ -316,7 +316,7 @@ export function MemoryCard({
   }
 
   return (
-    <div className="group relative flex flex-col rounded-xl border bg-card overflow-hidden hover:bg-accent/30 transition-colors">
+    <div className="group relative flex flex-col rounded-xl border bg-card overflow-hidden hover:bg-accent/30 transition-colors max-h-[360px]">
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
         <Button
           variant="secondary"
