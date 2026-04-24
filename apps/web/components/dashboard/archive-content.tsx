@@ -28,7 +28,7 @@ export function ArchiveContent() {
           <div className={cn(
             "grid gap-4",
             viewMode === "grid"
-              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
               : "grid-cols-1"
           )}>
             {Array.from({ length: 6 }).map((_, i) => (
@@ -67,7 +67,7 @@ export function ArchiveContent() {
               </p>
             </div>
           ) : viewMode === "grid" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
               {archivedMemories.map((memory) => (
                 <MemoryCard key={memory.id} memory={memory} context="archive" onSelect={setSelectedMemory} />
               ))}

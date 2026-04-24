@@ -19,7 +19,7 @@ export function FavoritesContent() {
       <div className="flex-1 w-full overflow-auto">
         <div className="p-4 md:p-6 space-y-6">
           <Skeleton className="h-20 w-full rounded-xl" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-48 rounded-xl" />
             ))}
@@ -55,7 +55,7 @@ export function FavoritesContent() {
             </p>
           </div>
         ) : viewMode === "grid" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
             {favoriteMemories.map((memory) => (
               <MemoryCard key={memory.id} memory={memory} onSelect={setSelectedMemory} />
             ))}
