@@ -29,7 +29,8 @@ export interface ModelConfig {
 
 const CONFIG_PATH = join(process.cwd(), ".sayknowmind-active-model");
 
-const cloud = isCloud();
+// Server-side: use build-time env var directly (no window dependency)
+const cloud = process.env.NEXT_PUBLIC_DEPLOY_MODE !== "desktop" && isCloud();
 
 const DEFAULTS: ModelConfig = {
   chat: process.env.LLM_MODEL ?? "qwen3:1.7b",
