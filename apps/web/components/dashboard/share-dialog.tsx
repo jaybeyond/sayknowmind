@@ -167,10 +167,13 @@ export function ShareDialog({ open, onOpenChange, memory }: ShareDialogProps) {
             {/* Passphrase input */}
             {accessType === "passphrase" && (
               <Input
-                type="password"
+                type="text"
                 placeholder={t("share.passphrasePlaceholder")}
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
                 autoFocus
               />
             )}
