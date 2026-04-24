@@ -32,9 +32,11 @@ import {
   Video,
   File,
   Share2,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
+import { useCategoriesStore } from "@/store/categories-store";
 import { useTranslation } from "@/lib/i18n";
 import { getVideoEmbedUrl } from "@/lib/video-embed";
 import { ShareDialog } from "./share-dialog";
@@ -88,10 +90,28 @@ export function MemoryCard({
   const { toggleFavorite, archiveMemory, trashMemory, restoreFromArchive, restoreFromTrash, permanentlyDelete, addUserTag, fetchMemories } =
     useMemoryStore();
   const { t } = useTranslation();
+  const { categories } = useCategoriesStore();
   const [shareOpen, setShareOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [tagInputOpen, setTagInputOpen] = React.useState(false);
   const [tagValue, setTagValue] = React.useState("");
+  const [collectionMenuOpen, setCollectionMenuOpen] = React.useState(false);
+
+  const handleChangeCollection = async (categoryId: string | null) => {
+    try {
+      const res = await fetch(`/api/documents/${memory.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(t("memory.collectionChanged") ?? "Collection changed");
+      fetchMemories();
+    } catch {
+      toast.error(t("memory.collectionChangeFailed") ?? "Failed to change collection");
+    }
+    setCollectionMenuOpen(false);
+  };
   const memoryTags = [...new Set(memory.tags)];
   const aiTagSet = new Set(memory.aiTags);
 
@@ -368,6 +388,10 @@ export function MemoryCard({
               <Tag className="size-4 mr-2" />
               {t("memory.addTags")}
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setCollectionMenuOpen(true)}>
+              <FolderOpen className="size-4 mr-2" />
+              {t("memory.changeCollection") ?? "Change Collection"}
+            </DropdownMenuItem>
             {context === "default" && (
               <DropdownMenuItem onClick={() => setShareOpen(true)}>
                 <Share2 className="size-4 mr-2" />
@@ -434,6 +458,29 @@ export function MemoryCard({
             onKeyDown={(e) => { if (e.key === "Escape") { setTagInputOpen(false); setTagValue(""); } }}
           />
         </form>
+      )}
+
+      {collectionMenuOpen && (
+        <div className="absolute top-14 right-3 z-20 bg-popover border rounded-lg p-2 shadow-lg max-h-48 overflow-y-auto min-w-[160px]">
+          <button
+            onClick={() => handleChangeCollection(null)}
+            className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors text-muted-foreground"
+          >
+            {t("memory.noCollection") ?? "None"}
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => handleChangeCollection(cat.id)}
+              className={cn(
+                "w-full text-left px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors",
+                memory.categoryIds.includes(cat.id) && "bg-accent font-medium"
+              )}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
       )}
 
       <ProcessingBadge status={memory.jobStatus} />

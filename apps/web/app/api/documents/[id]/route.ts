@@ -63,11 +63,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   try {
     const body = await request.json();
-    const { title, summary, metadata, privacyLevel } = body as {
+    const { title, summary, metadata, privacyLevel, categoryId } = body as {
       title?: string;
       summary?: string;
       metadata?: Record<string, unknown>;
       privacyLevel?: string;
+      categoryId?: string | null;
     };
 
     // Build SET clauses dynamically
@@ -105,11 +106,29 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       paramIdx++;
     }
 
-    if (setClauses.length === 1) {
+    // Handle category change separately (document_categories table)
+    if (categoryId !== undefined) {
+      // Remove all existing categories
+      await pool.query(`DELETE FROM document_categories WHERE document_id = $1`, [id]);
+      // Assign new category if provided
+      if (categoryId) {
+        await pool.query(
+          `INSERT INTO document_categories (document_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [id, categoryId],
+        );
+      }
+    }
+
+    if (setClauses.length === 1 && categoryId === undefined) {
       return NextResponse.json(
         { code: ErrorCode.SYSTEM_VALIDATION_ERROR, message: "No fields to update", timestamp: new Date().toISOString() },
         { status: 400 },
       );
+    }
+
+    // If only categoryId was changed, no need to update documents table
+    if (setClauses.length === 1) {
+      return NextResponse.json({ id, categoryUpdated: true });
     }
 
     params.push(id, userId);
