@@ -17,7 +17,7 @@ const DEFAULT_PROMPTS: CustomPrompts = {
   summary: "2-3 sentence summary",
   whatItSolves: "1-2 sentences describing what problem/question this content addresses",
   keyPoints: "array of 3-7 key bullet points",
-  tags: "array of 3-10 lowercase tags/keywords",
+  tags: "array of 3-5 highly specific, descriptive tags (not generic words like 'technology' or 'software' — use precise terms like 'react-server-components' or 'vector-database')",
 };
 
 function getCustomPrompts(): CustomPrompts {
@@ -153,7 +153,7 @@ export async function generateStructuredMetadata(
 - "summary": ${prompts.summary} — MUST be written in ${langMap[language]}
 - "what_it_solves": ${prompts.whatItSolves} — MUST be written in ${langMap[language]}
 - "key_points": ${prompts.keyPoints} (strings) — MUST be written in ${langMap[language]}
-- "tags": ${prompts.tags} — MUST be written in ${langMap[language]}
+- "tags": ${prompts.tags} — MUST be specific and descriptive, written in ${langMap[language]}. Avoid generic tags like "technology", "information", "article".
 - "reading_time_minutes": estimated reading time as integer
 
 IMPORTANT: ALL text output MUST be in ${langMap[language]}. Even if the content is in another language, your output must be in ${langMap[language]}.
@@ -177,7 +177,7 @@ Output ONLY the JSON object, no markdown fences or explanation.`,
         ? parsed.key_points.filter((k: unknown): k is string => typeof k === "string").slice(0, 7)
         : [],
       aiTags: Array.isArray(parsed.tags)
-        ? parsed.tags.filter((t: unknown): t is string => typeof t === "string").slice(0, 10)
+        ? parsed.tags.filter((t: unknown): t is string => typeof t === "string").slice(0, 5)
         : [],
       reading_time_minutes: typeof parsed.reading_time_minutes === "number"
         ? Math.max(1, Math.round(parsed.reading_time_minutes))
@@ -211,14 +211,15 @@ export async function suggestCategories(
     : "(No existing categories)";
 
   const result = await callAi({
-    system: `You are a categorization assistant. Given the content and the user's existing categories, suggest 1-2 categories this content should be assigned to.
+    system: `You are a strict categorization assistant. Given the content and the user's existing categories, suggest exactly 1 category this content should be assigned to.
 
-IMPORTANT RULES:
-1. ALWAYS prefer existing categories. Reuse them even if the match is partial.
-2. Only suggest a NEW category if the content truly doesn't fit ANY existing category.
-3. Keep category names broad and reusable (e.g. "Technology" not "React Server Components Tutorial").
-4. Maximum 1 new category per document. If you suggest a new one, also try to match an existing one.
-5. Category names must be in ${langMap[language]}.
+STRICT RULES:
+1. You MUST use an existing category if there is even a 50% relevance match. Be generous with matching.
+2. NEVER create a new category if there are fewer than 5 existing categories — force-fit into the best existing one.
+3. Only suggest "new" if: the user has 5+ categories AND the content is completely unrelated to ALL existing ones.
+4. New category names must be broad, reusable topic areas (e.g. "AI", "개발", "디자인") — never specific article titles.
+5. Suggest at most 1 category total. Do NOT suggest 2 or more.
+6. Category names must be in ${langMap[language]}.
 
 Existing categories:
 ${categoryList}
