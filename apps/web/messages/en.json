@@ -343,7 +343,11 @@
     "share": "Share",
     "urlCopied": "URL copied",
     "tagAdded": "Tag added",
-    "tagPlaceholder": "Tag name"
+    "tagPlaceholder": "Tag name",
+    "changeCollection": "Change Collection",
+    "collectionChanged": "Collection changed",
+    "collectionChangeFailed": "Failed to change collection",
+    "noCollection": "None"
   },
   "status": {
     "summarizing": "Summarizing...",

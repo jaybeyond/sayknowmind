@@ -343,7 +343,11 @@
     "share": "共有",
     "urlCopied": "URLをコピーしました",
     "tagAdded": "タグを追加しました",
-    "tagPlaceholder": "タグ名"
+    "tagPlaceholder": "タグ名",
+    "changeCollection": "コレクション変更",
+    "collectionChanged": "コレクションを変更しました",
+    "collectionChangeFailed": "コレクションの変更に失敗しました",
+    "noCollection": "なし"
   },
   "status": {
     "summarizing": "要約中...",

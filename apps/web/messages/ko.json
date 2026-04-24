@@ -343,7 +343,11 @@
     "share": "공유",
     "urlCopied": "URL 복사됨",
     "tagAdded": "태그 추가됨",
-    "tagPlaceholder": "태그 이름"
+    "tagPlaceholder": "태그 이름",
+    "changeCollection": "컬렉션 변경",
+    "collectionChanged": "컬렉션이 변경되었습니다",
+    "collectionChangeFailed": "컬렉션 변경에 실패했습니다",
+    "noCollection": "없음"
   },
   "status": {
     "summarizing": "요약 중...",

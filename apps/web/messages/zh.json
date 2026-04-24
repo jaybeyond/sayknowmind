@@ -343,7 +343,11 @@
     "share": "分享",
     "urlCopied": "URL已复制",
     "tagAdded": "标签已添加",
-    "tagPlaceholder": "标签名称"
+    "tagPlaceholder": "标签名称",
+    "changeCollection": "更改集合",
+    "collectionChanged": "集合已更改",
+    "collectionChangeFailed": "更改集合失败",
+    "noCollection": "无"
   },
   "status": {
     "summarizing": "摘要生成中...",
