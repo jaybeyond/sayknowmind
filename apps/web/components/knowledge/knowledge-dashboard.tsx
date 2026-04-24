@@ -136,10 +136,13 @@ export function KnowledgeDashboard() {
             <path d="m21 21-4.3-4.3" />
           </svg>
           <input
-            type="text"
+            type="search"
             placeholder={t("knowledge.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
             className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md bg-muted/50 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>

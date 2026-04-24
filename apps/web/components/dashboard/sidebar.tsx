@@ -383,7 +383,11 @@ export function MemorySidebar({
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
+            type="search"
             placeholder={t("sidebar.searchPlaceholder")}
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
             className="pl-9 pr-10 h-9 bg-background"
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 bg-muted px-1.5 py-0.5 rounded text-[11px] text-muted-foreground font-medium">

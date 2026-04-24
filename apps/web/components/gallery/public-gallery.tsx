@@ -186,9 +186,13 @@ export function PublicGallery() {
               <div className="relative w-full max-w-3xl mx-auto">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
                 <Input
+                  type="search"
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
                   placeholder={t("gallery.searchPlaceholder")}
+                  autoComplete="off"
+                  data-1p-ignore
+                  data-lpignore="true"
                   className="pl-11 pr-10 h-11 rounded-full border-muted-foreground/20"
                 />
                 {searchQuery && (

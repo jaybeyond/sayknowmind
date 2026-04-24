@@ -175,9 +175,13 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
               <div className="relative hidden md:block">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                 <Input
+                  type="search"
                   placeholder={t("header.searchPlaceholder")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  autoComplete="off"
+                  data-1p-ignore
+                  data-lpignore="true"
                   className="pl-9 w-64 h-9"
                 />
               </div>
