@@ -136,6 +136,29 @@ CREATE TABLE IF NOT EXISTS document_categories (
     PRIMARY KEY (document_id, category_id)
 );
 
+-- === Tags (canonical deduplication) ===
+
+CREATE TABLE IF NOT EXISTS tags (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    canonical_name TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, canonical_name)
+);
+
+CREATE INDEX IF NOT EXISTS tags_user_id_idx ON tags(user_id);
+CREATE INDEX IF NOT EXISTS tags_canonical_idx ON tags(user_id, canonical_name);
+
+CREATE TABLE IF NOT EXISTS document_tags (
+    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    tag_id UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (document_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS document_tags_doc_idx ON document_tags(document_id);
+CREATE INDEX IF NOT EXISTS document_tags_tag_idx ON document_tags(tag_id);
+
 CREATE TABLE IF NOT EXISTS vectors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,

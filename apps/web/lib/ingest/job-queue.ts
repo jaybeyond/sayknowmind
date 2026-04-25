@@ -189,13 +189,9 @@ async function processJob(job: JobRow): Promise<void> {
     try {
       const wordCount = doc.content ? doc.content.split(/\s+/).length : 0;
 
-      // Fetch existing tags for this user to enable deduplication
-      const tagResult = await pool.query(
-        `SELECT DISTINCT jsonb_array_elements_text(metadata->'aiTags') AS tag
-         FROM documents WHERE user_id = $1 AND metadata->'aiTags' IS NOT NULL`,
-        [doc.user_id],
-      );
-      const existingTags = tagResult.rows.map((r: { tag: string }) => r.tag);
+      // Fetch existing tags from dedicated tags table for deduplication
+      const { listTagNames } = await import("@/lib/tags/store");
+      const existingTags = await listTagNames(doc.user_id);
 
       structuredMeta = await generateStructuredMetadata(doc.content ?? "", language, wordCount, existingTags);
 
@@ -211,6 +207,12 @@ async function processJob(job: JobRow): Promise<void> {
           language,
         },
       });
+
+      // Save tags to dedicated tags table (canonical deduplication)
+      if (structuredMeta.aiTags.length > 0) {
+        const { assignTags } = await import("@/lib/tags/store");
+        await assignTags(doc.user_id, documentId, structuredMeta.aiTags);
+      }
     } catch (err) {
       console.error(`[job-queue] Structured metadata generation failed for job ${jobId}:`, err);
     }
