@@ -39,23 +39,35 @@ export async function listTagNames(userId: string): Promise<string[]> {
 
 /**
  * Resolve a tag name: find existing or create new.
- * Returns the tag ID. Deduplication via canonical_name.
+ * 3-step matching: exact canonical → fuzzy (contains/contained) → create new.
  */
 export async function resolveTag(userId: string, tagName: string): Promise<string> {
   const canonical = canonicalize(tagName);
   if (!canonical) throw new Error("Empty tag name");
 
-  // Try to find existing
-  const existing = await pool.query(
+  // Step 1: Exact canonical match
+  const exact = await pool.query(
     `SELECT id FROM tags WHERE user_id = $1 AND canonical_name = $2`,
     [userId, canonical],
   );
-
-  if (existing.rows.length > 0) {
-    return existing.rows[0].id;
+  if (exact.rows.length > 0) {
+    return exact.rows[0].id;
   }
 
-  // Create new
+  // Step 2: Fuzzy match — find tags that contain or are contained by this tag
+  // e.g. "reactjs" matches "react", "ai agent" matches "ai"
+  const fuzzy = await pool.query(
+    `SELECT id, canonical_name FROM tags WHERE user_id = $1
+     AND (canonical_name LIKE '%' || $2 || '%' OR $2 LIKE '%' || canonical_name || '%')
+     ORDER BY length(canonical_name) DESC
+     LIMIT 1`,
+    [userId, canonical],
+  );
+  if (fuzzy.rows.length > 0) {
+    return fuzzy.rows[0].id;
+  }
+
+  // Step 3: No match — create new
   const result = await pool.query(
     `INSERT INTO tags (user_id, name, canonical_name)
      VALUES ($1, $2, $3)

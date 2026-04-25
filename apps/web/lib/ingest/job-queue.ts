@@ -263,9 +263,15 @@ async function processJob(job: JobRow): Promise<void> {
 
         // Create new category if AI suggests one that doesn't exist (max 1 per document)
         if (isNew && suggestion.categoryName && !newCategoryCreated) {
-          // Check if a similar category already exists (case-insensitive)
+          // Check if a similar category already exists (case-insensitive + fuzzy contains)
+          const suggestLower = suggestion.categoryName.toLowerCase();
           const similar = existingCategories.find(
-            (c: { id: string; name: string }) => c.name.toLowerCase() === suggestion.categoryName.toLowerCase(),
+            (c: { id: string; name: string }) => {
+              const existLower = c.name.toLowerCase();
+              return existLower === suggestLower
+                || existLower.includes(suggestLower)
+                || suggestLower.includes(existLower);
+            },
           );
           if (similar) {
             categoryId = similar.id;
