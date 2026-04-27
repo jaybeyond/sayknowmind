@@ -278,6 +278,15 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
                 {t("header.addMemory")}
               </Button>
 
+              {/* Mobile FAB */}
+              <Button
+                onClick={() => setAddOpen(true)}
+                aria-label={t("header.addMemory")}
+                className="sm:hidden fixed right-4 bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-40 size-14 rounded-full p-0 shadow-lg shadow-primary/30"
+              >
+                <Plus className="size-6" />
+              </Button>
+
               <Separator orientation="vertical" className="h-5 hidden sm:block" />
             </>
           )}
