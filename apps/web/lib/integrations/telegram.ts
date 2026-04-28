@@ -97,8 +97,8 @@ export function classifyUpdate(update: TelegramUpdate): TelegramMessageType {
 
   if (text.startsWith("/")) return "command";
 
-  // Explicit save intent patterns (KO/EN/JA/ZH)
-  if (/^(저장해|저장|메모|기록|노트|save|memo|note|保存|记录|笔记|备忘|メモ|記録|ノート)[:\s]/i.test(text)) {
+  // Explicit save intent patterns (Korean + English)
+  if (/^(저장해[:\s]|메모[:\s]|save[:\s]|memo[:\s]|기록[:\s]|노트[:\s]|note[:\s])/i.test(text)) {
     return "save_text";
   }
 
