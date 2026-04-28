@@ -67,6 +67,7 @@ function truncate(text: string): string {
 export async function generateSummary(
   content: string,
   language: Language,
+  userId?: string,
 ): Promise<string> {
   const langMap: Record<Language, string> = {
     ko: "Korean",
@@ -78,6 +79,7 @@ export async function generateSummary(
   const result = await callAi({
     system: `You are a summarization assistant. Write a concise summary (3-5 sentences) of the provided content in ${langMap[language]}. Focus on the key points, main arguments, and important details. Output only the summary text, no preamble.`,
     message: truncate(content),
+    userId,
   });
 
   return result.trim();
@@ -86,6 +88,7 @@ export async function generateSummary(
 export async function extractEntities(
   content: string,
   language: Language,
+  userId?: string,
 ): Promise<ExtractedEntity[]> {
   const langMap: Record<Language, string> = {
     ko: "Korean",
@@ -104,6 +107,7 @@ Return a JSON array of objects with these fields:
 
 Extract up to 20 most relevant entities. Output ONLY the JSON array, no markdown fences or explanation.`,
     message: truncate(content),
+    userId,
   });
 
   try {
@@ -143,6 +147,7 @@ export async function generateStructuredMetadata(
   language: Language,
   wordCount: number,
   existingTags: string[] = [],
+  userId?: string,
 ): Promise<StructuredMetadata> {
   const langMap: Record<Language, string> = {
     ko: "Korean", en: "English", ja: "Japanese", zh: "Chinese",
@@ -169,6 +174,7 @@ IMPORTANT: ALL text output MUST be in ${langMap[language]}. Even if the content 
 
 Output ONLY the JSON object, no markdown fences or explanation.`,
     message: truncate(content),
+    userId,
   });
 
   try {
@@ -242,6 +248,7 @@ Return a JSON array of objects with:
 
 Output ONLY the JSON array.`,
     message: truncate(content),
+    userId,
   });
 
   try {

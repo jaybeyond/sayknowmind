@@ -196,7 +196,7 @@ async function processJob(job: JobRow): Promise<void> {
       const { listTagNames } = await import("@/lib/tags/store");
       const existingTags = await listTagNames(doc.user_id);
 
-      structuredMeta = await generateStructuredMetadata(doc.content ?? "", language, wordCount, existingTags);
+      structuredMeta = await generateStructuredMetadata(doc.content ?? "", language, wordCount, existingTags, userId);
 
       await updateDocument(documentId, {
         title: structuredMeta.title || undefined,
@@ -224,7 +224,7 @@ async function processJob(job: JobRow): Promise<void> {
     // Step 2: Extract entities (40% → 70%)
     let entityCount = 0;
     try {
-      const entities = await extractEntities(doc.content, language);
+      const entities = await extractEntities(doc.content, language, userId);
       entityCount = entities.length;
       if (entities.length > 0) {
         await insertEntities(
