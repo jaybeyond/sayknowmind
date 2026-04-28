@@ -19,6 +19,33 @@ interface JobRow {
   max_retries: number;
 }
 
+// Per-process global cap on concurrent ingestion jobs. Mirrors the bookmark
+// import BATCH_SIZE so realtime intake (Telegram, URL, file) cannot saturate
+// the AI providers / DB pool. Multi-instance deployments scale linearly.
+const MAX_CONCURRENT_JOBS = 10;
+let activeJobs = 0;
+const jobWaiters: Array<() => void> = [];
+
+async function acquireJobSlot(): Promise<void> {
+  if (activeJobs < MAX_CONCURRENT_JOBS) {
+    activeJobs++;
+    return;
+  }
+  await new Promise<void>((resolve) => jobWaiters.push(resolve));
+  activeJobs++;
+}
+
+function releaseJobSlot(): void {
+  activeJobs = Math.max(0, activeJobs - 1);
+  const next = jobWaiters.shift();
+  if (next) next();
+}
+
+async function isDocumentAlive(documentId: string): Promise<boolean> {
+  const r = await pool.query(`SELECT 1 FROM documents WHERE id = $1`, [documentId]);
+  return r.rows.length > 0;
+}
+
 export async function createJob(userId: string, documentId: string): Promise<string> {
   const result = await pool.query(
     `INSERT INTO ingestion_jobs (user_id, document_id)
@@ -103,7 +130,12 @@ async function processJobById(jobId: string): Promise<void> {
   const job = await getJob(jobId);
   if (!job) return;
 
-  await processJob(job);
+  await acquireJobSlot();
+  try {
+    await processJob(job);
+  } finally {
+    releaseJobSlot();
+  }
 }
 
 async function processJob(job: JobRow): Promise<void> {
@@ -185,10 +217,19 @@ async function processJob(job: JobRow): Promise<void> {
       await updateJobProgress(jobId, 20);
     }
 
+    // Track per-step outcome — used to decide whether the job should retry vs
+    // complete with partial results. Core = metadata + edgequake; if both die
+    // the document is unsearchable AND unsummarised, so the job is failed.
+    const stepFailures = { metadata: false, entities: false, edgequake: false };
+
     // Step 1: Generate structured metadata via AI (20% → 50%)
     let structuredMeta: StructuredMetadata = {
       title: "", summary: "", what_it_solves: "", key_points: [], aiTags: [], reading_time_minutes: 1,
     };
+    if (!(await isDocumentAlive(documentId))) {
+      await failJob(jobId, "Document deleted during processing");
+      return;
+    }
     try {
       const wordCount = doc.content ? doc.content.split(/\s+/).length : 0;
 
@@ -217,12 +258,17 @@ async function processJob(job: JobRow): Promise<void> {
         await assignTags(doc.user_id, documentId, structuredMeta.aiTags);
       }
     } catch (err) {
+      stepFailures.metadata = true;
       console.error(`[job-queue] Structured metadata generation failed for job ${jobId}:`, err);
     }
     await updateJobProgress(jobId, 50);
 
     // Step 2: Extract entities (40% → 70%)
     let entityCount = 0;
+    if (!(await isDocumentAlive(documentId))) {
+      await failJob(jobId, "Document deleted during processing");
+      return;
+    }
     try {
       const entities = await extractEntities(doc.content, language, userId);
       entityCount = entities.length;
@@ -237,11 +283,16 @@ async function processJob(job: JobRow): Promise<void> {
         );
       }
     } catch (err) {
+      stepFailures.entities = true;
       console.error(`[job-queue] Entity extraction failed for job ${jobId}:`, err);
     }
     await updateJobProgress(jobId, 70);
 
     // Step 3: Suggest categories (70% → 90%)
+    if (!(await isDocumentAlive(documentId))) {
+      await failJob(jobId, "Document deleted during processing");
+      return;
+    }
     try {
       // Fetch user's existing categories
       const catResult = await pool.query(
@@ -303,6 +354,10 @@ async function processJob(job: JobRow): Promise<void> {
 
     // Step 4: Index in EdgeQuake for RAG search (90% → 100%)
     let edgeQuakeAvailable = false;
+    if (!(await isDocumentAlive(documentId))) {
+      await failJob(jobId, "Document deleted during processing");
+      return;
+    }
     try {
       if (doc.content) {
         await indexDocument({
@@ -318,8 +373,11 @@ async function processJob(job: JobRow): Promise<void> {
           [documentId],
         );
         edgeQuakeAvailable = true;
+      } else {
+        // No content to index isn't a step failure — vision-only docs can be empty
       }
     } catch (err) {
+      stepFailures.edgequake = true;
       console.error(`[job-queue] EdgeQuake indexing failed for job ${jobId}:`, err);
       // Flag for later sync — document is saved but needs EdgeQuake indexing
       try {
@@ -366,6 +424,15 @@ async function processJob(job: JobRow): Promise<void> {
     }
     await updateJobProgress(jobId, 95);
 
+    // Decide outcome: if BOTH core steps died (no summary AND no search index)
+    // the doc is useless — bubble up so the outer catch can retry. Single-step
+    // failures still complete (partial success).
+    if (stepFailures.metadata && stepFailures.edgequake) {
+      throw new Error(
+        "Critical pipeline failure: structured metadata and EdgeQuake indexing both failed. See prior logs.",
+      );
+    }
+
     // Notify: processing complete
     await createNotification(userId, "job_complete", doc.title ?? "Document", structuredMeta.summary || undefined, { documentId }).catch(() => {});
 
@@ -376,7 +443,14 @@ async function processJob(job: JobRow): Promise<void> {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error(`[job-queue] Job ${jobId} failed:`, err);
 
-    // Retry logic
+    // Retry logic — but skip retry if the document was deleted in the meantime
+    const docStillThere = await isDocumentAlive(documentId);
+    if (!docStillThere) {
+      await failJob(jobId, "Document deleted before retry");
+      emitDocumentEvent({ type: "ingest:failed", documentId, userId, jobId, error: "Document deleted" });
+      return;
+    }
+
     if (job.retry_count < job.max_retries) {
       const delay = Math.pow(2, job.retry_count) * 1000; // Exponential backoff
       await pool.query(
@@ -386,7 +460,7 @@ async function processJob(job: JobRow): Promise<void> {
         [errorMessage, jobId],
       );
 
-      // Schedule retry
+      // Schedule retry — re-checks doc liveness on entry via processJob
       setTimeout(() => {
         processJobById(jobId).catch((retryErr) => {
           console.error(`[job-queue] Retry failed for job ${jobId}:`, retryErr);
