@@ -1095,12 +1095,18 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const filePath = await saveFile(documentId, fileName, buffer);
-      // Store filePath in metadata so /api/files/[id] and preview work
-      await pool.query(
-        `UPDATE documents SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
-        [JSON.stringify({ filePath }), documentId],
-      );
+      // Filesystem mirror is best-effort — DB already has the content (and base64 for small files).
+      // Don't fail the ingestion if the container's disk is read-only / out of space.
+      try {
+        const filePath = await saveFile(documentId, fileName, buffer);
+        await pool.query(
+          `UPDATE documents SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
+          [JSON.stringify({ filePath }), documentId],
+        );
+      } catch (diskErr) {
+        console.error("[telegram] Photo disk mirror failed (non-fatal):", (diskErr as Error).message);
+      }
+
       const jobId = await createJob(userId, documentId);
 
       const categories = await listCategories(userId);
@@ -1110,7 +1116,7 @@ export async function POST(request: NextRequest) {
       });
       notifyJobCompletion(botToken, chatId, userId, jobId, title, L);
     } catch (err) {
-      console.error("[telegram] Photo ingest error:", err);
+      console.error("[telegram] Photo ingest error:", { fileId: largest.file_id, error: (err as Error).message, stack: (err as Error).stack });
       await sendMessage(botToken, chatId, msg("photoFail", L));
     }
     return NextResponse.json({ ok: true });
@@ -1172,15 +1178,21 @@ export async function POST(request: NextRequest) {
           fileSize: buffer.length,
           mimeType,
           source: "telegram",
+          ...(buffer.length < 5_000_000 ? { fileBase64: buffer.toString("base64") } : {}),
         },
       });
 
-      const filePath = await saveFile(documentId, fileName, buffer);
-      // Store filePath in metadata so /api/files/[id] and preview work
-      await pool.query(
-        `UPDATE documents SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
-        [JSON.stringify({ filePath }), documentId],
-      );
+      // Filesystem mirror is best-effort.
+      try {
+        const filePath = await saveFile(documentId, fileName, buffer);
+        await pool.query(
+          `UPDATE documents SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
+          [JSON.stringify({ filePath }), documentId],
+        );
+      } catch (diskErr) {
+        console.error("[telegram] Document disk mirror failed (non-fatal):", (diskErr as Error).message);
+      }
+
       const jobId = await createJob(userId, documentId);
 
       const categories = await listCategories(userId);
@@ -1190,7 +1202,7 @@ export async function POST(request: NextRequest) {
       });
       notifyJobCompletion(botToken, chatId, userId, jobId, title, L);
     } catch (err) {
-      console.error("[telegram] Document ingest error:", err);
+      console.error("[telegram] Document ingest error:", { fileId: doc.file_id, fileName, mimeType, error: (err as Error).message, stack: (err as Error).stack });
       await sendMessage(botToken, chatId, msg("fileFail", L));
     }
     return NextResponse.json({ ok: true });
@@ -1199,7 +1211,7 @@ export async function POST(request: NextRequest) {
   // ── Text Memo Save ("저장해: ...", "메모: ...") ─────────
 
   if (msgType === "save_text") {
-    const content = text.replace(/^(저장해|메모|save|memo|기록|노트|note)[:\s]+/i, "").trim();
+    const content = text.replace(/^(저장해|저장|메모|기록|노트|save|memo|note|保存|记录|笔记|备忘|メモ|記録|ノート)[:\s]+/i, "").trim();
     if (!content) {
       await sendMessage(botToken, chatId, msg("saveTextEmpty", L));
       return NextResponse.json({ ok: true });
@@ -1221,7 +1233,8 @@ export async function POST(request: NextRequest) {
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
       });
       notifyJobCompletion(botToken, chatId, userId, jobId, title, L);
-    } catch {
+    } catch (err) {
+      console.error("[telegram] Memo save error:", { textLen: text.length, error: (err as Error).message, stack: (err as Error).stack });
       await sendMessage(botToken, chatId, msg("saveTextFail", L));
     }
     return NextResponse.json({ ok: true });
