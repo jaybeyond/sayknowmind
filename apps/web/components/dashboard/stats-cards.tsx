@@ -33,12 +33,12 @@ const stats = [
 ];
 
 export function StatsCards() {
-  const { memories, getDerivedTags } = useMemoryStore();
+  const { memories, totalCount, getDerivedTags } = useMemoryStore();
   const { categories } = useCategoriesStore();
 
   const derivedTags = getDerivedTags();
   const values = [
-    memories.length,
+    totalCount,
     memories.filter((m) => m.isFavorite).length,
     categories.length,
     derivedTags.length,
