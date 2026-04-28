@@ -150,6 +150,9 @@ async function processJob(job: JobRow): Promise<void> {
     // Step 0: Vision analysis for images/videos (saved first, analyzed now)
     const fileType = typeof meta.fileType === "string" ? meta.fileType : "";
     const fileBase64 = typeof meta.fileBase64 === "string" ? meta.fileBase64 : "";
+    if ((fileType === "image" || fileType === "video") && !fileBase64) {
+      console.warn(`[job-queue] Vision skipped for ${fileType} job ${jobId}: no fileBase64 in metadata (file may exceed 5MB threshold)`);
+    }
     if ((fileType === "image" || fileType === "video") && fileBase64) {
       // Keep base64 for preview if small enough (< 2MB base64 ≈ 1.5MB original)
       const keepBase64 = fileBase64.length < 2 * 1024 * 1024;
@@ -159,8 +162,8 @@ async function processJob(job: JobRow): Promise<void> {
 
       try {
         const result = fileType === "image"
-          ? await describeImage(fileBase64, language)
-          : await describeVideoFrame(fileBase64, language);
+          ? await describeImage(fileBase64, language, userId)
+          : await describeVideoFrame(fileBase64, language, userId);
 
         // Only update if vision returned actual content — don't overwrite with empty
         if (result.content && result.content.trim().length > 0) {
