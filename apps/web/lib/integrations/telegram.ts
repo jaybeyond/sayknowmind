@@ -190,19 +190,6 @@ export async function sendTyping(botToken: string, chatId: number): Promise<void
   }
 }
 
-/**
- * Telegram's "typing..." chat action auto-clears after ~5s. For long-running
- * handlers (file download, AI inference) that takes longer than that, refresh
- * the indicator every 4s. Returns a stop fn — call it in a finally block.
- */
-export function startTypingKeepalive(botToken: string, chatId: number): () => void {
-  sendTyping(botToken, chatId).catch(() => {});
-  const interval = setInterval(() => {
-    sendTyping(botToken, chatId).catch(() => {});
-  }, 4000);
-  return () => clearInterval(interval);
-}
-
 export async function answerCallbackQuery(
   botToken: string,
   callbackQueryId: string,

@@ -35,7 +35,6 @@ interface AiChatRequest {
   system: string;
   message: string;
   images?: string[]; // base64-encoded images for vision models
-  userId?: string;   // route through user-configured cloud providers (e.g. their OpenRouter key)
 }
 
 interface ExtractedEntity {
@@ -54,7 +53,6 @@ async function callAi(req: AiChatRequest): Promise<string> {
     system: req.system,
     message: req.message,
     images: req.images,
-    userId: req.userId,
     timeout: req.images?.length ? 120_000 : AI_TIMEOUT,
   });
 }
@@ -281,7 +279,6 @@ Output ONLY the JSON array.`,
 export async function describeImage(
   base64Image: string,
   language: Language = "en",
-  userId?: string,
 ): Promise<{ title: string; content: string }> {
   const langMap: Record<Language, string> = {
     ko: "Korean", en: "English", ja: "Japanese", zh: "Chinese",
@@ -301,7 +298,6 @@ TITLE: <title>
 <All extracted text from the image, then a description of the visual content>`,
     message: "Analyze this image. Extract all visible text (OCR) and describe the content.",
     images: [base64Image],
-    userId,
   });
 
   const titleMatch = result.match(/^TITLE:\s*(.+)/m);
@@ -320,7 +316,6 @@ TITLE: <title>
 export async function describeVideoFrame(
   base64Frame: string,
   language: Language = "en",
-  userId?: string,
 ): Promise<{ title: string; content: string }> {
   const langMap: Record<Language, string> = {
     ko: "Korean", en: "English", ja: "Japanese", zh: "Chinese",
@@ -340,7 +335,6 @@ TITLE: <title>
 <description and extracted text>`,
     message: "Describe this video frame.",
     images: [base64Frame],
-    userId,
   });
 
   const titleMatch = result.match(/^TITLE:\s*(.+)/m);

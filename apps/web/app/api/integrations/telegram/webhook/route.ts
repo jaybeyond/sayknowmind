@@ -3,7 +3,6 @@ import { pool } from "@/lib/db";
 import {
   sendMessage,
   sendTyping,
-  startTypingKeepalive,
   extractUrls,
   classifyUpdate,
   getFile,
@@ -1002,7 +1001,7 @@ export async function POST(request: NextRequest) {
   if (msgType === "url") {
     const urls = extractUrls(update);
     const url = urls[0] ?? text;
-    const stopTyping = startTypingKeepalive(botToken, chatId);
+    await sendTyping(botToken, chatId);
 
     try {
       // Duplicate check
@@ -1035,8 +1034,6 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error("[telegram] URL ingest error:", err);
       await sendMessage(botToken, chatId, msg("urlFail", L));
-    } finally {
-      stopTyping();
     }
     return NextResponse.json({ ok: true });
   }
@@ -1046,7 +1043,7 @@ export async function POST(request: NextRequest) {
   if (msgType === "photo") {
     const photos = message.photo!;
     const largest = photos[photos.length - 1];
-    const stopTyping = startTypingKeepalive(botToken, chatId);
+    await sendTyping(botToken, chatId);
 
     try {
       const fileInfo = await getFile(botToken, largest.file_id);
@@ -1121,8 +1118,6 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error("[telegram] Photo ingest error:", { fileId: largest.file_id, error: (err as Error).message, stack: (err as Error).stack });
       await sendMessage(botToken, chatId, msg("photoFail", L));
-    } finally {
-      stopTyping();
     }
     return NextResponse.json({ ok: true });
   }
@@ -1131,7 +1126,7 @@ export async function POST(request: NextRequest) {
 
   if (msgType === "document") {
     const doc = message.document!;
-    const stopTyping = startTypingKeepalive(botToken, chatId);
+    await sendTyping(botToken, chatId);
 
     try {
       if (doc.file_size && doc.file_size > 20 * 1024 * 1024) {
@@ -1209,8 +1204,6 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error("[telegram] Document ingest error:", { fileId: doc.file_id, fileName: doc.file_name, mimeType: doc.mime_type, error: (err as Error).message, stack: (err as Error).stack });
       await sendMessage(botToken, chatId, msg("fileFail", L));
-    } finally {
-      stopTyping();
     }
     return NextResponse.json({ ok: true });
   }
@@ -1249,7 +1242,7 @@ export async function POST(request: NextRequest) {
 
   // ── AI Chat (RAG search → conversation history → AI answer) ──
 
-  const stopTyping = startTypingKeepalive(botToken, chatId);
+  await sendTyping(botToken, chatId);
 
   try {
     const [context, userCtx, convId] = await Promise.all([
@@ -1298,8 +1291,6 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("[telegram] AI chat error:", err);
     await sendMessage(botToken, chatId, msg("aiError", L));
-  } finally {
-    stopTyping();
   }
 
   return NextResponse.json({ ok: true });
