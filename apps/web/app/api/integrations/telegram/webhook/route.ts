@@ -1202,7 +1202,7 @@ export async function POST(request: NextRequest) {
       });
       notifyJobCompletion(botToken, chatId, userId, jobId, title, L);
     } catch (err) {
-      console.error("[telegram] Document ingest error:", { fileId: doc.file_id, fileName, mimeType, error: (err as Error).message, stack: (err as Error).stack });
+      console.error("[telegram] Document ingest error:", { fileId: doc.file_id, fileName: doc.file_name, mimeType: doc.mime_type, error: (err as Error).message, stack: (err as Error).stack });
       await sendMessage(botToken, chatId, msg("fileFail", L));
     }
     return NextResponse.json({ ok: true });
