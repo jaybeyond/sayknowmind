@@ -87,9 +87,26 @@ release: ## Create a new release tag (usage: make release v=0.1.1)
 desktop-dev: ## Run desktop app in dev mode
 	cd apps/desktop && cargo tauri dev
 
-desktop-build: ## Build desktop app for current platform
-	cd apps/web && pnpm build
-	cd apps/desktop && cargo tauri build
+desktop-build: ## Build desktop app (full + lite) for current platform
+	cd apps/desktop && bash scripts/build-all.sh all
+
+desktop-full: ## Build desktop FULL (Node+standalone bundled, offline)
+	cd apps/desktop && bash scripts/build-all.sh full
+
+desktop-lite: ## Build desktop LITE (webview to mind.sayknow.ai)
+	cd apps/desktop && bash scripts/build-all.sh lite
+
+desktop-full-mac: ## Build desktop FULL for macOS
+	cd apps/desktop && bash scripts/build-all.sh full mac
+
+desktop-lite-mac: ## Build desktop LITE for macOS
+	cd apps/desktop && bash scripts/build-all.sh lite mac
+
+desktop-full-win: ## Build desktop FULL for Windows (cross-compile)
+	cd apps/desktop && bash scripts/build-all.sh full windows
+
+desktop-lite-win: ## Build desktop LITE for Windows (cross-compile)
+	cd apps/desktop && bash scripts/build-all.sh lite windows
 
 # --- Mobile ---
 mobile-android: ## Build Android APK

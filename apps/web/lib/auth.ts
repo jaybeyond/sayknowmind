@@ -47,7 +47,13 @@ export const auth = betterAuth({
 
   trustedOrigins: process.env.TRUSTED_ORIGINS
     ? process.env.TRUSTED_ORIGINS.split(",").map((o) => o.trim())
-    : ["http://localhost:3000", "http://localhost:3001"],
+    : [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3457",
+        "http://localhost:3457",
+        "tauri://localhost",
+      ],
 });
 
 export type Auth = typeof auth;

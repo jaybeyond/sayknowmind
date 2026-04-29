@@ -4,6 +4,11 @@ version = "0.1.0"
 description = "SayknowMind Desktop App"
 edition = "2021"
 
+[features]
+default = ["full"]
+full = []   # Node.js sidecar + Next.js standalone 번들 (오프라인)
+lite = []   # 원격 URL webview wrapper (경량)
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

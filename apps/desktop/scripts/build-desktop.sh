@@ -1,13 +1,30 @@
 #!/bin/bash
 # Build web app for desktop bundling + setup Node sidecar
 # Called by Tauri's beforeBuildCommand
+# Usage: build-desktop.sh [full|lite]
 
 set -euo pipefail
+
+BUILD_MODE="${1:-full}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DESKTOP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 WEB_DIR="$(cd "$DESKTOP_DIR/../web" && pwd)"
 RESOURCES_DIR="$DESKTOP_DIR/src-tauri/resources"
+
+echo "=== [desktop-build] Mode: $BUILD_MODE ==="
+
+# ─── Lite mode: nothing to bundle ───
+if [ "$BUILD_MODE" = "lite" ]; then
+  echo "=== [desktop-build] Lite mode — no web bundling needed ==="
+  # Clean up any leftover full-mode resources
+  rm -rf "$RESOURCES_DIR/web-standalone"
+  rm -f "$DESKTOP_DIR/src-tauri/binaries"/node-*
+  echo "=== [desktop-build] Lite build prep done ==="
+  exit 0
+fi
+
+# ─── Full mode: bundle everything ───
 
 echo "=== [desktop-build] Step 1: Setup Node sidecar ==="
 bash "$SCRIPT_DIR/setup-sidecar.sh"
@@ -47,7 +64,6 @@ find . -type l | while read -r link; do
 done
 
 echo "=== [desktop-build] Step 4: Flatten pnpm hoisted packages ==="
-# pnpm keeps hoisted deps in .pnpm/node_modules/ — copy to top-level for Node resolution
 PNPM_HOISTED="$RESOURCES_DIR/web-standalone/node_modules/.pnpm/node_modules"
 if [ -d "$PNPM_HOISTED" ]; then
   for pkg in "$PNPM_HOISTED"/*/; do
@@ -83,8 +99,6 @@ if [ -d "$WEB_DIR/public" ]; then
 fi
 
 echo "=== [desktop-build] Step 5: Link Turbopack hashed externals ==="
-# Turbopack generates hashed names for serverExternalPackages (e.g. pg-53265b4d7b96f656)
-# Create aliases so Node.js can resolve them
 cd "$RESOURCES_DIR/web-standalone"
 npm install --no-save --no-package-lock pg 2>/dev/null
 

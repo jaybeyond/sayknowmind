@@ -1,14 +1,12 @@
 // SayknowMind Desktop Application
-// Local-first architecture:
-// - Bundled Node.js runs Next.js standalone server as background process
-// - Tauri webview loads from localhost:3457
-// - Ollama access via direct localhost
-// - Auth via local PGlite
+// Build modes:
+//   full (default) — Bundled Node.js + Next.js standalone server (offline)
+//   lite           — Remote webview to https://mind.sayknow.ai (lightweight)
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::net::TcpStream;
-use std::process::{Command, Child, Stdio};
+#[cfg(feature = "full")]
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::path::PathBuf;
@@ -19,13 +17,21 @@ use tauri::{
     Manager, Runtime,
 };
 
+#[cfg(feature = "full")]
+use std::process::{Command, Child, Stdio};
+
 const SERVER_PORT: u16 = 3457;
+const REMOTE_URL: &str = "https://mind.sayknow.ai";
 
 // ---------------------------------------------------------------------------
-// State: track the server child process
+// State
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "full")]
 struct ServerState(Arc<Mutex<Option<Child>>>);
+
+#[cfg(feature = "lite")]
+struct ServerState;
 
 // ---------------------------------------------------------------------------
 // Commands
@@ -33,63 +39,95 @@ struct ServerState(Arc<Mutex<Option<Child>>>);
 
 #[tauri::command]
 fn get_app_info() -> serde_json::Value {
+    let mode = if cfg!(feature = "full") { "desktop-full" } else { "desktop-lite" };
     serde_json::json!({
         "name": "SayknowMind",
         "version": env!("CARGO_PKG_VERSION"),
         "description": "Open Personal Agentic Second Brain",
-        "mode": "desktop",
+        "mode": mode,
     })
 }
 
 #[tauri::command]
 fn detect_environment() -> serde_json::Value {
-    let extra_paths = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let full_path = format!("{}:{}", extra_paths, current_path);
+    #[cfg(feature = "full")]
+    {
+        let extra_paths = if cfg!(target_os = "windows") {
+            ""
+        } else {
+            "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        };
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+        let full_path = format!("{}{}{}", extra_paths, sep, current_path);
 
-    let detect = |cmd: &str, args: &[&str]| -> Option<String> {
-        Command::new(cmd)
-            .args(args)
-            .env("PATH", &full_path)
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-    };
+        let detect = |cmd: &str, args: &[&str]| -> Option<String> {
+            std::process::Command::new(cmd)
+                .args(args)
+                .env("PATH", &full_path)
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        };
 
-    let docker = detect("docker", &["--version"])
-        .map(|v| v.replace("Docker version ", "").split(',').next().unwrap_or("").to_string());
+        let docker = detect("docker", &["--version"])
+            .map(|v| v.replace("Docker version ", "").split(',').next().unwrap_or("").to_string());
 
-    let ollama_version = detect("ollama", &["--version"])
-        .map(|v| v.replace("ollama version ", ""));
-    let ollama_running = port_open(11434);
+        let ollama_version = detect("ollama", &["--version"])
+            .map(|v| v.replace("ollama version ", ""));
+        let ollama_running = port_open(11434);
 
-    let git = detect("git", &["--version"])
-        .map(|v| v.replace("git version ", ""));
+        let git = detect("git", &["--version"])
+            .map(|v| v.replace("git version ", ""));
 
-    serde_json::json!({
-        "mode": "desktop",
-        "docker": docker.map(|v| serde_json::json!({ "version": v })),
-        "ollama": ollama_version.map(|v| serde_json::json!({
-            "version": v,
-            "running": ollama_running,
-        })),
-        "git": git.map(|v| serde_json::json!({ "version": v })),
-        "serverPort": SERVER_PORT,
-    })
+        serde_json::json!({
+            "mode": "desktop-full",
+            "docker": docker.map(|v| serde_json::json!({ "version": v })),
+            "ollama": ollama_version.map(|v| serde_json::json!({
+                "version": v,
+                "running": ollama_running,
+            })),
+            "git": git.map(|v| serde_json::json!({ "version": v })),
+            "serverPort": SERVER_PORT,
+        })
+    }
+
+    #[cfg(feature = "lite")]
+    {
+        serde_json::json!({
+            "mode": "desktop-lite",
+            "remoteUrl": REMOTE_URL,
+        })
+    }
 }
 
 #[tauri::command]
 fn check_services_health() -> serde_json::Value {
-    serde_json::json!({
-        "server": port_open(SERVER_PORT),
-        "ollama": port_open(11434),
-    })
+    if cfg!(feature = "full") {
+        serde_json::json!({
+            "server": port_open(SERVER_PORT),
+            "ollama": port_open(11434),
+        })
+    } else {
+        serde_json::json!({
+            "server": true,
+            "remote": REMOTE_URL,
+        })
+    }
 }
 
 #[tauri::command]
 fn is_offline() -> bool {
-    !port_open(SERVER_PORT)
+    if cfg!(feature = "full") {
+        !port_open(SERVER_PORT)
+    } else {
+        // Lite: check if remote is reachable
+        std::net::TcpStream::connect_timeout(
+            &"mind.sayknow.ai:443".parse().unwrap(),
+            Duration::from_secs(3),
+        ).is_err()
+    }
 }
 
 #[tauri::command]
@@ -128,7 +166,11 @@ fn get_cache_dir() -> PathBuf {
         .join("sayknowmind")
 }
 
-/// Read a config value from a file in the data dir, return default if missing
+// ---------------------------------------------------------------------------
+// Full-mode only: server lifecycle
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "full")]
 fn read_config(data_dir: &PathBuf, name: &str, default: &str) -> String {
     let path = data_dir.join(name);
     match fs::read_to_string(&path) {
@@ -140,11 +182,16 @@ fn read_config(data_dir: &PathBuf, name: &str, default: &str) -> String {
     }
 }
 
-/// Find the Node.js binary (bundled in MacOS dir next to our binary)
+#[cfg(feature = "full")]
 fn find_node_binary() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
-            let node = exe_dir.join("node");
+            // Windows: node.exe beside the main binary
+            let node = if cfg!(target_os = "windows") {
+                exe_dir.join("node.exe")
+            } else {
+                exe_dir.join("node")
+            };
             if node.exists() {
                 return Some(node);
             }
@@ -153,15 +200,20 @@ fn find_node_binary() -> Option<PathBuf> {
     None
 }
 
-/// Find the web-standalone directory
+#[cfg(feature = "full")]
 fn find_web_standalone() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             // macOS: .app/Contents/MacOS/../Resources/web-standalone
-            let macos_resource = exe_dir.join("../Resources/web-standalone");
-            if macos_resource.join("server.js").exists() {
-                return Some(macos_resource);
+            #[cfg(target_os = "macos")]
+            {
+                let macos_resource = exe_dir.join("../Resources/web-standalone");
+                if macos_resource.join("server.js").exists() {
+                    return Some(macos_resource);
+                }
             }
+
+            // Windows/Linux: web-standalone beside the exe
             let beside = exe_dir.join("web-standalone");
             if beside.join("server.js").exists() {
                 return Some(beside);
@@ -179,10 +231,30 @@ fn find_web_standalone() -> Option<PathBuf> {
     None
 }
 
-// ---------------------------------------------------------------------------
-// Server lifecycle — std::process::Command (no dock icon)
-// ---------------------------------------------------------------------------
+#[cfg(feature = "full")]
+fn generate_secret() -> String {
+    #[cfg(not(target_os = "windows"))]
+    {
+        Command::new("openssl")
+            .args(["rand", "-base64", "32"])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_else(|| "fallback-desktop-secret".to_string())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: use powershell for random bytes
+        Command::new("powershell")
+            .args(["-Command", "[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }))"])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_else(|| "fallback-desktop-secret".to_string())
+    }
+}
 
+#[cfg(feature = "full")]
 fn start_server(state: &ServerState) {
     let node_bin = match find_node_binary() {
         Some(p) => p,
@@ -202,26 +274,19 @@ fn start_server(state: &ServerState) {
 
     eprintln!("[desktop] Starting server from: {:?}", standalone_dir);
 
-    // Generate or read auth secret
     let data_dir = get_cache_dir();
     let _ = fs::create_dir_all(&data_dir);
     let secret_file = data_dir.join("auth-secret");
     let secret = if secret_file.exists() {
         fs::read_to_string(&secret_file).unwrap_or_default().trim().to_string()
     } else {
-        let s = Command::new("openssl")
-            .args(["rand", "-base64", "32"])
-            .output()
-            .ok()
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .unwrap_or_else(|| "fallback-desktop-secret".to_string());
+        let s = generate_secret();
         let _ = fs::write(&secret_file, &s);
         s
     };
 
     let server_js = standalone_dir.join("server.js");
 
-    // Spawn as background process — no dock icon, no visible window
     match Command::new(&node_bin)
         .arg(server_js.to_string_lossy().as_ref())
         .env("NODE_ENV", "production")
@@ -246,6 +311,8 @@ fn start_server(state: &ServerState) {
     }
 }
 
+#[cfg(feature = "full")]
+#[allow(dead_code)]
 fn stop_server(state: &ServerState) {
     let mut guard = state.0.lock().unwrap();
     if let Some(mut child) = guard.take() {
@@ -255,11 +322,10 @@ fn stop_server(state: &ServerState) {
     }
 }
 
-/// Wait for the server to be ready (up to ~10 seconds)
+#[cfg(feature = "full")]
 fn wait_for_server(timeout_ms: u64) -> bool {
     let start = std::time::Instant::now();
     let timeout = Duration::from_millis(timeout_ms);
-
     while start.elapsed() < timeout {
         if port_open(SERVER_PORT) {
             return true;
@@ -373,13 +439,38 @@ fn setup_global_shortcut<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Navigation filter (shared)
+// ---------------------------------------------------------------------------
+
+fn is_allowed_navigation(url: &tauri::Url) -> bool {
+    let host = url.host_str().unwrap_or("");
+    host == "localhost"
+        || host == "127.0.0.1"
+        || host == "mind.sayknow.ai"
+        || url.scheme() == "tauri"
+        || url.scheme() == "ipc"
+}
+
+fn open_external(url_str: &str) {
+    #[cfg(target_os = "macos")]
+    { let _ = std::process::Command::new("open").arg(url_str).spawn(); }
+    #[cfg(target_os = "windows")]
+    { let _ = std::process::Command::new("cmd").args(["/C", "start", "", url_str]).spawn(); }
+    #[cfg(target_os = "linux")]
+    { let _ = std::process::Command::new("xdg-open").arg(url_str).spawn(); }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 fn main() {
+    #[cfg(feature = "full")]
     let server_state = ServerState(Arc::new(Mutex::new(None)));
+    #[cfg(feature = "lite")]
+    let server_state = ServerState;
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
@@ -391,62 +482,61 @@ fn main() {
             is_offline,
             get_offline_cache,
             save_offline_cache,
-        ])
-        .setup(|app| {
-            setup_tray(app)?;
-            setup_global_shortcut(app)?;
+        ]);
 
-            // Start the bundled Next.js server (release only)
+    builder = builder.setup(|app| {
+        setup_tray(app)?;
+        setup_global_shortcut(app)?;
+
+        // Determine the URL to load
+        #[cfg(feature = "full")]
+        let url = {
             if !cfg!(debug_assertions) {
                 let state = app.state::<ServerState>();
                 start_server(&state);
-
                 eprintln!("[desktop] Waiting for server...");
                 if !wait_for_server(10_000) {
                     eprintln!("[desktop] Server not ready after 10s — opening anyway");
                 }
             }
+            let port = if cfg!(debug_assertions) { 3000 } else { SERVER_PORT };
+            format!("http://127.0.0.1:{}", port)
+        };
 
-            // Determine server URL
-            // Use 127.0.0.1 (not localhost) to match cookie domain from server
-            let url = format!("http://127.0.0.1:{}", if cfg!(debug_assertions) { 3000 } else { SERVER_PORT });
+        #[cfg(feature = "lite")]
+        let url = REMOTE_URL.to_string();
 
-            // Inject desktop env BEFORE page loads — no timing issues
-            let env_data = detect_environment();
-            let env_json = serde_json::to_string(&env_data).unwrap_or_else(|_| "{}".to_string());
-            let init_js = format!(
-                "window.__SAYKNOW_ENV__ = {}; window.__TAURI_DESKTOP__ = true;",
-                env_json
-            );
+        // Inject desktop env
+        let env_data = detect_environment();
+        let env_json = serde_json::to_string(&env_data).unwrap_or_else(|_| "{}".to_string());
+        let init_js = format!(
+            "window.__SAYKNOW_ENV__ = {}; window.__TAURI_DESKTOP__ = true;",
+            env_json
+        );
 
-            let window = tauri::WebviewWindowBuilder::new(
-                app,
-                "main",
-                tauri::WebviewUrl::External(url.parse().unwrap()),
-            )
-            .title("SayknowMind - Agentic Second Brain")
-            .inner_size(1280.0, 800.0)
-            .disable_drag_drop_handler()
-            .initialization_script(&init_js)
-            .on_navigation(|nav_url| {
-                let host = nav_url.host_str().unwrap_or("");
-                if host == "localhost"
-                    || host == "127.0.0.1"
-                    || nav_url.scheme() == "tauri"
-                    || nav_url.scheme() == "ipc"
-                {
-                    true
-                } else {
-                    let _ = std::process::Command::new("open")
-                        .arg(nav_url.as_str())
-                        .spawn();
-                    false
-                }
-            })
-            .build()
-            .expect("failed to create main window");
+        let window = tauri::WebviewWindowBuilder::new(
+            app,
+            "main",
+            tauri::WebviewUrl::External(url.parse().unwrap()),
+        )
+        .title("SayknowMind - Agentic Second Brain")
+        .inner_size(1280.0, 800.0)
+        .disable_drag_drop_handler()
+        .initialization_script(&init_js)
+        .on_navigation(|nav_url| {
+            if is_allowed_navigation(nav_url) {
+                true
+            } else {
+                open_external(nav_url.as_str());
+                false
+            }
+        })
+        .build()
+        .expect("failed to create main window");
 
-            // Cleanup server when window closes
+        // Cleanup server on window destroy (full mode only)
+        #[cfg(feature = "full")]
+        {
             let server_arc = Arc::clone(&app.state::<ServerState>().0);
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::Destroyed = event {
@@ -457,12 +547,18 @@ fn main() {
                     }
                 }
             });
+        }
 
-            #[cfg(debug_assertions)]
-            window.open_devtools();
+        #[cfg(feature = "lite")]
+        { let _ = &window; }
 
-            Ok(())
-        })
+        #[cfg(debug_assertions)]
+        window.open_devtools();
+
+        Ok(())
+    });
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running SayknowMind desktop app");
 }

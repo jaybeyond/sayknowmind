@@ -5,14 +5,14 @@
   "identifier": "com.sayknowmind.desktop",
   "build": {
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "bash scripts/build-desktop.sh",
+    "beforeBuildCommand": "",
     "beforeDevCommand": ""
   },
   "app": {
     "macOSPrivateApi": true,
     "windows": [],
     "security": {
-      "csp": "default-src 'self' http://localhost:3457; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3457; style-src 'self' 'unsafe-inline' http://localhost:3457; img-src 'self' data: blob: http: https:; connect-src 'self' http://localhost:3457 http://127.0.0.1:3458 http://localhost:11434 https://mind.sayknow.ai ws://localhost:*; font-src 'self' data: http://localhost:3457"
+      "csp": "default-src 'self' http://localhost:3457 https://mind.sayknow.ai; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3457 https://mind.sayknow.ai; style-src 'self' 'unsafe-inline' http://localhost:3457 https://mind.sayknow.ai; img-src 'self' data: blob: http: https:; connect-src 'self' http://localhost:3457 http://127.0.0.1:3458 http://localhost:11434 https://mind.sayknow.ai wss://mind.sayknow.ai ws://localhost:*; font-src 'self' data: http://localhost:3457 https://mind.sayknow.ai"
     }
   },
   "bundle": {
@@ -25,10 +25,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/node"],
-    "resources": {
-      "resources/web-standalone": "web-standalone"
-    },
     "macOS": {
       "entitlements": null,
       "exceptionDomain": "",
@@ -36,7 +32,9 @@
       "minimumSystemVersion": "10.15"
     },
     "windows": {
-      "wix": null
+      "nsis": {
+        "installMode": "both"
+      }
     },
     "linux": {
       "deb": {
