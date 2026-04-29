@@ -140,16 +140,7 @@ export async function POST(
            DO UPDATE SET bot_token = $3, bot_name = $4, bot_username = $5, updated_at = NOW()`,
           [userId, channel, token, result.botName ?? null, result.botUsername ?? null],
         );
-        // Also update ALL rows for this channel that use the same bot (same bot_username)
-        // so every linked user gets the fresh token
-        if (result.botUsername) {
-          await pool.query(
-            `UPDATE channel_links SET bot_token = $1, bot_name = $2, bot_username = $3, updated_at = NOW()
-             WHERE channel = $4 AND user_id != $5 AND (bot_username = $3 OR bot_username IS NULL)`,
-            [token, result.botName ?? null, result.botUsername, channel, userId],
-          );
-        }
-        console.log(`[integrations/${channel}] Token saved for user ${userId} + synced to all rows`);
+        console.log(`[integrations/${channel}] Token saved for user ${userId}`);
       } catch (dbErr) {
         console.error(`[integrations/${channel}] DB save failed:`, dbErr);
         return NextResponse.json({ valid: true, saved: false, error: "Failed to save token to database" });

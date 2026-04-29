@@ -136,9 +136,10 @@ function buildDupKeyboard(dupId: string, lang: Lang): TelegramInlineKeyboardMark
 async function getBotToken(): Promise<string | null> {
   if (process.env.TELEGRAM_BOT_TOKEN) return process.env.TELEGRAM_BOT_TOKEN;
   try {
-    // Pick most recently updated token (not random LIMIT 1)
+    // Pick any valid token as a fallback for webhook health-check (GET)
+    // Actual message handling uses getBotTokenForTelegramUser() which is per-user
     const result = await pool.query(
-      `SELECT bot_token FROM channel_links WHERE channel = 'telegram' AND bot_token IS NOT NULL ORDER BY updated_at DESC LIMIT 1`,
+      `SELECT DISTINCT bot_token FROM channel_links WHERE channel = 'telegram' AND bot_token IS NOT NULL LIMIT 1`,
     );
     return (result.rows[0]?.bot_token as string) ?? null;
   } catch {
@@ -598,8 +599,8 @@ export async function POST(request: NextRequest) {
     const cbChatId = cbq.message!.chat.id;
     const cbMessageId = cbq.message!.message_id;
     const cbTgUserId = String(cbq.from.id);
-    const { lang: cbLang } = await getBotTokenForTelegramUser(cbTgUserId);
-    const cbBotToken = fallbackToken;
+    const { token: cbUserToken, lang: cbLang } = await getBotTokenForTelegramUser(cbTgUserId);
+    const cbBotToken = cbUserToken ?? fallbackToken;
 
     const cbLinked = await pool.query(
       `SELECT user_id FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1
@@ -774,8 +775,8 @@ export async function POST(request: NextRequest) {
   const tgUserId = String(message.from.id);
   const text = message.text?.trim() ?? message.caption?.trim() ?? "";
   const { token: userToken, lang: userLang } = await getBotTokenForTelegramUser(tgUserId);
-  // Always prefer fallbackToken (most recently verified) over per-user token which may be stale
-  const botToken = fallbackToken;
+  // Prefer per-user token; fall back to global only if user has none
+  const botToken = userToken ?? fallbackToken;
   const L = userLang;
   console.log(`[telegram/webhook] msg from=${tgUserId} type=${msgType} userToken=${userToken ? "yes" : "no"} fallback=${fallbackToken ? "yes" : "no"}`);
 
