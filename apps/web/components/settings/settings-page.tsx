@@ -21,9 +21,13 @@ export function SettingsPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
-  const { cloud, desktop } = useEnvironmentStore();
+  const { cloud, desktop, desktopMode } = useEnvironmentStore();
 
   const tabs = useMemo(() => {
+    // Local runtime tab: shown on self-hosted web and full desktop builds.
+    // Hidden on lite desktop (remote webview to mind.sayknow.ai — no local runtime)
+    // and on cloud browser (no Tauri shell to manage local processes).
+    const showLocalTab = !cloud || (desktop && desktopMode === "full");
     const all: { id: TabId; label: string }[] = [
       { id: "profile", label: t("settings.tabProfile") },
       { id: "appearance", label: t("settings.tabAppearance") },
@@ -33,10 +37,10 @@ export function SettingsPage() {
       { id: "integrations", label: t("settings.tabIntegrations") },
       { id: "services", label: t("settings.tabServices") },
       { id: "mcp", label: "MCP" },
-      ...(!cloud || desktop ? [{ id: "runtime" as TabId, label: t("settings.tabLocal") }] : []),
+      ...(showLocalTab ? [{ id: "runtime" as TabId, label: t("settings.tabLocal") }] : []),
     ];
     return all;
-  }, [t, cloud, desktop]);
+  }, [t, cloud, desktop, desktopMode]);
 
   return (
     <main className="flex-1 overflow-auto">
