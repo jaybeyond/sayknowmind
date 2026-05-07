@@ -30,9 +30,9 @@ build_full() {
   echo ""
 
   if [ -n "$target_flag" ]; then
-    cargo tauri build --features full --no-default-features --config src-tauri/tauri.full.conf.json --target "$target_flag"
+    cargo tauri build --features full --config src-tauri/tauri.full.conf.json --target "$target_flag" -- --no-default-features
   else
-    cargo tauri build --features full --no-default-features --config src-tauri/tauri.full.conf.json
+    cargo tauri build --features full --config src-tauri/tauri.full.conf.json -- --no-default-features
   fi
 }
 
@@ -45,9 +45,9 @@ build_lite() {
   echo ""
 
   if [ -n "$target_flag" ]; then
-    cargo tauri build --features lite --no-default-features --config src-tauri/tauri.lite.conf.json --target "$target_flag"
+    cargo tauri build --features lite --config src-tauri/tauri.lite.conf.json --target "$target_flag" -- --no-default-features
   else
-    cargo tauri build --features lite --no-default-features --config src-tauri/tauri.lite.conf.json
+    cargo tauri build --features lite --config src-tauri/tauri.lite.conf.json -- --no-default-features
   fi
 }
 
