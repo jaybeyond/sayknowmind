@@ -328,7 +328,7 @@ export function IntegrationsTab() {
                                 {/* Primary: code from Telegram bot */}
                                 <div className="space-y-2">
                                   <p className="text-xs text-muted-foreground">
-                                    텔레그램에서 <b>@sayknow_mind_bot</b>에게 <code>/start</code>를 보내세요.
+                                    텔레그램에서 <b>@{st?.botName ?? "your_bot"}</b>에게 <code>/start</code>를 보내세요.
                                     봇이 6자리 인증 코드를 보내줍니다.
                                   </p>
                                   <div className="flex gap-2">

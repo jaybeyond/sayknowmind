@@ -571,8 +571,18 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
-  const fallbackToken = await getBotToken();
+/**
+ * Core Telegram update handler. Shared by both the legacy /webhook route and
+ * the per-bot /webhook/[botId] route. When `opts.pinnedBotToken` is provided
+ * (typically resolved from the [botId] path segment), it is used as the bot
+ * token for replying to unlinked users instead of the global fallback —
+ * this is what makes new users' /start flow reach the correct bot.
+ */
+export async function handleTelegramUpdate(
+  request: NextRequest,
+  opts: { pinnedBotToken?: string | null } = {},
+): Promise<NextResponse> {
+  const fallbackToken = opts.pinnedBotToken ?? (await getBotToken());
   if (!fallbackToken) {
     console.error("[telegram/webhook] No bot token configured");
     return NextResponse.json({ ok: false, error: "No bot token configured" }, { status: 503 });
@@ -1304,4 +1314,14 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * Legacy single-URL POST entry point. Bots whose webhook still points at
+ * /api/integrations/telegram/webhook (without a botId segment) land here and
+ * fall back to the global getBotToken() resolution. New registrations should
+ * use the per-bot /api/integrations/telegram/webhook/[botId] route instead.
+ */
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  return handleTelegramUpdate(request);
 }

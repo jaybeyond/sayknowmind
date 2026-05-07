@@ -80,7 +80,8 @@ export async function GET(
     if (!webhookActive) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL;
       if (appUrl) {
-        const webhookUrl = `${appUrl}/api/integrations/telegram/webhook`;
+        const botId = token.split(":")[0];
+        const webhookUrl = `${appUrl}/api/integrations/telegram/webhook/${botId}`;
         const ok = await setupTelegramWebhook(token, webhookUrl).catch(() => false);
         if (ok) webhookActive = true;
       }
@@ -145,7 +146,18 @@ export async function POST(
         console.error(`[integrations/${channel}] DB save failed:`, dbErr);
         return NextResponse.json({ valid: true, saved: false, error: "Failed to save token to database" });
       }
-      return NextResponse.json({ ...result, saved: true });
+
+      // Auto-register webhook so the bot starts receiving messages immediately
+      // (without this, the user must click "Setup webhook" separately)
+      let webhookRegistered = false;
+      if (channel === "telegram") {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+        const botId = token.split(":")[0];
+        const webhookUrl = `${appUrl}/api/integrations/telegram/webhook/${botId}`;
+        webhookRegistered = await setupTelegramWebhook(token, webhookUrl).catch(() => false);
+        console.log(`[integrations/${channel}] Auto-registered webhook for bot ${botId}: ${webhookRegistered}`);
+      }
+      return NextResponse.json({ ...result, saved: true, webhookRegistered });
     }
     return NextResponse.json(result);
   }
@@ -204,7 +216,8 @@ export async function POST(
 
     if (channel === "telegram") {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-      const webhookUrl = `${appUrl}/api/integrations/telegram/webhook`;
+      const botId = token.split(":")[0];
+      const webhookUrl = `${appUrl}/api/integrations/telegram/webhook/${botId}`;
       const ok = await setupTelegramWebhook(token, webhookUrl);
       return NextResponse.json({ ok, webhookUrl });
     }
