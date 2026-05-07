@@ -62,9 +62,15 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.5",
     "fast-check": "^4.5.3",
-    "jsdom": "^28.1.0",
+    "jsdom": "26.1.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"
+  },
+  "pnpm": {
+    "overrides": {
+      "html-encoding-sniffer": "4.0.0",
+      "whatwg-url": "14.2.0"
+    }
   }
 }

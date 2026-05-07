@@ -4,7 +4,11 @@ const isDesktopBuild = process.env.NEXT_PUBLIC_DEPLOY_MODE === "desktop";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  serverExternalPackages: ["pg"],
+  // jsdom + @mozilla/readability are externalized so Turbopack doesn't try to
+  // bundle them at build time. jsdom transitively pulls @exodus/bytes (ESM-only)
+  // through html-encoding-sniffer, which fails the page-data-collection step
+  // when Next requires() it. Treating it as external defers loading to runtime.
+  serverExternalPackages: ["pg", "jsdom", "@mozilla/readability"],
   images: {
     remotePatterns: [
       {
