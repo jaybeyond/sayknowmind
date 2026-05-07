@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 export type DeployMode = "cloud" | "desktop" | "auto";
+export type DesktopMode = "full" | "lite" | null;
 
 /** Server & client: read the build-time env var */
 export function getDeployMode(): DeployMode {
@@ -21,6 +22,16 @@ export function isDesktop(): boolean {
   return !!(w.__TAURI_INTERNALS__ || w.__TAURI__ || w.__TAURI_IPC__ || w.__TAURI_DESKTOP__ || w.__SAYKNOW_ENV__);
 }
 
+/** Client-only: returns "full" | "lite" when injected by Tauri, else null */
+export function getDesktopMode(): DesktopMode {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { __SAYKNOW_ENV__?: { mode?: string } };
+  const mode = w.__SAYKNOW_ENV__?.mode;
+  if (mode === "desktop-full") return "full";
+  if (mode === "desktop-lite") return "lite";
+  return null;
+}
+
 /** Resolved environment — works on both server and client */
 export function isCloud(): boolean {
   const mode = getDeployMode();
@@ -30,14 +41,23 @@ export function isCloud(): boolean {
 }
 
 /** Reactive desktop detection */
-export const useEnvironmentStore = create<{ desktop: boolean; cloud: boolean }>(() => ({
+export const useEnvironmentStore = create<{
+  desktop: boolean;
+  cloud: boolean;
+  desktopMode: DesktopMode;
+}>(() => ({
   desktop: isDesktop(),
   cloud: isCloud(),
+  desktopMode: getDesktopMode(),
 }));
 
 // Single re-check after Tauri env injection (only needed for auto mode)
 if (typeof window !== "undefined" && getDeployMode() === "auto") {
   window.addEventListener("sayknow-env-ready", () => {
-    useEnvironmentStore.setState({ desktop: isDesktop(), cloud: isCloud() });
+    useEnvironmentStore.setState({
+      desktop: isDesktop(),
+      cloud: isCloud(),
+      desktopMode: getDesktopMode(),
+    });
   });
 }
