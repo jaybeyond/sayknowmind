@@ -1,0 +1,14 @@
+apiVersion: v2
+name: sayknowmind
+description: SayKnowMind — agentic second brain. Web, AI server, MCP server, RAG dashboard, EdgeQuake engine, relay, and supporting infra (Postgres, Redis, Ollama, IPFS, SearXNG).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/sayknowmind/sayknowmind
+keywords:
+  - rag
+  - agentic
+  - knowledge-graph
+  - second-brain
+maintainers:
+  - name: SayKnowMind

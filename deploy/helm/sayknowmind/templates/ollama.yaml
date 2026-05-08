@@ -1,0 +1,78 @@
+{{- if .Values.ollama.enabled }}
+{{- $component := "ollama" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: {{ .Values.ollama.port }}
+      targetPort: 11434
+      name: ollama
+  selector: {{- include "sayknowmind.componentSelector" (dict "root" . "component" $component) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  serviceName: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "sayknowmind.componentSelector" (dict "root" . "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "sayknowmind.serviceAccountName" . }}
+      {{- include "sayknowmind.podDefaults" . | nindent 6 }}
+      {{- if .Values.ollama.gpu.enabled }}
+      runtimeClassName: {{ .Values.ollama.gpu.runtimeClassName }}
+      {{- end }}
+      containers:
+        - name: ollama
+          image: {{ .Values.ollama.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          env:
+            - name: OLLAMA_HOST
+              value: "0.0.0.0"
+          ports:
+            - containerPort: 11434
+              name: ollama
+          livenessProbe:
+            httpGet: { path: /, port: 11434 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /, port: 11434 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- if .Values.ollama.gpu.enabled }}
+            limits:
+              {{- toYaml .Values.ollama.resources.limits | nindent 14 }}
+              nvidia.com/gpu: "1"
+            requests:
+              {{- toYaml .Values.ollama.resources.requests | nindent 14 }}
+            {{- else }}
+            {{- toYaml .Values.ollama.resources | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /root/.ollama
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.ollama.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.ollama.storage.size }}
+{{- end }}

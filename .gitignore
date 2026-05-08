@@ -36,6 +36,11 @@ Thumbs.db
 keys/
 .sayknowmind-providers.json
 
+# Helm secret values (must NEVER be committed)
+deploy/helm/sayknowmind/values-secret.yaml
+deploy/helm/**/charts/
+deploy/helm/**/*.tgz
+
 # Docker volumes data
 ollama-data/
 ocr-cache/

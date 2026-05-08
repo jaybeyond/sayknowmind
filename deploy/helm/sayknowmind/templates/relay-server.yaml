@@ -1,0 +1,72 @@
+{{- if .Values.relayServer.enabled }}
+{{- $component := "relay-server" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.relayServer.port }}
+      targetPort: 3200
+      name: http
+  selector: {{- include "sayknowmind.componentSelector" (dict "root" . "component" $component) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.relayServer.replicas }}
+  selector:
+    matchLabels: {{- include "sayknowmind.componentSelector" (dict "root" . "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-app.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "sayknowmind.serviceAccountName" . }}
+      {{- include "sayknowmind.podDefaults" . | nindent 6 }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: relay-server
+          image: {{ include "sayknowmind.image" (dict "root" . "component" "relay-server" "config" .Values.relayServer) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 3200
+              name: http
+          envFrom:
+            - configMapRef:
+                name: {{ include "sayknowmind.fullname" . }}-app
+          env:
+            - name: PORT
+              value: "3200"
+            - name: PURGE_INTERVAL_MS
+              value: {{ .Values.relayServer.purgeIntervalMs | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: {{ include "sayknowmind.databaseUrl" . | quote }}
+            - name: RELAY_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: RELAY_SHARED_SECRET
+          livenessProbe:
+            httpGet: { path: /health, port: 3200 }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /health, port: 3200 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: {{- toYaml .Values.relayServer.resources | nindent 12 }}
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+{{- end }}

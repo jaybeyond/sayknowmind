@@ -1,4 +1,4 @@
-.PHONY: install dev dev-web dev-dashboard dev-ai dev-all dev-stop dev-status up down logs build clean help
+.PHONY: install dev dev-web dev-dashboard dev-ai dev-all dev-stop dev-status up down logs build clean help helm-sync helm-sync-db-init helm-sync-files helm-lint helm-template
 
 # ============================================
 # SayknowMind v0.1.0 - Development Commands
@@ -117,3 +117,30 @@ mobile-android: ## Build Android APK
 mobile-ios: ## Build iOS (macOS only)
 	cd apps/web && pnpm build
 	cd apps/mobile && npx cap sync ios
+
+# --- Helm / K8s ---
+HELM_CHART := deploy/helm/sayknowmind
+
+helm-sync-db-init: ## Sync db/init/ → chart's db-init/ (re-run whenever DB init scripts change)
+	@rm -rf $(HELM_CHART)/db-init
+	@cp -R db/init $(HELM_CHART)/db-init
+	@echo "Synced db/init/ → $(HELM_CHART)/db-init/"
+
+helm-sync-files: ## Sync chart-bundled files (searxng settings, db init)
+	@cp docker/searxng/settings.yml $(HELM_CHART)/files/searxng-settings.yml
+	@echo "Synced docker/searxng/settings.yml → $(HELM_CHART)/files/"
+
+helm-sync: helm-sync-db-init helm-sync-files ## Sync everything the chart needs from the repo
+
+helm-lint: helm-sync ## Lint the Helm chart
+	helm lint $(HELM_CHART)
+
+helm-template: helm-sync ## Render the chart for inspection (uses values-staging.yaml)
+	helm template sayknowmind $(HELM_CHART) \
+		-f $(HELM_CHART)/values-staging.yaml \
+		--set secrets.postgresPassword=dummy \
+		--set secrets.betterAuthSecret=dummy \
+		--set secrets.encryptionKey=dummy \
+		--set secrets.relaySharedSecret=dummy \
+		--set secrets.searxngSecretKey=dummy
+

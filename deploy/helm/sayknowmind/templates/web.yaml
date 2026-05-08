@@ -1,0 +1,106 @@
+{{- if .Values.web.enabled }}
+{{- $component := "web" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.web.port }}
+      targetPort: 3000
+      name: http
+  selector: {{- include "sayknowmind.componentSelector" (dict "root" . "component" $component) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels: {{- include "sayknowmind.componentSelector" (dict "root" . "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-app.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "sayknowmind.serviceAccountName" . }}
+      {{- include "sayknowmind.podDefaults" . | nindent 6 }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: web
+          image: {{ include "sayknowmind.image" (dict "root" . "component" "web" "config" .Values.web) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: {{ include "sayknowmind.fullname" . }}-app
+          env:
+            - name: PORT
+              value: "3000"
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: {{ include "sayknowmind.databaseUrl" . | quote }}
+            - name: BETTER_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: BETTER_AUTH_SECRET
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: ENCRYPTION_KEY
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: AI_API_KEY
+            - name: EDGEQUAKE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: EDGEQUAKE_API_KEY
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: TELEGRAM_BOT_TOKEN
+            - name: TELEGRAM_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: TELEGRAM_WEBHOOK_SECRET
+          livenessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources: {{- toYaml .Values.web.resources | nindent 12 }}
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+{{- end }}

@@ -1,0 +1,94 @@
+{{- if .Values.ingress.enabled }}
+{{- $fullName := include "sayknowmind.fullname" . -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  labels: {{- include "sayknowmind.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.issuer }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.hosts.web }}
+        {{- if .Values.dashboard.enabled }}
+        - {{ .Values.ingress.hosts.dashboard }}
+        {{- end }}
+        {{- if .Values.aiServer.enabled }}
+        - {{ .Values.ingress.hosts.ai }}
+        {{- end }}
+        {{- if .Values.mcpServer.enabled }}
+        - {{ .Values.ingress.hosts.mcp }}
+        {{- end }}
+        {{- if .Values.relayServer.enabled }}
+        - {{ .Values.ingress.hosts.relay }}
+        {{- end }}
+      secretName: {{ $fullName }}-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.hosts.web }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sayknowmind.svcHost" (dict "root" . "component" "web") }}
+                port:
+                  number: {{ .Values.web.port }}
+    {{- if .Values.dashboard.enabled }}
+    - host: {{ .Values.ingress.hosts.dashboard }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sayknowmind.svcHost" (dict "root" . "component" "dashboard") }}
+                port:
+                  number: {{ .Values.dashboard.port }}
+    {{- end }}
+    {{- if .Values.aiServer.enabled }}
+    - host: {{ .Values.ingress.hosts.ai }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sayknowmind.svcHost" (dict "root" . "component" "ai-server") }}
+                port:
+                  number: {{ .Values.aiServer.port }}
+    {{- end }}
+    {{- if .Values.mcpServer.enabled }}
+    - host: {{ .Values.ingress.hosts.mcp }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sayknowmind.svcHost" (dict "root" . "component" "mcp-server") }}
+                port:
+                  number: {{ .Values.mcpServer.port }}
+    {{- end }}
+    {{- if .Values.relayServer.enabled }}
+    - host: {{ .Values.ingress.hosts.relay }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sayknowmind.svcHost" (dict "root" . "component" "relay-server") }}
+                port:
+                  number: {{ .Values.relayServer.port }}
+    {{- end }}
+{{- end }}

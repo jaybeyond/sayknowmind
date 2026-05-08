@@ -1,0 +1,30 @@
+# Staging overrides
+global:
+  imageTag: staging
+
+ingress:
+  hosts:
+    web: staging.sayknowmind.example.com
+    dashboard: dashboard-staging.sayknowmind.example.com
+    ai: ai-staging.sayknowmind.example.com
+    mcp: mcp-staging.sayknowmind.example.com
+    relay: relay-staging.sayknowmind.example.com
+  tls:
+    enabled: true
+    issuer: letsencrypt-staging
+
+# Single replica everywhere to save cost in staging
+web:
+  replicas: 1
+edgequake:
+  replicas: 1
+
+postgres:
+  storage:
+    size: 10Gi
+aiServer:
+  resources:
+    requests: { cpu: 200m, memory: 1Gi }
+    limits:   { cpu: "2",  memory: 4Gi }
+  modelCache:
+    size: 5Gi

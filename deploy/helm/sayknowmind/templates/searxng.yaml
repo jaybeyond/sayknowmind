@@ -1,0 +1,73 @@
+{{- if .Values.searxng.enabled }}
+{{- $component := "searxng" -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sayknowmind.fullname" . }}-searxng
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+data:
+  settings.yml: |
+{{ .Files.Get "files/searxng-settings.yml" | indent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.searxng.port }}
+      targetPort: 8080
+      name: http
+  selector: {{- include "sayknowmind.componentSelector" (dict "root" . "component" $component) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {{- include "sayknowmind.componentSelector" (dict "root" . "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "sayknowmind.serviceAccountName" . }}
+      {{- include "sayknowmind.podDefaults" . | nindent 6 }}
+      containers:
+        - name: searxng
+          image: {{ .Values.searxng.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          env:
+            - name: SEARXNG_BASE_URL
+              value: "http://{{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}:{{ .Values.searxng.port }}/"
+            - name: SEARXNG_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: SEARXNG_SECRET_KEY
+          ports:
+            - containerPort: 8080
+              name: http
+          livenessProbe:
+            httpGet: { path: /, port: 8080 }
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: {{- toYaml .Values.searxng.resources | nindent 12 }}
+          volumeMounts:
+            - name: settings
+              mountPath: /etc/searxng/settings.yml
+              subPath: settings.yml
+              readOnly: true
+      volumes:
+        - name: settings
+          configMap:
+            name: {{ include "sayknowmind.fullname" . }}-searxng
+{{- end }}

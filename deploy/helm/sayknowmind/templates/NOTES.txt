@@ -1,0 +1,36 @@
+SayKnowMind has been installed.
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Chart:     {{ .Chart.Name }}-{{ .Chart.Version }} (app {{ .Chart.AppVersion }})
+
+Endpoints:
+{{- if .Values.ingress.enabled }}
+{{- $scheme := ternary "https" "http" .Values.ingress.tls.enabled }}
+  Web:        {{ $scheme }}://{{ .Values.ingress.hosts.web }}
+  Dashboard:  {{ $scheme }}://{{ .Values.ingress.hosts.dashboard }}
+  AI Server:  {{ $scheme }}://{{ .Values.ingress.hosts.ai }}
+  MCP:        {{ $scheme }}://{{ .Values.ingress.hosts.mcp }}
+  Relay:      {{ $scheme }}://{{ .Values.ingress.hosts.relay }}
+{{- else }}
+  Ingress is disabled — port-forward services directly.
+{{- end }}
+
+Next steps:
+  1. Watch pod rollout:
+     kubectl get pods -n {{ .Release.Namespace }} -w
+
+  2. Tail web logs:
+     kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=web -f
+
+  3. Verify Postgres init scripts ran (only on first install):
+     kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=postgres | head -50
+
+  4. Test health endpoints from inside the cluster:
+     kubectl run -it --rm probe --image=curlimages/curl --restart=Never -- \
+       curl -s {{ include "sayknowmind.svcUrl" (dict "root" . "component" "web" "port" .Values.web.port) }}/api/health
+
+If pods are stuck in CrashLoopBackOff, check that:
+  - secrets in values-secret.yaml are filled in (POSTGRES_PASSWORD, BETTER_AUTH_SECRET, ENCRYPTION_KEY, RELAY_SHARED_SECRET, SEARXNG_SECRET_KEY are required)
+  - the postgres image you pushed includes pgvector + Apache AGE extensions
+  - imagePullSecrets is set if using a private registry

@@ -1,0 +1,108 @@
+{{- if .Values.aiServer.enabled }}
+{{- $component := "ai-server" -}}
+{{- if gt (int .Values.aiServer.replicas) 1 }}
+{{- /* PVC is RWO; multi-replica needs RWX or per-pod cache. We model as PVC for now and require 1 replica unless storageClass supports RWX. */ -}}
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "sayknowmind.fullname" . }}-ai-server-models
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.aiServer.modelCache.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.aiServer.modelCache.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.aiServer.port }}
+      targetPort: 4000
+      name: http
+  selector: {{- include "sayknowmind.componentSelector" (dict "root" . "component" $component) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sayknowmind.svcHost" (dict "root" . "component" $component) }}
+  labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.aiServer.replicas }}
+  strategy:
+    # PVC is RWO so we cannot run two pods simultaneously sharing the cache
+    type: Recreate
+  selector:
+    matchLabels: {{- include "sayknowmind.componentSelector" (dict "root" . "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "sayknowmind.componentLabels" (merge (dict "component" $component) .) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-app.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "sayknowmind.serviceAccountName" . }}
+      {{- include "sayknowmind.podDefaults" . | nindent 6 }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: ai-server
+          image: {{ include "sayknowmind.image" (dict "root" . "component" "ai-server" "config" .Values.aiServer) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 4000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: {{ include "sayknowmind.fullname" . }}-app
+          env:
+            - name: PORT
+              value: "4000"
+            - name: SKIP_AUTH
+              value: {{ .Values.aiServer.skipAuth | quote }}
+            - name: USE_ZAI
+              value: {{ ternary "true" "false" .Values.aiServer.zai.enabled | quote }}
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: OPENAI_API_KEY
+            - name: OPENROUTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: OPENROUTER_API_KEY
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: AI_API_KEY
+          livenessProbe:
+            httpGet: { path: /health, port: 4000 }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health, port: 4000 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources: {{- toYaml .Values.aiServer.resources | nindent 12 }}
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: {{ include "sayknowmind.fullname" . }}-ai-server-models
+{{- end }}

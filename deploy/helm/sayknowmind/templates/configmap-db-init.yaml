@@ -1,0 +1,23 @@
+{{- if .Values.postgres.enabled }}
+{{- /*
+  PostgreSQL init scripts.
+
+  Files are pulled from the repo's db/init/ directory at chart-render time.
+  The chart must be rendered from the repo root (or the directory must be
+  bundled into the chart) for .Files.Glob to find them.
+
+  Stored as binaryData to preserve exact bytes (the .sh file in particular).
+  PostgreSQL's docker-entrypoint runs every *.sql, *.sql.gz, and *.sh in the
+  mounted directory in alphabetical order on first DB initialization only.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sayknowmind.fullname" . }}-db-init
+  labels:
+    {{- include "sayknowmind.labels" . | nindent 4 }}
+binaryData:
+{{- range $path, $bytes := .Files.Glob "db-init/*" }}
+  {{ base $path }}: {{ $.Files.Get $path | b64enc }}
+{{- end }}
+{{- end }}

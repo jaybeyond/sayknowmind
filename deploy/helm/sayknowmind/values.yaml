@@ -1,0 +1,241 @@
+# =====================================================================
+# SayKnowMind — default values
+# =====================================================================
+# Override per environment via:
+#   helm install sayknowmind . -f values-production.yaml -f values-secret.yaml
+# values-secret.yaml is gitignored and holds real secret values.
+# =====================================================================
+
+global:
+  # Container image registry and prefix (matches .github/workflows/deploy.yml)
+  registry: ghcr.io
+  imagePrefix: sayknowmind/sayknowmind
+  imageTag: latest
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+  # Cluster-wide DNS suffix used to address Services. Leave default for kubeadm/EKS/GKE/AKS.
+  clusterDomain: cluster.local
+
+# ---------------------------------------------------------------------
+# Public-facing hostnames. Replace before production install.
+# ---------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  tls:
+    enabled: true
+    issuer: letsencrypt-prod   # cert-manager ClusterIssuer name
+  hosts:
+    web: sayknowmind.example.com
+    dashboard: dashboard.sayknowmind.example.com
+    ai: ai.sayknowmind.example.com
+    mcp: mcp.sayknowmind.example.com
+    relay: relay.sayknowmind.example.com
+  # Body size cap raised because ingestion uploads can be large
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+
+# ---------------------------------------------------------------------
+# Application-level config (non-secret)
+# ---------------------------------------------------------------------
+app:
+  nodeEnv: production
+  deployMode: cloud            # cloud | desktop | auto — K8s install is "cloud"
+  privateMode: "true"
+  rustLog: info
+  llm:
+    provider: openai           # openai | ollama
+    model: gpt-4o-mini
+  embedding:
+    provider: openai
+    model: text-embedding-3-small
+  rateLimit:
+    ttl: "60"
+    max: "100"
+  trustedOrigins: []           # auto-populated from ingress hosts when empty (see _helpers.tpl)
+  requireEmailVerification: "false"
+
+# ---------------------------------------------------------------------
+# Secrets (placeholders — supply via values-secret.yaml or external secret manager)
+# Leave a value empty to disable that integration (e.g. unset TELEGRAM_* to skip Telegram).
+# ---------------------------------------------------------------------
+secrets:
+  postgresPassword: "REPLACE_ME"
+  betterAuthSecret: "REPLACE_ME"
+  encryptionKey: "REPLACE_ME"
+  relaySharedSecret: "REPLACE_ME"
+  searxngSecretKey: "REPLACE_ME"
+  aiApiKey: ""
+  edgequakeApiKey: ""
+  openaiApiKey: ""
+  openrouterApiKey: ""
+  telegramBotToken: ""
+  telegramWebhookSecret: ""
+
+# ---------------------------------------------------------------------
+# Service definitions
+# ---------------------------------------------------------------------
+postgres:
+  enabled: true
+  # IMPORTANT: SayKnowMind requires PostgreSQL with pgvector + Apache AGE extensions
+  # built in. The default below points at the custom image you must build from
+  # docker/Dockerfile.postgres and push to your registry. The stock postgres image
+  # will NOT work — db init scripts call CREATE EXTENSION pgvector / age.
+  image: ""                  # default: {{ registry }}/{{ imagePrefix }}-postgres:{{ tag }}
+  user: postgres
+  database: sayknowmind
+  port: 5432
+  storage:
+    size: 50Gi
+    storageClass: ""         # empty = cluster default
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits:   { cpu: "2",  memory: 4Gi }
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  port: 6379
+  resources:
+    requests: { cpu: 50m,  memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+ollama:
+  enabled: false             # disabled by default — cloud deploy uses external LLM APIs
+  image: ollama/ollama:latest
+  port: 11434
+  storage:
+    size: 100Gi              # model files are large
+    storageClass: ""
+  resources:
+    requests: { cpu: "1",  memory: 4Gi }
+    limits:   { cpu: "4",  memory: 16Gi }
+  # Optionally enable GPU scheduling
+  gpu:
+    enabled: false
+    runtimeClassName: nvidia
+
+ipfs:
+  enabled: false             # disabled by default — only needed for shared/decentralized mode
+  image: ipfs/kubo:latest
+  apiPort: 5001
+  gatewayPort: 8080
+  storage:
+    size: 50Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: "1",  memory: 2Gi }
+
+searxng:
+  enabled: true
+  image: searxng/searxng:latest
+  port: 8888
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 1Gi }
+
+edgequake:
+  enabled: true
+  image: ""                  # default: {{ registry }}/{{ imagePrefix }}-edgequake:{{ tag }}
+  port: 8080
+  replicas: 1                # stateless RAG engine — can scale, but uses Postgres/Redis backing
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits:   { cpu: "2",  memory: 4Gi }
+
+aiServer:
+  enabled: true
+  image: ""                  # default: {{ registry }}/{{ imagePrefix }}-ai-server:{{ tag }}
+  port: 4000
+  replicas: 1
+  modelCache:
+    size: 20Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 500m, memory: 4Gi }   # docker-compose reserves 4G
+    limits:   { cpu: "4",  memory: 8Gi }   # docker-compose limits at 8G
+  zai:
+    enabled: false           # set true and provide ZAI_API_KEY via secrets to use Z.AI
+  skipAuth: "false"
+
+ocrServer:
+  enabled: true
+  image: ""                  # default: {{ registry }}/{{ imagePrefix }}-ocr-server:{{ tag }}
+  port: 8000
+  replicas: 1
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits:   { cpu: "2",  memory: 2Gi }
+
+web:
+  enabled: true
+  image: ""                  # default: {{ registry }}/{{ imagePrefix }}-web:{{ tag }}
+  port: 3000
+  replicas: 2                # Next.js standalone — safe to scale horizontally
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits:   { cpu: "1",  memory: 1Gi }
+
+dashboard:
+  enabled: true
+  image: ""                  # default: {{ registry }}/{{ imagePrefix }}-dashboard:{{ tag }}
+  port: 3000                 # container listens on 3000, Service exposes as dashboard
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+mcpServer:
+  enabled: true
+  image: ""                  # default: {{ registry }}/{{ imagePrefix }}-mcp-server:{{ tag }}
+  port: 8082
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+relayServer:
+  enabled: true
+  image: ""                  # default: {{ registry }}/{{ imagePrefix }}-relay-server:{{ tag }}
+  port: 3200
+  replicas: 1
+  purgeIntervalMs: "900000"
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+# ---------------------------------------------------------------------
+# DB migration Job — runs init SQL once on install/upgrade
+# ---------------------------------------------------------------------
+migrations:
+  enabled: true
+  image: postgres:16-alpine
+  backoffLimit: 2
+
+# ---------------------------------------------------------------------
+# Pod-level scheduling defaults (apply to every workload unless overridden)
+# ---------------------------------------------------------------------
+podDefaults:
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  priorityClassName: ""
+  topologySpreadConstraints: []
+
+serviceAccount:
+  create: true
+  name: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  readOnlyRootFilesystem: false   # several services write to /tmp or app data

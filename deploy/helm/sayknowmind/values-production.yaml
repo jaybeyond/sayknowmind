@@ -1,0 +1,36 @@
+# Production overrides
+global:
+  imageTag: ""   # Pin to a release tag, e.g. v0.1.0 — never use 'latest' in prod
+
+ingress:
+  hosts:
+    web: app.sayknowmind.com
+    dashboard: dashboard.sayknowmind.com
+    ai: ai.sayknowmind.com
+    mcp: mcp.sayknowmind.com
+    relay: relay.sayknowmind.com
+  tls:
+    enabled: true
+    issuer: letsencrypt-prod
+
+web:
+  replicas: 3
+
+edgequake:
+  replicas: 2
+
+aiServer:
+  replicas: 2
+
+postgres:
+  storage:
+    size: 200Gi
+    storageClass: fast-ssd
+
+# Production typically uses an external LLM, not Ollama
+ollama:
+  enabled: false
+
+# Enable IPFS only if shared/decentralized mode is in use
+ipfs:
+  enabled: false
