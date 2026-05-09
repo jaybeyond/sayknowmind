@@ -1,5 +1,7 @@
 FROM node:22-alpine AS base
-RUN corepack enable
+# corepack auto-download is unreliable in some build environments; prepare/activate
+# the exact pnpm version up front so `pnpm install` doesn't try to fetch on first call.
+RUN corepack enable && corepack prepare pnpm@9.15.6 --activate
 
 FROM base AS deps
 WORKDIR /app
