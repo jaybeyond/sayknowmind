@@ -81,7 +81,8 @@ apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/binaries/
 apps/desktop/src-tauri/resources/web-standalone/
 apps/desktop/src-tauri/gen/
-# Internal notes/work-logs are gitignored, but public-facing docs/intro/ is tracked.
+# Internal notes are gitignored, but public-facing docs/intro/ and weekly reports are tracked.
 # Note: a bare `docs/` would block the !exception, so we ignore docs/* instead.
 docs/*
 !docs/intro/
+!docs/weekly-report-*.md
