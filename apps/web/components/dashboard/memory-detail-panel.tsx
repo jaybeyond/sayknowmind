@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { getVideoEmbedUrl } from "@/lib/video-embed";
+import { openExternal } from "@/lib/open-external";
 import { ShareDialog } from "./share-dialog";
 import { MemoryEditModal } from "./memory-edit-modal";
 
@@ -296,7 +297,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
                 <button
                   key={doc.id}
                   className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors"
-                  onClick={() => window.open(`/api/documents/${doc.id}`, "_blank")}
+                  onClick={() => void openExternal(`/api/documents/${doc.id}`)}
                 >
                   <FileText className="size-3.5 text-muted-foreground shrink-0" />
                   <span className="text-sm truncate flex-1">{doc.title}</span>

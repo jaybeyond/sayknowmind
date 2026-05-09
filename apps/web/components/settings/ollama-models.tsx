@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
 import { isDesktop, useEnvironmentStore } from "@/lib/environment";
+import { openExternal } from "@/lib/open-external";
 
 // All Ollama operations go through /api/models/* routes (works for both cloud and desktop)
 
@@ -565,11 +566,11 @@ export function OllamaModels({ ollamaRunning }: { ollamaRunning?: boolean } = {}
                   const btn = document.activeElement as HTMLButtonElement;
                   if (btn) btn.disabled = true;
                   try {
-                    window.open("https://ollama.com/download", "_blank");
+                    await openExternal("https://ollama.com/download");
                     // Re-check after user might have installed
                     setTimeout(() => checkHealth().then(fetchModels), 10000);
                   } catch {
-                    window.open("https://ollama.com/download", "_blank");
+                    await openExternal("https://ollama.com/download");
                   } finally {
                     if (btn) btn.disabled = false;
                   }

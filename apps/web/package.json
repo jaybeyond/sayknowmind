@@ -24,6 +24,8 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-sigma/core": "^5.0.6",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-shell": "^2.3.5",
     "@xyflow/react": "^12.10.1",
     "better-auth": "^1.5.6",
     "cheerio": "^1.2.0",

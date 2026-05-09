@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.turbo/
+.cache/
+coverage/
+.git/
+__tests__/
+playwright-report/
+test-results/
+*.log

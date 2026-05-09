@@ -39,6 +39,7 @@ import { useMemoryStore, type Memory } from "@/store/memory-store";
 import { useCategoriesStore } from "@/store/categories-store";
 import { useTranslation } from "@/lib/i18n";
 import { getVideoEmbedUrl } from "@/lib/video-embed";
+import { openExternal } from "@/lib/open-external";
 import { ShareDialog } from "./share-dialog";
 import { MemoryEditModal } from "./memory-edit-modal";
 import { toast } from "sonner";
@@ -144,9 +145,9 @@ export function MemoryCard({
     if (onSelect) {
       onSelect(memory);
     } else if (fileUrl && (isImage || isVideo)) {
-      window.open(fileUrl, "_blank");
+      void openExternal(fileUrl);
     } else if (memory.url) {
-      window.open(memory.url, "_blank");
+      void openExternal(memory.url);
     }
   };
 
