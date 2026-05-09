@@ -11,6 +11,9 @@
 
 > **"Everything you say, we know, and mind forever."**
 
+**Read introduction in your language:**
+[English](./docs/intro/INTRO.md) · [한국어](./docs/intro/INTRO.ko.md) · [简体中文](./docs/intro/INTRO.zh-CN.md) · [繁體中文](./docs/intro/INTRO.zh-TW.md) · [日本語](./docs/intro/INTRO.ja.md)
+
 SayKnowMind is an open-source Personal Agentic Second Brain platform. It captures, organizes, and retrieves all your knowledge with a local-first architecture, multi-agent orchestration, and cross-platform accessibility.
 
 ---
