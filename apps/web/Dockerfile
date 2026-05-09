@@ -1,6 +1,9 @@
 FROM node:22-alpine AS base
-# corepack auto-download is unreliable in some build environments; prepare/activate
-# the exact pnpm version up front so `pnpm install` doesn't try to fetch on first call.
+# Pin pnpm to the version recorded in package.json's "packageManager" field.
+# Without this, recent corepack defaults to fetching the latest pnpm at install
+# time, which produced ERR_PNPM_LOCKFILE_CONFIG_MISMATCH against our v9 lockfile.
+ENV COREPACK_DEFAULT_TO_LATEST=0
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable && corepack prepare pnpm@9.15.6 --activate
 
 FROM base AS deps
