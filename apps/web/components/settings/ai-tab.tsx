@@ -20,7 +20,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
-import { isCloud } from "@/lib/environment";
+import { isCloud, useEnvironmentStore } from "@/lib/environment";
+import { CodexStatusCard } from "./codex-status-card";
+import { OcpStatusCard } from "./ocp-status-card";
 
 // ─── Provider definitions ────────────────────────────────────
 
@@ -427,6 +429,10 @@ const EMBEDDING_PROVIDERS: EmbeddingDef[] = [
 export function AITab() {
   const { t } = useTranslation();
   const cloudMode = isCloud();
+  // Subscription-card visibility: only show in the bundled "full" desktop
+  // build, where the Next.js server lives on the user's machine and can
+  // actually see ~/.codex/auth.json and localhost:3456.
+  const desktopMode = useEnvironmentStore((s) => s.desktopMode);
   const [chatMode, setChatMode] = useState("simple");
   const [keyValues, setKeyValues] = useState<Record<string, string>>({});
   const [activeProviderId, setActiveProviderId] = useState<string>("");
@@ -582,6 +588,18 @@ export function AITab() {
 
   return (
     <div className="space-y-8">
+      {/* Subscription-based providers (Codex / OCP) only make sense when the
+          Next.js server runs on the user's own machine — i.e. the Tauri full
+          build with the bundled sidecar. In lite mode the server is in the
+          cloud and can't see local credentials, so we hide the cards to
+          avoid surfacing controls that can't possibly succeed. */}
+      {desktopMode === "full" && (
+        <div className="space-y-3">
+          <CodexStatusCard />
+          <OcpStatusCard />
+        </div>
+      )}
+
       {/* Chat Mode */}
       <div className="space-y-3">
         <div>
