@@ -15,15 +15,21 @@ import { Button } from "@/components/ui/button";
  * the Tauri `ocp_status` invoke command when available — it runs on the
  * user's machine.
  */
+
+interface TauriInvoke {
+  invoke?: <T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+}
+
+function tauriBridge(): TauriInvoke | null {
+  if (typeof window === "undefined") return null;
+  return (window as unknown as { __TAURI_INTERNALS__?: TauriInvoke }).__TAURI_INTERNALS__ ?? null;
+}
+
 async function fetchOcpReady(): Promise<boolean> {
-  const w = typeof window !== "undefined"
-    ? (window as unknown as {
-        __TAURI_INTERNALS__?: { invoke?: (cmd: string) => Promise<unknown> };
-      })
-    : null;
-  if (w?.__TAURI_INTERNALS__?.invoke) {
+  const bridge = tauriBridge();
+  if (bridge?.invoke) {
     try {
-      const result = (await w.__TAURI_INTERNALS__.invoke("ocp_status")) as { ready: boolean };
+      const result = await bridge.invoke<{ ready: boolean }>("ocp_status");
       return Boolean(result?.ready);
     } catch {
       /* fall through */
@@ -33,6 +39,27 @@ async function fetchOcpReady(): Promise<boolean> {
   if (!res.ok) return false;
   const data = await res.json();
   return Boolean(data.ready);
+}
+
+async function provisionOcpKeyLocally(): Promise<string | null> {
+  const bridge = tauriBridge();
+  if (!bridge?.invoke) return null;
+  try {
+    const result = await bridge.invoke<{ key: string }>("provision_ocp_key");
+    return result?.key ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function revokeOcpKeyLocally(): Promise<void> {
+  const bridge = tauriBridge();
+  if (!bridge?.invoke) return;
+  try {
+    await bridge.invoke("revoke_ocp_key");
+  } catch {
+    /* best-effort */
+  }
 }
 
 type InstallStep = "idle" | "cloning" | "installing" | "configuring" | "starting" | "done" | "failed";
@@ -84,9 +111,23 @@ export function OcpStatusCard() {
     setErrorMsg(null);
     try {
       const next = !active;
-      const res = await fetch("/api/integrations/ocp/status", {
-        method: next ? "POST" : "DELETE",
-      });
+      let res: Response;
+      if (next) {
+        // Activation. In a Tauri build we mint the key locally and ship the
+        // plaintext to the API in the body; otherwise the API mints it
+        // server-side using its own admin-key file.
+        const localKey = await provisionOcpKeyLocally();
+        res = await fetch("/api/integrations/ocp/status", {
+          method: "POST",
+          headers: localKey ? { "Content-Type": "application/json" } : undefined,
+          body: localKey ? JSON.stringify({ clientKey: localKey }) : undefined,
+        });
+      } else {
+        // Deactivation. Revoke locally first when we can — the API will
+        // also try, but only succeeds when it has the admin-key itself.
+        await revokeOcpKeyLocally();
+        res = await fetch("/api/integrations/ocp/status", { method: "DELETE" });
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setErrorMsg(body.error ?? "토글 실패");

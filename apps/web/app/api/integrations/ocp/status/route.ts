@@ -9,7 +9,7 @@
  * other OpenAI-compatible provider.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { encryptForUser } from "@/lib/encryption";
 import { getSession } from "@/lib/admin";
@@ -44,28 +44,45 @@ export async function GET() {
   return NextResponse.json({ ready, active });
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  invalidateOcpHealthCache();
-  if (!(await isOcpReady())) {
-    return NextResponse.json(
-      {
-        error:
-          "OCP not reachable on http://localhost:3456 or admin-key missing — install and start OCP first.",
-      },
-      { status: 412 },
-    );
+
+  // Two paths to obtain the API key we'll store:
+  //   1. `clientKey` in the request body — the Tauri webview minted it
+  //      locally via the provision_ocp_key invoke command. This is the
+  //      lite-build path because the cloud server can't see OCP itself.
+  //   2. No body — we're on the same machine as OCP, ask its admin
+  //      endpoint directly via lib/ocp's provisionOcpKey().
+  let body: { clientKey?: string } = {};
+  try {
+    body = await req.json();
+  } catch {
+    /* body optional */
   }
 
   let key: string;
-  try {
-    key = await provisionOcpKey();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "OCP provisioning failed";
-    return NextResponse.json({ error: msg }, { status: 502 });
+  if (body.clientKey && typeof body.clientKey === "string") {
+    key = body.clientKey;
+  } else {
+    invalidateOcpHealthCache();
+    if (!(await isOcpReady())) {
+      return NextResponse.json(
+        {
+          error:
+            "OCP not reachable on http://localhost:3456 or admin-key missing — install and start OCP first.",
+        },
+        { status: 412 },
+      );
+    }
+    try {
+      key = await provisionOcpKey();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "OCP provisioning failed";
+      return NextResponse.json({ error: msg }, { status: 502 });
+    }
   }
 
   const encrypted = encryptForUser(session.user.id, key);

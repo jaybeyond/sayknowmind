@@ -23,26 +23,52 @@ import { Button } from "@/components/ui/button";
  * prefer the Tauri `codex_status` invoke command when the runtime exposes
  * it. We fall back to the API for plain browser dev.
  */
+interface TauriInvoke {
+  invoke?: <T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+}
+
+function tauriBridge(): TauriInvoke | null {
+  if (typeof window === "undefined") return null;
+  return (window as unknown as { __TAURI_INTERNALS__?: TauriInvoke }).__TAURI_INTERNALS__ ?? null;
+}
+
 async function fetchCodexReady(): Promise<boolean> {
-  // Tauri's JS bridge: window.__TAURI_INTERNALS__.invoke exists in any
-  // build (full or lite). Detect at call time so SSR doesn't trip up.
-  const w = typeof window !== "undefined"
-    ? (window as unknown as {
-        __TAURI_INTERNALS__?: { invoke?: (cmd: string) => Promise<unknown> };
-      })
-    : null;
-  if (w?.__TAURI_INTERNALS__?.invoke) {
+  const bridge = tauriBridge();
+  if (bridge?.invoke) {
     try {
-      const result = (await w.__TAURI_INTERNALS__.invoke("codex_status")) as { ready: boolean };
+      const result = await bridge.invoke<{ ready: boolean }>("codex_status");
       return Boolean(result?.ready);
     } catch {
-      // Fall through to API — the command might not be registered in older builds.
+      /* fall through */
     }
   }
   const res = await fetch("/api/integrations/codex/status");
   if (!res.ok) return false;
   const data = await res.json();
   return Boolean(data.ready);
+}
+
+/**
+ * Kick off the OAuth flow. Tauri builds spawn `codex login` directly on the
+ * user's machine; browser/dev falls back to the legacy API route which only
+ * works when the Next.js server is on the same host as the user.
+ */
+async function startCodexLogin(): Promise<{ ok: boolean; error?: string }> {
+  const bridge = tauriBridge();
+  if (bridge?.invoke) {
+    try {
+      await bridge.invoke("exec_codex_login");
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+  const res = await fetch("/api/integrations/codex/login", { method: "POST" });
+  if (!res.ok && res.status !== 202) {
+    const body = await res.json().catch(() => ({}));
+    return { ok: false, error: body.error ?? "로그인 시작 실패" };
+  }
+  return { ok: true };
 }
 
 export function CodexStatusCard() {
@@ -113,10 +139,9 @@ export function CodexStatusCard() {
     setLoggingIn(true);
     setErrorMsg(null);
     try {
-      const res = await fetch("/api/integrations/codex/login", { method: "POST" });
-      if (!res.ok && res.status !== 202) {
-        const body = await res.json().catch(() => ({}));
-        setErrorMsg(body.error ?? "로그인 시작 실패");
+      const launched = await startCodexLogin();
+      if (!launched.ok) {
+        setErrorMsg(launched.error ?? "로그인 시작 실패");
         setLoggingIn(false);
         return;
       }

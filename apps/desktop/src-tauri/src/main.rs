@@ -187,6 +187,111 @@ struct OcpStatus {
     has_admin_key: bool,
 }
 
+/// Spawn `codex login` on the user's machine. The CLI opens a localhost
+/// callback server and pops the system browser at the ChatGPT OAuth page;
+/// `~/.codex/auth.json` is written on success. Returns once the child is
+/// detached — callers should poll codex_status() for completion.
+#[tauri::command]
+fn exec_codex_login() -> Result<u32, String> {
+    // The Codex CLI may or may not be on PATH; prefer `codex` if available,
+    // otherwise fall back to `npx -y @openai/codex` which always resolves.
+    let (program, args): (&str, Vec<&str>) = if Command::new("which")
+        .arg("codex")
+        .output()
+        .ok()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        ("codex", vec!["login"])
+    } else {
+        ("npx", vec!["-y", "@openai/codex", "login"])
+    };
+
+    Command::new(program)
+        .args(&args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map(|child| child.id())
+        .map_err(|e| format!("Failed to spawn {}: {}", program, e))
+}
+
+#[derive(serde::Serialize)]
+struct OcpProvisionResult {
+    key: String,
+}
+
+/// Mint a "sayknowmind"-named API key against the user's local OCP proxy
+/// using the admin-key file. Caller persists the key wherever it needs to
+/// (typically the cloud DB via /api/integrations/ocp/status).
+#[tauri::command]
+fn provision_ocp_key() -> Result<OcpProvisionResult, String> {
+    let admin = read_ocp_admin_key().ok_or_else(|| {
+        "OCP admin-key not found at ~/.ocp/admin-key — install and start OCP first".to_string()
+    })?;
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("HTTP client init failed: {}", e))?;
+
+    // Best-effort revoke any prior key of the same name so we always own a
+    // fresh secret (we never see the existing one's plaintext anyway).
+    let _ = client
+        .delete("http://127.0.0.1:3456/api/keys/sayknowmind")
+        .bearer_auth(&admin)
+        .send();
+
+    let res = client
+        .post("http://127.0.0.1:3456/api/keys")
+        .bearer_auth(&admin)
+        .json(&serde_json::json!({ "name": "sayknowmind" }))
+        .send()
+        .map_err(|e| format!("OCP provision failed: {}", e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("OCP provision HTTP {}", res.status()));
+    }
+    let body: serde_json::Value = res
+        .json()
+        .map_err(|e| format!("OCP response parse failed: {}", e))?;
+    let key = body
+        .get("key")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "OCP response had no plaintext key".to_string())?
+        .to_string();
+    Ok(OcpProvisionResult { key })
+}
+
+/// Revoke the SayKnowMind-named key at OCP. Idempotent — silent on 404.
+#[tauri::command]
+fn revoke_ocp_key() -> Result<(), String> {
+    let admin = match read_ocp_admin_key() {
+        Some(k) => k,
+        None => return Ok(()),
+    };
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("HTTP client init failed: {}", e))?;
+    let res = client
+        .delete("http://127.0.0.1:3456/api/keys/sayknowmind")
+        .bearer_auth(&admin)
+        .send()
+        .map_err(|e| format!("OCP revoke failed: {}", e))?;
+    if res.status().is_success() || res.status().as_u16() == 404 {
+        Ok(())
+    } else {
+        Err(format!("OCP revoke HTTP {}", res.status()))
+    }
+}
+
+fn read_ocp_admin_key() -> Option<String> {
+    let home = dirs_next::home_dir()?;
+    let path = home.join(".ocp").join("admin-key");
+    fs::read_to_string(&path).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
 #[tauri::command]
 fn ocp_status() -> OcpStatus {
     let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("/"));
@@ -563,6 +668,9 @@ fn main() {
             save_offline_cache,
             codex_status,
             ocp_status,
+            exec_codex_login,
+            provision_ocp_key,
+            revoke_ocp_key,
         ]);
 
     builder = builder.setup(|app| {
