@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { Send, MessageSquare, Gamepad2, Mail, CheckCircle2, XCircle, ChevronDown, ChevronUp, Radio } from "lucide-react";
+import { CloudConnectorsSection } from "./cloud-connectors-section";
 
 type ChannelId = "telegram" | "slack" | "discord" | "email";
 
@@ -172,8 +173,10 @@ export function IntegrationsTab() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="space-y-8">
+      <CloudConnectorsSection />
+
+      <div className="border-t border-border pt-6">
         <h3 className="text-sm font-medium mb-1">{t("integrations.channelsTitle")}</h3>
         <p className="text-xs text-muted-foreground mb-4">{t("integrations.channelsDesc")}</p>
       </div>
