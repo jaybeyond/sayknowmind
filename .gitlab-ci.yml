@@ -1,0 +1,133 @@
+# =====================================================================
+# GitLab CI/CD — main branch push triggers build, optional manual deploy.
+#
+# Required CI/CD Variables (Settings → CI/CD → Variables):
+#   DATABASE_URL          — production Postgres connection string
+#                           (protected, masked)
+#   DEPLOY_HOST           — production EC2 hostname or IP, e.g.
+#                           43.199.240.206 or sayknowmind.ypai.click
+#   DEPLOY_USER           — SSH user on the host, e.g. ec2-user
+#   DEPLOY_SSH_KEY        — full PEM contents (file or var, type=File)
+#   APP_URL               — public origin, e.g. https://sayknowmind.ypai.click
+#   BETTER_AUTH_SECRET    — production better-auth secret (masked)
+#
+# GitLab provides $CI_REGISTRY / $CI_REGISTRY_USER / $CI_REGISTRY_PASSWORD
+# automatically when the project's Container Registry is enabled.
+#
+# The GitLab Runner that runs `deploy:production` must be able to SSH into
+# DEPLOY_HOST — if the EC2 Security Group only allows JumpServer IPs,
+# either co-locate the runner in the same VPC or add the runner's egress
+# IP to the SG.
+# =====================================================================
+
+stages:
+  - build
+  - migrate
+  - deploy
+
+variables:
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  IMAGE_WEB: $CI_REGISTRY_IMAGE/web
+
+# ──────────────────────────────────────────────────────────────────────
+# Build & push the web image to GitLab Container Registry.
+# Only main triggers this — feature branches stay registry-quiet.
+# ──────────────────────────────────────────────────────────────────────
+build:web:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  script:
+    # Bake the public origin into the client JS so the browser doesn't try
+    # to call a stale host (the old prod build shipped Railway URL because
+    # the Dockerfile default was never overridden).
+    - docker build
+        --build-arg NEXT_PUBLIC_APP_URL="$APP_URL"
+        --build-arg NEXT_PUBLIC_DEPLOY_MODE=cloud
+        --build-arg BETTER_AUTH_URL="$APP_URL"
+        -f apps/web/Dockerfile
+        -t "$IMAGE_WEB:$IMAGE_TAG"
+        -t "$IMAGE_WEB:latest"
+        .
+    - docker push "$IMAGE_WEB:$IMAGE_TAG"
+    - docker push "$IMAGE_WEB:latest"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# ──────────────────────────────────────────────────────────────────────
+# Apply DB migrations to production Postgres. Manual so the Postgres
+# host doesn't get rewritten by an accidental push.
+# ──────────────────────────────────────────────────────────────────────
+migrate:production:
+  stage: migrate
+  image: postgres:16-alpine
+  script:
+    # Only the migrations that are safe to re-run; `IF NOT EXISTS` makes
+    # them idempotent. EdgeQuake-specific scripts (01/02) are skipped —
+    # they need the edgequake role and AGE extension.
+    - >
+      for f in
+        db/init/03-init-extensions.sql
+        db/init/04-sayknowmind-init.sql
+        db/init/05-ingestion-jobs.sql
+        db/init/06-privacy-levels.sql
+        db/init/07-better-auth.sql
+        db/init/08-relay-sync.sql
+        db/init/09-sync-ledger.sql
+        db/init/10-integration-tokens.sql
+        db/migrations/038_user_provider_configs.sql ; do
+        echo "Applying: $f" ;
+        psql "$DATABASE_URL" -f "$f" ;
+      done
+    # better-auth rateLimit table — code uses storage="database" but no
+    # migration file ships it. Create here.
+    - psql "$DATABASE_URL" -c
+        'CREATE TABLE IF NOT EXISTS "rateLimit" (
+           id text PRIMARY KEY,
+           key text,
+           count integer DEFAULT 0,
+           "lastRequest" bigint
+         );'
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+
+# ──────────────────────────────────────────────────────────────────────
+# Pull the new image on the host and bounce the docker-compose stack.
+# Assumes the host has /opt/sayknowmind/docker-compose.yml referencing
+# $CI_REGISTRY_IMAGE/web:latest (or :$IMAGE_TAG).
+# ──────────────────────────────────────────────────────────────────────
+deploy:production:
+  stage: deploy
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - echo "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+    - chmod 600 ~/.ssh/id_deploy
+    - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+  script:
+    - |
+      ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=accept-new \
+        "$DEPLOY_USER@$DEPLOY_HOST" bash -s << ENDSSH
+      set -e
+      cd /opt/sayknowmind
+      echo "Logging in to $CI_REGISTRY..."
+      echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+      echo "Pulling $IMAGE_WEB:$IMAGE_TAG..."
+      docker compose pull
+      docker compose up -d --remove-orphans
+      docker image prune -f
+      echo "Deployed $IMAGE_TAG"
+      ENDSSH
+  environment:
+    name: production
+    url: $APP_URL
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual

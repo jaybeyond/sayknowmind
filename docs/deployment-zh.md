@@ -154,4 +154,58 @@ docker compose up -d
 
 ---
 
+## 7. GitLab CI/CD（推荐：自动化部署）
+
+仓库已包含 `.gitlab-ci.yml`，按 `push 到 main → 自动构建 → 手动触发部署` 的流程跑。请在 GitLab 项目里配置好以下内容：
+
+### 7.1 CI/CD 变量（Settings → CI/CD → Variables）
+
+| 变量名 | 类型 | 说明 |
+|---|---|---|
+| `DATABASE_URL` | Variable，Protected，Masked | 生产 Postgres 连接串 `postgres://user:pass@host:5432/sayknowmind` |
+| `APP_URL` | Variable，Protected | `https://sayknowmind.ypai.click` |
+| `BETTER_AUTH_SECRET` | Variable，Masked | 生产环境的 better-auth 密钥 |
+| `DEPLOY_HOST` | Variable，Protected | 生产 EC2 主机名或 IP（例 `43.199.240.206`） |
+| `DEPLOY_USER` | Variable，Protected | SSH 用户（例 `ec2-user`） |
+| `DEPLOY_SSH_KEY` | Variable，Protected，File | PEM 文件全文（不是路径，是文件内容） |
+
+⚠️ **Container Registry 必须先开启**（Settings → General → Visibility → Container registry = Enabled），否则 `$CI_REGISTRY` 没值。
+
+### 7.2 GitLab Runner
+
+`deploy:production` 这个 job 需要 SSH 进生产 EC2。如果 EC2 的安全组只放 JumpServer 的内网 IP：
+- **方案 A（推荐）**：在同一个 VPC 里跑一个 self-hosted GitLab Runner，绑给本项目，runner 自然能内网 SSH 进去。
+- **方案 B**：把 GitLab Runner 的出口 IP 加进 EC2 安全组的 22 入站规则。
+
+### 7.3 生产 EC2 上的 docker-compose
+
+EC2 的 `/opt/sayknowmind/docker-compose.yml` 应该指向 GitLab Container Registry：
+
+```yaml
+services:
+  web:
+    image: registry.gitlab.ai-ops.click/devops/sayknowmind/web:latest
+    restart: always
+    ports: ["3000:3000"]
+    env_file: /opt/sayknowmind/.env
+```
+
+`/opt/sayknowmind/.env` 内容参照本文 §1，但**不要把 NEXT_PUBLIC_* 放在 runtime env file 里** —— 那些已经在 docker build 时 baked 进 client JS。把它们留在 GitLab CI 变量里就够了。
+
+### 7.4 触发部署的流程
+
+```text
+push 到 main
+  ↓
+build:web 自动跑 → 推 web:$SHORT_SHA 和 web:latest 到 registry
+  ↓
+migrate:production（手动）→ 在 GitLab UI 里点 Run，先跑 DB migration
+  ↓
+deploy:production（手动）→ 确认 migration ok 后，点 Run 拉 latest 重启
+```
+
+之所以两个 stage 都设成 `when: manual`，是怕生产 DB 被一次错误的 push 改写——开发同事确认改动安全后再点。
+
+---
+
 如有疑问联系开发同事。

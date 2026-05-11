@@ -14,11 +14,15 @@ RUN pnpm install --frozen-lockfile
 FROM base AS builder
 WORKDIR /app
 
-# Build-time args — NEXT_PUBLIC_* must be available during next build
-ARG NEXT_PUBLIC_APP_URL=https://sayknowmind-production.up.railway.app
+# Build-time args — NEXT_PUBLIC_* are baked into client JS at build time, so
+# whatever value is set HERE is what every browser will see. CI must pass
+# --build-arg NEXT_PUBLIC_APP_URL=https://<your-host> for production builds;
+# the defaults track the current production domain so an ad-hoc `docker build`
+# without args doesn't silently ship a stale URL.
+ARG NEXT_PUBLIC_APP_URL=https://sayknowmind.ypai.click
 ARG NEXT_PUBLIC_DEPLOY_MODE=cloud
 ARG BETTER_AUTH_SECRET=build-time-placeholder
-ARG BETTER_AUTH_URL=https://sayknowmind-production.up.railway.app
+ARG BETTER_AUTH_URL=https://sayknowmind.ypai.click
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_DEPLOY_MODE=$NEXT_PUBLIC_DEPLOY_MODE
 ENV BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
