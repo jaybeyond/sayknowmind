@@ -17,8 +17,11 @@ use tauri::{
     Manager, Runtime,
 };
 
+// Command/Stdio are used by both full (server spawn) and lite (codex login
+// spawn) — keep them outside the feature gate. Child is full-only.
+use std::process::{Command, Stdio};
 #[cfg(feature = "full")]
-use std::process::{Command, Child, Stdio};
+use std::process::Child;
 
 const SERVER_PORT: u16 = 3457;
 const REMOTE_URL: &str = "https://sayknowmind.ypai.click";
