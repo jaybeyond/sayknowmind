@@ -6,6 +6,7 @@ import * as path from 'path';
 import { ZaiService } from './zai.service';
 import { CloudflareService } from './cloudflare.service';
 import { OpenRouterService, OPENROUTER_MODELS, OPENROUTER_VISION_MODELS } from './openrouter.service';
+import { OpenAIService, OPENAI_MODELS, OPENAI_VISION_MODELS } from './openai.service';
 import { UpstageService } from './upstage.service';
 import { NvidiaService, NVIDIA_MODELS } from './nvidia.service';
 import { VeniceService, VENICE_MODELS } from './venice.service';
@@ -46,6 +47,7 @@ export class AIRouterService implements OnModuleInit {
   private useZai: boolean = true;
   private useCloudflare: boolean = true;
   private useOpenRouter: boolean = true;
+  private useOpenAI: boolean = true;
   private useUpstage: boolean = true;
   private useNvidia: boolean = true;
   private useVenice: boolean = true;
@@ -59,6 +61,7 @@ export class AIRouterService implements OnModuleInit {
     @Inject(forwardRef(() => ZaiService)) private readonly zaiService: ZaiService,
     @Inject(forwardRef(() => CloudflareService)) private readonly cloudflareService: CloudflareService,
     @Inject(forwardRef(() => OpenRouterService)) private readonly openRouterService: OpenRouterService,
+    @Inject(forwardRef(() => OpenAIService)) private readonly openAIService: OpenAIService,
     @Inject(forwardRef(() => UpstageService)) private readonly upstageService: UpstageService,
     @Inject(forwardRef(() => NvidiaService)) private readonly nvidiaService: NvidiaService,
     @Inject(forwardRef(() => VeniceService)) private readonly veniceService: VeniceService,
@@ -67,12 +70,14 @@ export class AIRouterService implements OnModuleInit {
     this.useZai = this.configService.get('USE_ZAI', 'true') === 'true';
     this.useCloudflare = this.configService.get('USE_CLOUDFLARE', 'true') === 'true';
     this.useOpenRouter = this.configService.get('USE_OPENROUTER', 'true') === 'true';
+    this.useOpenAI = this.configService.get('USE_OPENAI', 'true') === 'true';
     this.useUpstage = this.configService.get('USE_UPSTAGE', 'true') === 'true';
     this.useNvidia = this.configService.get('USE_NVIDIA', 'true') === 'true';
     this.useVenice = this.configService.get('USE_VENICE', 'false') === 'true';
     this.useGrok = this.configService.get('USE_GROK', 'false') === 'true';
     
     this.logger.log(`🤖 AI Router initialized with new cascade structure`);
+    this.logger.log(`   - OpenAI: ${this.useOpenAI ? '✅' : '❌'}`);
     this.logger.log(`   - OpenRouter: ${this.useOpenRouter ? '✅' : '❌'}`);
     this.logger.log(`   - Grok (xAI): ${this.useGrok ? '✅' : '❌'}`);
     this.logger.log(`   - Venice AI (uncensored fallback): ${this.useVenice ? '✅' : '❌'}`);
@@ -126,6 +131,10 @@ export class AIRouterService implements OnModuleInit {
   getModelCatalog() {
     const catalog: Array<{ type: string; model: string; name: string; free: boolean }> = [];
 
+    // OpenAI models (always paid — never tagged free)
+    for (const [key, model] of Object.entries(OPENAI_MODELS)) {
+      catalog.push({ type: 'openai', model: model as string, name: key, free: false });
+    }
     // OpenRouter models
     for (const [key, model] of Object.entries(OPENROUTER_MODELS)) {
       const isFree = (model as string).includes(':free');
@@ -253,6 +262,8 @@ export class AIRouterService implements OnModuleInit {
 
   private getDefaultProCascade() {
     return [
+      // 0th: OpenAI (member-supplied key) — quality-first priority
+      { type: 'openai', model: OPENAI_MODELS.GPT_4O, name: 'GPT-4o (member key)' },
       // 1st: OpenRouter free uncensored (Venice provider)
       { type: 'openrouter', model: OPENROUTER_MODELS.DOLPHIN_VENICE, name: 'Dolphin Venice Edition' },
       { type: 'openrouter', model: OPENROUTER_MODELS.HERMES_405B, name: 'Hermes 3 405B' },
@@ -275,6 +286,8 @@ export class AIRouterService implements OnModuleInit {
 
   private getDefaultFlashCascade() {
     return [
+      // 0th: OpenAI (member-supplied key) — cheapest tier, fastest
+      { type: 'openai', model: OPENAI_MODELS.GPT_4O_MINI, name: 'GPT-4o mini (member key)' },
       { type: 'openrouter', model: OPENROUTER_MODELS.STEP_35_FLASH, name: 'Step 3.5 Flash' },
       { type: 'cloudflare', model: 'llama-3.1-70b', name: 'Cloudflare Llama 3.1 70B' },
       { type: 'openrouter', model: OPENROUTER_MODELS.QWEN3_NEXT_80B, name: 'Qwen3 Next 80B' },
@@ -332,14 +345,27 @@ export class AIRouterService implements OnModuleInit {
         this.logger.warn(`⚠️ OpenRouter not available, skipping ${name}`);
         return null;
       }
-      
+
       this.logger.log(`🌐 Trying ${name} (OpenRouter)`);
       const result = await this.openRouterService.chat(messages, model);
       const elapsed = Date.now() - startTime;
       this.logger.log(`✅ ${name} responded in ${elapsed}ms`);
       return result;
     }
-    
+
+    if (type === 'openai') {
+      if (!this.useOpenAI || !this.openAIService.isReady()) {
+        this.logger.warn(`⚠️ OpenAI not available (no member key), skipping ${name}`);
+        return null;
+      }
+
+      this.logger.log(`🤖 Trying ${name} (OpenAI)`);
+      const result = await this.openAIService.chat(messages, model);
+      const elapsed = Date.now() - startTime;
+      this.logger.log(`✅ ${name} responded in ${elapsed}ms`);
+      return result;
+    }
+
     if (type === 'zai') {
       if (!this.useZai || !this.zaiService.isReady()) {
         this.logger.warn(`⚠️ Z.AI not available, skipping ${name}`);
@@ -460,16 +486,25 @@ export class AIRouterService implements OnModuleInit {
       if (!this.useOpenRouter || !this.openRouterService.isReady()) {
         return null;
       }
-      
+
       this.logger.log(`🌐 Trying ${name} stream (OpenRouter)`);
       return this.openRouterService.chatStream(messages, model);
     }
-    
+
+    if (type === 'openai') {
+      if (!this.useOpenAI || !this.openAIService.isReady()) {
+        return null;
+      }
+
+      this.logger.log(`🤖 Trying ${name} stream (OpenAI)`);
+      return this.openAIService.chatStream(messages, model);
+    }
+
     if (type === 'zai') {
       if (!this.useZai || !this.zaiService.isReady()) {
         return null;
       }
-      
+
       this.logger.log(`🤖 Trying ${name} stream (Z.AI)`);
       return this.zaiService.chatStream(messages, model);
     }
@@ -654,19 +689,30 @@ export class AIRouterService implements OnModuleInit {
   async chatVisionStream(
     messages: Array<{ role: string; content: any }>,
   ): Promise<{ emitter: EventEmitter; modelUsed: string }> {
-    if (!this.useOpenRouter || !this.openRouterService.isReady()) {
-      throw new Error('OpenRouter not available for vision');
+    const openAIReady = this.useOpenAI && this.openAIService.isReady();
+    const openRouterReady = this.useOpenRouter && this.openRouterService.isReady();
+
+    if (!openAIReady && !openRouterReady) {
+      throw new Error('No vision-capable provider available (OpenAI or OpenRouter)');
     }
 
-    const visionCascade = [
-      { model: OPENROUTER_VISION_MODELS.QWEN_VL_72B, name: 'Qwen2.5-VL 72B' },
-      { model: OPENROUTER_VISION_MODELS.LLAMA_VISION_11B, name: 'Llama 3.2 Vision 11B' },
-    ];
+    // OpenAI GPT-4o is the priority for members with their own key; fall back
+    // to OpenRouter free vision models if it fails or the user has no key.
+    const visionCascade: Array<{ type: 'openai' | 'openrouter'; model: string; name: string }> = [];
+    if (openAIReady) {
+      visionCascade.push({ type: 'openai', model: OPENAI_VISION_MODELS.GPT_4O, name: 'GPT-4o vision (member key)' });
+    }
+    if (openRouterReady) {
+      visionCascade.push({ type: 'openrouter', model: OPENROUTER_VISION_MODELS.QWEN_VL_72B, name: 'Qwen2.5-VL 72B' });
+      visionCascade.push({ type: 'openrouter', model: OPENROUTER_VISION_MODELS.LLAMA_VISION_11B, name: 'Llama 3.2 Vision 11B' });
+    }
 
     for (const item of visionCascade) {
       try {
         this.logger.log(`🖼️ Trying vision model: ${item.name}`);
-        const result = await this.openRouterService.chatVisionStream(messages, item.model);
+        const result = item.type === 'openai'
+          ? await this.openAIService.chatVisionStream(messages, item.model)
+          : await this.openRouterService.chatVisionStream(messages, item.model);
         return result;
       } catch (error) {
         this.logger.warn(`⚠️ Vision model ${item.name} failed: ${error.message}`);
@@ -682,6 +728,7 @@ export class AIRouterService implements OnModuleInit {
    */
   updateProviderKeys(keys: Record<string, string>) {
     if (keys.openrouter) this.openRouterService.updateApiKey(keys.openrouter);
+    if (keys.openai) this.openAIService.updateApiKey(keys.openai);
     if (keys.grok) this.grokService.updateApiKey(keys.grok);
     if (keys.zai) this.zaiService.updateApiKey(keys.zai);
     if (keys.venice) this.veniceService.updateApiKey(keys.venice);
@@ -692,7 +739,8 @@ export class AIRouterService implements OnModuleInit {
   }
 
   isReady(): boolean {
-    return (this.useOpenRouter && this.openRouterService.isReady()) ||
+    return (this.useOpenAI && this.openAIService.isReady()) ||
+           (this.useOpenRouter && this.openRouterService.isReady()) ||
            (this.useGrok && this.grokService.isReady()) ||
            (this.useVenice && this.veniceService.isReady()) ||
            (this.useZai && this.zaiService.isReady()) ||
@@ -701,6 +749,9 @@ export class AIRouterService implements OnModuleInit {
 
   getAvailableModels(): string[] {
     const models: string[] = [];
+    if (this.useOpenAI && this.openAIService.isReady()) {
+      models.push('openai:gpt-4o-mini', 'openai:gpt-4o', 'openai:gpt-4.1-mini');
+    }
     if (this.useOpenRouter && this.openRouterService.isReady()) {
       models.push('openrouter:solar-pro-3', 'openrouter:step-3.5-flash', 'openrouter:qwen3-next-80b');
     }

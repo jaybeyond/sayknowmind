@@ -4,6 +4,7 @@ import { AIRouterService } from './ai-router.service';
 import { ZaiService } from './zai.service';
 import { CloudflareService } from './cloudflare.service';
 import { OpenRouterService } from './openrouter.service';
+import { OpenAIService } from './openai.service';
 import { UpstageService } from './upstage.service';
 import { NvidiaService } from './nvidia.service';
 import { VeniceService } from './venice.service';
@@ -16,7 +17,7 @@ import { IntelligenceModule } from '../intelligence/intelligence.module';
 @Module({
   imports: [OCRModule, SearchModule, IntelligenceModule],
   controllers: [AIController],
-  providers: [AIRouterService, ZaiService, CloudflareService, OpenRouterService, UpstageService, NvidiaService, VeniceService, GrokService, PromptManagerService],
-  exports: [AIRouterService, ZaiService, CloudflareService, OpenRouterService, UpstageService, NvidiaService, VeniceService, GrokService, PromptManagerService],
+  providers: [AIRouterService, ZaiService, CloudflareService, OpenRouterService, OpenAIService, UpstageService, NvidiaService, VeniceService, GrokService, PromptManagerService],
+  exports: [AIRouterService, ZaiService, CloudflareService, OpenRouterService, OpenAIService, UpstageService, NvidiaService, VeniceService, GrokService, PromptManagerService],
 })
 export class AIModule {}
