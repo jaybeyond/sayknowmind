@@ -7,7 +7,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { vector } from "@electric-sql/pglite/vector";
 import { join } from "path";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, mkdirSync } from "fs";
 
 // Store data in user's app data directory
 function getDataDir(): string {
@@ -28,6 +28,10 @@ async function getInstance(): Promise<PGlite> {
   if (pgliteInstance) return pgliteInstance;
 
   const dataDir = getDataDir();
+  // PGlite doesn't recurse-create its parent dir, so on a clean install the
+  // ~/Library/Application Support/com.sayknowmind.desktop folder is missing
+  // and the first query 500s with ENOENT. Ensure the tree exists.
+  mkdirSync(dataDir, { recursive: true });
   console.log(`[pglite] Data directory: ${dataDir}`);
 
   pgliteInstance = new PGlite(dataDir, {

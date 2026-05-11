@@ -287,16 +287,32 @@ fn start_server(state: &ServerState) {
 
     let server_js = standalone_dir.join("server.js");
 
+    // Database: prefer a user-supplied DATABASE_URL (override file in the
+    // data dir), otherwise fall back to embedded PGlite so the app is
+    // self-contained on first launch. We pass an empty DATABASE_URL when
+    // PGlite is active so `pg` never tries to grab a stray local server.
+    let db_url = read_config(&data_dir, "database-url", "");
+    let use_pglite = db_url.is_empty();
+    let bind_origin = format!("http://127.0.0.1:{}", SERVER_PORT);
+
     match Command::new(&node_bin)
         .arg(server_js.to_string_lossy().as_ref())
         .env("NODE_ENV", "production")
         .env("PORT", &SERVER_PORT.to_string())
         .env("HOSTNAME", "127.0.0.1")
-        .env("DATABASE_URL", &read_config(&data_dir, "database-url", ""))
+        .env("PGLITE_MODE", if use_pglite { "true" } else { "false" })
+        .env("DATABASE_URL", &db_url)
         .env("BETTER_AUTH_SECRET", &secret)
-        .env("BETTER_AUTH_URL", &format!("http://127.0.0.1:{}", SERVER_PORT))
-        .env("NEXT_PUBLIC_APP_URL", &format!("http://127.0.0.1:{}", SERVER_PORT))
+        .env("BETTER_AUTH_URL", &bind_origin)
+        .env("NEXT_PUBLIC_APP_URL", &bind_origin)
         .env("NEXT_PUBLIC_DEPLOY_MODE", "desktop")
+        // better-auth blocks sign-in from origins not in TRUSTED_ORIGINS;
+        // the bundled server only ever sees the local Tauri webview hitting
+        // 127.0.0.1, so trust both 127.0.0.1 and localhost on this port.
+        .env(
+            "TRUSTED_ORIGINS",
+            format!("http://127.0.0.1:{0},http://localhost:{0}", SERVER_PORT),
+        )
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
