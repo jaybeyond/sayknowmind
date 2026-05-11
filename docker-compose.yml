@@ -7,7 +7,11 @@ services:
       context: ./docker
       dockerfile: Dockerfile.postgres
     container_name: sayknowmind-postgres
-    # ports: — internal only, access via Docker network
+    # Host port mapping is opt-in via POSTGRES_PORT in .env. Leave unset
+    # in production (services reach Postgres via the Docker network);
+    # set e.g. 5433 in dev so the host's `pnpm dev` can connect.
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: sayknowmind
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -23,6 +27,7 @@ services:
       - ./db/init/06-privacy-levels.sql:/docker-entrypoint-initdb.d/06-privacy-levels.sql
       - ./db/init/08-relay-sync.sql:/docker-entrypoint-initdb.d/08-relay-sync.sql
       - ./db/init/09-sync-ledger.sql:/docker-entrypoint-initdb.d/09-sync-ledger.sql
+      - ./db/init/10-integration-tokens.sql:/docker-entrypoint-initdb.d/10-integration-tokens.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
