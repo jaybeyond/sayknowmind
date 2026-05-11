@@ -1,0 +1,90 @@
+/**
+ * GET    /api/integrations/codex/status   — { ready, active }
+ * POST   /api/integrations/codex/status   — activate Codex for the member (404 if not ready)
+ * DELETE /api/integrations/codex/status   — deactivate
+ *
+ * "ready" reflects the local machine's Codex login (~/.codex/auth.json
+ * present). Only meaningful in the desktop / Tauri sidecar build.
+ *
+ * "active" reflects the member's choice — we mirror it into the existing
+ * `user_provider_configs` table (provider_id='codex') so downstream code
+ * that already keys off that table (usage-limit, ai cascade) sees Codex
+ * the same way it sees other providers.
+ *
+ * The placeholder we store in encrypted_api_key is irrelevant — Codex
+ * does not use an API key. We use it only to satisfy the NOT NULL column.
+ */
+
+import { NextResponse } from "next/server";
+import { pool } from "@/lib/db";
+import { encryptForUser } from "@/lib/encryption";
+import { getSession } from "@/lib/admin";
+import { isCodexReady, invalidateCodexReadyCache } from "@/lib/codex";
+
+const PROVIDER_ID = "codex";
+const PLACEHOLDER_PLAINTEXT = "codex-oauth";
+// We pin a known model id so the catalog has something to render — Codex
+// CLI ignores this and uses whatever the ChatGPT subscription provides.
+const PINNED_MODEL = "codex-default";
+// Symbolic base URL — Codex CLI handles the real endpoint internally.
+const PINNED_BASE_URL = "https://auth.openai.com";
+
+async function isCodexActiveForUser(userId: string): Promise<boolean> {
+  const result = await pool.query(
+    `SELECT is_active FROM user_provider_configs
+     WHERE user_id = $1 AND provider_id = $2`,
+    [userId, PROVIDER_ID],
+  );
+  return result.rows[0]?.is_active === true;
+}
+
+export async function GET() {
+  const session = await getSession();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  invalidateCodexReadyCache();
+  const ready = isCodexReady();
+  const active = await isCodexActiveForUser(session.user.id);
+  return NextResponse.json({ ready, active });
+}
+
+export async function POST() {
+  const session = await getSession();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  invalidateCodexReadyCache();
+  if (!isCodexReady()) {
+    return NextResponse.json(
+      { error: "Codex not authenticated on this machine — run `codex login` first." },
+      { status: 412 },
+    );
+  }
+
+  const encrypted = encryptForUser(session.user.id, PLACEHOLDER_PLAINTEXT);
+  await pool.query(
+    `INSERT INTO user_provider_configs
+       (user_id, provider_id, encrypted_api_key, model, base_url, is_active, extra_fields)
+     VALUES ($1, $2, $3, $4, $5, true, '{}'::jsonb)
+     ON CONFLICT (user_id, provider_id)
+     DO UPDATE SET is_active = true, updated_at = NOW()`,
+    [session.user.id, PROVIDER_ID, encrypted, PINNED_MODEL, PINNED_BASE_URL],
+  );
+  return NextResponse.json({ ready: true, active: true });
+}
+
+export async function DELETE() {
+  const session = await getSession();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Soft-deactivate: keep the row so we don't lose history, just flip the flag.
+  await pool.query(
+    `UPDATE user_provider_configs SET is_active = false, updated_at = NOW()
+     WHERE user_id = $1 AND provider_id = $2`,
+    [session.user.id, PROVIDER_ID],
+  );
+  invalidateCodexReadyCache();
+  return NextResponse.json({ ready: isCodexReady(), active: false });
+}
