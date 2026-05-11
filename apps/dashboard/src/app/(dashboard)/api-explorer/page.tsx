@@ -1,3 +1,4 @@
+'use client';
 import { PageSkeleton } from '@/components/shared/page-skeleton';
 import dynamic from 'next/dynamic';
 

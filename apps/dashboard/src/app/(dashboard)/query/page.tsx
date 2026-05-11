@@ -1,3 +1,4 @@
+'use client';
 /**
  * @module QueryPage
  * @description RAG query interface page route.

@@ -14,8 +14,8 @@
 # Use TARGETPLATFORM so QEMU/BuildKit handles cross-compilation transparently.
 # For native builds this is a no-op; for multi-platform buildx this enables
 # correct arch-native pdfium download inside pdfium-auto.
-ARG TARGETPLATFORM
-ARG BUILDPLATFORM
+ARG TARGETPLATFORM=linux/amd64
+ARG BUILDPLATFORM=linux/amd64
 FROM --platform=${TARGETPLATFORM} rust:bookworm AS builder
 
 WORKDIR /app

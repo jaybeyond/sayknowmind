@@ -87,3 +87,8 @@ docs/*
 !docs/intro/
 !docs/weekly-report-*.md
 !docs/deployment-*.md
+
+# Backups created during debugging
+*.bak
+db/init/*.bak
+docker-compose.yml.bak

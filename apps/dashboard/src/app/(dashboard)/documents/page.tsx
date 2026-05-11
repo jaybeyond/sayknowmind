@@ -1,3 +1,4 @@
+'use client';
 /**
  * @module DocumentsPage
  * @description Document ingestion and management page route.

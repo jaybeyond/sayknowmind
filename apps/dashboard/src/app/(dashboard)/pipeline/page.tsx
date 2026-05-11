@@ -1,3 +1,4 @@
+'use client';
 /**
  * @module PipelinePage
  * @description Dedicated page for monitoring document ingestion pipeline.

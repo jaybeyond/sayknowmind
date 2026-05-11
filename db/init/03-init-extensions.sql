@@ -4,7 +4,15 @@
 
 -- CRITICAL: Set the default search_path for the edgequake user to public ONLY
 -- This prevents SQLx from creating _sqlx_migrations in a user-specific schema
-ALTER USER edgequake SET search_path TO public;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edgequake') THEN
+        EXECUTE 'ALTER USER edgequake SET search_path TO public';
+    ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN
+        EXECUTE 'ALTER USER app_user SET search_path TO public';
+        RAISE NOTICE 'edgequake role missing - applied search_path to app_user instead';
+    END IF;
+END $$;
 
 -- UUID generation
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
