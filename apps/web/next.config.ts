@@ -39,11 +39,14 @@ const nextConfig: NextConfig = {
           key: "Content-Security-Policy",
           value: [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+            // Cloudflare-fronted deployments auto-inject the Insights beacon;
+            // allow it (and the matching connect-src below) so the script tag
+            // doesn't trip CSP and bury the real console errors.
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://static.cloudflareinsights.com",
             "style-src 'self' 'unsafe-inline' https://api.fontshare.com",
             "img-src 'self' data: https://api.dicebear.com https://www.google.com https:",
             "font-src 'self' https://cdn.fontshare.com",
-            `connect-src 'self' http://127.0.0.1:* http://localhost:* ${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"} ${process.env.NEXT_PUBLIC_EDGEQUAKE_URL ?? ""} ${process.env.NEXT_PUBLIC_AI_SERVER_URL ?? ""}`.trim(),
+            `connect-src 'self' http://127.0.0.1:* http://localhost:* https://cloudflareinsights.com ${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"} ${process.env.NEXT_PUBLIC_EDGEQUAKE_URL ?? ""} ${process.env.NEXT_PUBLIC_AI_SERVER_URL ?? ""}`.trim(),
             "frame-src 'self' https://www.instagram.com https://www.youtube.com https://www.tiktok.com https://player.vimeo.com",
             "frame-ancestors 'none'",
           ].join("; "),
