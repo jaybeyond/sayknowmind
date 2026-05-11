@@ -25,7 +25,7 @@ export function SettingsPage() {
 
   const tabs = useMemo(() => {
     // Local runtime tab: shown on self-hosted web and full desktop builds.
-    // Hidden on lite desktop (remote webview to mind.sayknow.ai — no local runtime)
+    // Hidden on lite desktop (remote webview to sayknowmind.ypai.click — no local runtime)
     // and on cloud browser (no Tauri shell to manage local processes).
     const showLocalTab = !cloud || (desktop && desktopMode === "full");
     const all: { id: TabId; label: string }[] = [

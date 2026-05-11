@@ -12,7 +12,7 @@
     "macOSPrivateApi": true,
     "windows": [],
     "security": {
-      "csp": "default-src 'self' http://localhost:3457 https://mind.sayknow.ai; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3457 https://mind.sayknow.ai; style-src 'self' 'unsafe-inline' http://localhost:3457 https://mind.sayknow.ai; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http://localhost:3457 http://127.0.0.1:3458 http://localhost:11434 https://mind.sayknow.ai wss://mind.sayknow.ai ws://localhost:*; font-src 'self' data: http://localhost:3457 https://mind.sayknow.ai; frame-src 'self' https://www.instagram.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.tiktok.com"
+      "csp": "default-src 'self' http://localhost:3457 https://sayknowmind.ypai.click; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3457 https://sayknowmind.ypai.click; style-src 'self' 'unsafe-inline' http://localhost:3457 https://sayknowmind.ypai.click; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http://localhost:3457 http://127.0.0.1:3458 http://localhost:11434 https://sayknowmind.ypai.click wss://sayknowmind.ypai.click ws://localhost:*; font-src 'self' data: http://localhost:3457 https://sayknowmind.ypai.click; frame-src 'self' https://www.instagram.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.tiktok.com"
     }
   },
   "bundle": {

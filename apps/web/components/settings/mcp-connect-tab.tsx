@@ -24,11 +24,11 @@ export function McpConnectTab() {
 
   const serverUrl = typeof window !== "undefined"
     ? `${window.location.origin}/mcp`
-    : "https://mind.sayknow.ai/mcp";
+    : "https://sayknowmind.ypai.click/mcp";
 
   const baseUrl = typeof window !== "undefined"
     ? window.location.origin
-    : "https://mind.sayknow.ai";
+    : "https://sayknowmind.ypai.click";
 
   const generateApiKey = useCallback(async () => {
     setGenerating(true);

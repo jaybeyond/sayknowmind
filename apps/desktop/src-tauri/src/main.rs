@@ -1,7 +1,7 @@
 // SayknowMind Desktop Application
 // Build modes:
 //   full (default) — Bundled Node.js + Next.js standalone server (offline)
-//   lite           — Remote webview to https://mind.sayknow.ai (lightweight)
+//   lite           — Remote webview to https://sayknowmind.ypai.click (lightweight)
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -21,7 +21,8 @@ use tauri::{
 use std::process::{Command, Child, Stdio};
 
 const SERVER_PORT: u16 = 3457;
-const REMOTE_URL: &str = "https://mind.sayknow.ai";
+const REMOTE_URL: &str = "https://sayknowmind.ypai.click";
+const REMOTE_HOST: &str = "sayknowmind.ypai.click";
 
 // ---------------------------------------------------------------------------
 // State
@@ -122,11 +123,18 @@ fn is_offline() -> bool {
     if cfg!(feature = "full") {
         !port_open(SERVER_PORT)
     } else {
-        // Lite: check if remote is reachable
-        std::net::TcpStream::connect_timeout(
-            &"mind.sayknow.ai:443".parse().unwrap(),
-            Duration::from_secs(3),
-        ).is_err()
+        // Lite: check if remote is reachable. `parse::<SocketAddr>()` rejects
+        // hostnames, so resolve via to_socket_addrs() first.
+        use std::net::ToSocketAddrs;
+        let reachable = format!("{}:443", REMOTE_HOST)
+            .to_socket_addrs()
+            .ok()
+            .and_then(|mut it| it.next())
+            .and_then(|addr| {
+                std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(3)).ok()
+            })
+            .is_some();
+        !reachable
     }
 }
 
@@ -517,7 +525,7 @@ fn is_allowed_navigation(url: &tauri::Url) -> bool {
     let host = url.host_str().unwrap_or("");
     host == "localhost"
         || host == "127.0.0.1"
-        || host == "mind.sayknow.ai"
+        || host == REMOTE_HOST
         || url.scheme() == "tauri"
         || url.scheme() == "ipc"
 }
