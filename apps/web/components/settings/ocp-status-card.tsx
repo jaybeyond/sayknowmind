@@ -9,6 +9,32 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Sparkles, CheckCircle2, RefreshCw, ExternalLink, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Lite-build readiness probe: in lite mode the Next.js server lives in the
+ * cloud, so the /api status route can't actually see localhost:3456. Prefer
+ * the Tauri `ocp_status` invoke command when available — it runs on the
+ * user's machine.
+ */
+async function fetchOcpReady(): Promise<boolean> {
+  const w = typeof window !== "undefined"
+    ? (window as unknown as {
+        __TAURI_INTERNALS__?: { invoke?: (cmd: string) => Promise<unknown> };
+      })
+    : null;
+  if (w?.__TAURI_INTERNALS__?.invoke) {
+    try {
+      const result = (await w.__TAURI_INTERNALS__.invoke("ocp_status")) as { ready: boolean };
+      return Boolean(result?.ready);
+    } catch {
+      /* fall through */
+    }
+  }
+  const res = await fetch("/api/integrations/ocp/status");
+  if (!res.ok) return false;
+  const data = await res.json();
+  return Boolean(data.ready);
+}
+
 type InstallStep = "idle" | "cloning" | "installing" | "configuring" | "starting" | "done" | "failed";
 
 const STEP_LABEL: Record<InstallStep, string> = {
@@ -34,15 +60,17 @@ export function OcpStatusCard() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/integrations/ocp/status");
-      if (!res.ok) {
-        setReady(false);
+      const [localReady, apiRes] = await Promise.all([
+        fetchOcpReady(),
+        fetch("/api/integrations/ocp/status").catch(() => null),
+      ]);
+      setReady(localReady);
+      if (apiRes?.ok) {
+        const data = await apiRes.json();
+        setActive(Boolean(data.active));
+      } else {
         setActive(false);
-        return;
       }
-      const data = await res.json();
-      setReady(Boolean(data.ready));
-      setActive(Boolean(data.active));
     } catch {
       setReady(false);
       setActive(false);

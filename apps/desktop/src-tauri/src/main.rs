@@ -149,6 +149,61 @@ fn save_offline_cache(data: serde_json::Value) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// Subscription-provider status (read-only, available in both full and lite)
+//
+// These let the webview ask the Tauri host whether the user's local machine
+// has Codex / OCP credentials, regardless of where the Next.js server lives.
+// In lite builds the server is on a cloud host and can't see ~/.codex or
+// localhost:3456 — these commands close that gap.
+// ---------------------------------------------------------------------------
+
+#[derive(serde::Serialize)]
+struct CodexStatus {
+    ready: bool,
+}
+
+#[tauri::command]
+fn codex_status() -> CodexStatus {
+    // Codex CLI stores OAuth tokens at $HOME/.codex/auth.json (or in the OS
+    // keyring; we only detect the file form here — keyring-only logins look
+    // un-ready and the user can still trigger codex login from the card).
+    let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    let auth_path = home.join(".codex").join("auth.json");
+    CodexStatus { ready: auth_path.exists() }
+}
+
+#[derive(serde::Serialize)]
+struct OcpStatus {
+    ready: bool,
+    healthy: bool,
+    has_admin_key: bool,
+}
+
+#[tauri::command]
+fn ocp_status() -> OcpStatus {
+    let home = dirs_next::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    let admin_key_path = home.join(".ocp").join("admin-key");
+    let has_admin_key = admin_key_path.exists();
+
+    // We only need to know whether the proxy is up — health endpoint is
+    // public and fast. Short timeout so the settings page doesn't hang
+    // when OCP is not installed.
+    let healthy = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_millis(1500))
+        .build()
+        .ok()
+        .and_then(|c| c.get("http://127.0.0.1:3456/health").send().ok())
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
+    OcpStatus {
+        ready: has_admin_key && healthy,
+        healthy,
+        has_admin_key,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -498,6 +553,8 @@ fn main() {
             is_offline,
             get_offline_cache,
             save_offline_cache,
+            codex_status,
+            ocp_status,
         ]);
 
     builder = builder.setup(|app| {

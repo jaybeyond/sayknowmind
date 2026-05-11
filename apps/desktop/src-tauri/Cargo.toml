@@ -20,3 +20,7 @@ tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs-next = "2"
+# Used by codex_status / ocp_status invoke commands to ping the local
+# OCP proxy. Blocking client keeps the command handlers simple and
+# avoids a tokio runtime hop for one short request.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }

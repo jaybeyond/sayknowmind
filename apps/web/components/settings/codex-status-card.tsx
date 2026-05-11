@@ -14,6 +14,37 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Bot, CheckCircle2, RefreshCw, ExternalLink, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Read Codex readiness from the local machine.
+ *
+ * In a full desktop build the Next.js server IS the local machine, so the
+ * /api/integrations/codex/status route can answer truthfully. In lite the
+ * server lives in the cloud and would always say `ready: false`, so we
+ * prefer the Tauri `codex_status` invoke command when the runtime exposes
+ * it. We fall back to the API for plain browser dev.
+ */
+async function fetchCodexReady(): Promise<boolean> {
+  // Tauri's JS bridge: window.__TAURI_INTERNALS__.invoke exists in any
+  // build (full or lite). Detect at call time so SSR doesn't trip up.
+  const w = typeof window !== "undefined"
+    ? (window as unknown as {
+        __TAURI_INTERNALS__?: { invoke?: (cmd: string) => Promise<unknown> };
+      })
+    : null;
+  if (w?.__TAURI_INTERNALS__?.invoke) {
+    try {
+      const result = (await w.__TAURI_INTERNALS__.invoke("codex_status")) as { ready: boolean };
+      return Boolean(result?.ready);
+    } catch {
+      // Fall through to API — the command might not be registered in older builds.
+    }
+  }
+  const res = await fetch("/api/integrations/codex/status");
+  if (!res.ok) return false;
+  const data = await res.json();
+  return Boolean(data.ready);
+}
+
 export function CodexStatusCard() {
   const [ready, setReady] = useState<boolean | null>(null);
   const [active, setActive] = useState<boolean | null>(null);
@@ -26,15 +57,20 @@ export function CodexStatusCard() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/integrations/codex/status");
-      if (!res.ok) {
-        setReady(false);
+      // `ready` from the local machine (Tauri-aware), `active` from the
+      // cloud/server-side DB (user_provider_configs). We still hit the
+      // API for the active flag because that's where it's persisted.
+      const [localReady, apiRes] = await Promise.all([
+        fetchCodexReady(),
+        fetch("/api/integrations/codex/status").catch(() => null),
+      ]);
+      setReady(localReady);
+      if (apiRes?.ok) {
+        const data = await apiRes.json();
+        setActive(Boolean(data.active));
+      } else {
         setActive(false);
-        return;
       }
-      const data = await res.json();
-      setReady(Boolean(data.ready));
-      setActive(Boolean(data.active));
     } catch {
       setReady(false);
       setActive(false);
@@ -90,13 +126,18 @@ export function CodexStatusCard() {
       const start = Date.now();
       pollTimer.current = setInterval(async () => {
         try {
-          const s = await fetch("/api/integrations/codex/status");
-          const sd = await s.json();
-          if (sd.ready) {
+          const localReady = await fetchCodexReady();
+          if (localReady) {
             if (pollTimer.current) clearInterval(pollTimer.current);
             pollTimer.current = null;
             setReady(true);
-            setActive(Boolean(sd.active));
+            // Pick up the cloud active flag for completeness; failure here
+            // doesn't matter because the next refresh will repair state.
+            try {
+              const s = await fetch("/api/integrations/codex/status");
+              const sd = await s.json();
+              setActive(Boolean(sd.active));
+            } catch { /* ignore */ }
             setLoggingIn(false);
           } else if (Date.now() - start > 5 * 60 * 1000) {
             // 5-minute giveup; user can retry from the button.

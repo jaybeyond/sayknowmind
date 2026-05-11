@@ -588,12 +588,13 @@ export function AITab() {
 
   return (
     <div className="space-y-8">
-      {/* Subscription-based providers (Codex / OCP) only make sense when the
-          Next.js server runs on the user's own machine — i.e. the Tauri full
-          build with the bundled sidecar. In lite mode the server is in the
-          cloud and can't see local credentials, so we hide the cards to
-          avoid surfacing controls that can't possibly succeed. */}
-      {desktopMode === "full" && (
+      {/* Subscription-based providers. Visible in any desktop build (full
+          or lite) — both can reach the local machine: full via the bundled
+          Next.js sidecar, lite via Tauri invoke commands to the Rust host
+          which reads ~/.codex and pings localhost:3456 directly. Web/cloud
+          browsers can't see local credentials at all, so the cards stay
+          hidden there. */}
+      {desktopMode !== null && (
         <div className="space-y-3">
           <CodexStatusCard />
           <OcpStatusCard />
