@@ -86,3 +86,4 @@ apps/desktop/src-tauri/gen/
 docs/*
 !docs/intro/
 !docs/weekly-report-*.md
+!docs/deployment-*.md
