@@ -49,13 +49,21 @@ export async function GET() {
   return NextResponse.json({ ready, active });
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   invalidateCodexReadyCache();
-  if (!isCodexReady()) {
+
+  // Desktop builds (lite + full) probe Codex on the user's machine via the
+  // Tauri `codex_status` invoke and forward the result here as
+  // `clientReady`. The server only sees its own filesystem, which in cloud
+  // mode never has ~/.codex/auth.json — trusting the client lets the
+  // desktop flow activate without faking auth.json on the server.
+  const body = (await request.json().catch(() => ({}))) as { clientReady?: boolean };
+  const ready = body.clientReady === true || isCodexReady();
+  if (!ready) {
     return NextResponse.json(
       { error: "Codex not authenticated on this machine — run `codex login` first." },
       { status: 412 },

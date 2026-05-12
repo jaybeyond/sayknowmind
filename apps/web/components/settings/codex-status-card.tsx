@@ -110,8 +110,15 @@ export function CodexStatusCard() {
     setErrorMsg(null);
     try {
       const next = !active;
+      // In lite/cloud-webview builds the API runs on the cloud host, which
+      // has no ~/.codex/auth.json — its readiness check always returns false
+      // and rejects activation with 412. Confirm readiness locally first and
+      // pass the verdict so the server can trust the desktop side.
+      const localReady = next ? await fetchCodexReady() : true;
       const res = await fetch("/api/integrations/codex/status", {
         method: next ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: next ? JSON.stringify({ clientReady: localReady }) : undefined,
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
