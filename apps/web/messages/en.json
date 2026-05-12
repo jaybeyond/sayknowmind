@@ -335,6 +335,25 @@
         "failed": "Install failed"
       },
       "toggleFailed": "Toggle failed"
+    },
+    "preflight": {
+      "title": "Prerequisites",
+      "checking": "Checking environment…",
+      "recheck": "Re-check",
+      "allReady": "All set — auto-install is ready to go.",
+      "nodeOk": "Node.js {version}",
+      "nodeMissing": "Node.js not found — need 22.5+",
+      "nodeTooOld": "Node.js {version} — need 22.5+ (OCP server won't run on this version)",
+      "gitOk": "{version}",
+      "gitMissing": "git not found — install required",
+      "claudeOk": "Claude CLI {version}",
+      "claudeMissing": "Claude CLI not installed — `npm install -g @anthropic-ai/claude-code`, or auto-install will take care of it",
+      "claudeNotAuthed": "Claude CLI not authenticated — run `claude auth login` in a terminal",
+      "ocpRepoInstalled": "OCP repo present — will just be updated",
+      "ocpRepoMissing": "OCP not installed yet — first click will download it",
+      "ocpRunning": "OCP server running (localhost:3456)",
+      "fixIt": "Fix automatically",
+      "openTerminal": "Open terminal"
     }
   },
   "profile": {

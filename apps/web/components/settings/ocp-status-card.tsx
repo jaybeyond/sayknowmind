@@ -9,6 +9,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Sparkles, CheckCircle2, RefreshCw, ExternalLink, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
+import { PreflightChecklist, type SystemEnvCheck } from "./preflight-checklist";
 
 /**
  * Lite-build readiness probe: in lite mode the Next.js server lives in the
@@ -69,6 +70,12 @@ export function OcpStatusCard() {
   const { t } = useTranslation();
   const stepLabel = (step: InstallStep): string =>
     step === "idle" ? "" : t(`settings.ocp.step.${step}`);
+  const [preflightReady, setPreflightReady] = useState<boolean>(false);
+  const [preflightEnv, setPreflightEnv] = useState<SystemEnvCheck | null>(null);
+  const handlePreflight = useCallback((ready: boolean, env: SystemEnvCheck | null) => {
+    setPreflightReady(ready);
+    setPreflightEnv(env);
+  }, []);
   const [ready, setReady] = useState<boolean | null>(null);
   const [active, setActive] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
@@ -290,6 +297,7 @@ export function OcpStatusCard() {
         </div>
       ) : (
         <div className="mt-3 space-y-3">
+          <PreflightChecklist variant="ocp" onReady={handlePreflight} />
           <p className="text-xs text-muted-foreground leading-relaxed">
             {installing
               ? stepLabel(installStep)
@@ -299,8 +307,13 @@ export function OcpStatusCard() {
             <Button
               size="sm"
               onClick={startInstall}
-              disabled={installing}
+              disabled={installing || (preflightEnv !== null && !preflightReady)}
               className="whitespace-nowrap"
+              title={
+                preflightEnv !== null && !preflightReady
+                  ? t("settings.preflight.title")
+                  : undefined
+              }
             >
               <Download className="size-3.5 mr-1 shrink-0" />
               <span className="whitespace-nowrap">

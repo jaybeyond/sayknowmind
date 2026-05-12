@@ -335,6 +335,25 @@
         "failed": "安装失败"
       },
       "toggleFailed": "切换失败"
+    },
+    "preflight": {
+      "title": "前提条件",
+      "checking": "正在检查环境…",
+      "recheck": "重新检查",
+      "allReady": "全部满足 — 可以自动安装。",
+      "nodeOk": "Node.js {version}",
+      "nodeMissing": "未安装 Node.js — 需要 22.5+",
+      "nodeTooOld": "Node.js {version} — 需要 22.5+ (当前版本无法运行 OCP server)",
+      "gitOk": "{version}",
+      "gitMissing": "未安装 git — 需要安装",
+      "claudeOk": "Claude CLI {version}",
+      "claudeMissing": "未安装 Claude CLI — 运行 `npm install -g @anthropic-ai/claude-code`，或在自动安装中一并完成",
+      "claudeNotAuthed": "Claude CLI 未认证 — 在终端运行 `claude auth login`",
+      "ocpRepoInstalled": "OCP 仓库已存在 — 仅执行更新",
+      "ocpRepoMissing": "OCP 尚未安装 — 首次点击会自动下载",
+      "ocpRunning": "OCP 服务运行中 (localhost:3456)",
+      "fixIt": "自动解决",
+      "openTerminal": "打开终端"
     }
   },
   "profile": {

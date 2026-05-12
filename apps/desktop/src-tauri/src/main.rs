@@ -169,6 +169,93 @@ fn save_offline_cache(data: serde_json::Value) -> bool {
 // localhost:3456 — these commands close that gap.
 // ---------------------------------------------------------------------------
 
+/// One-shot snapshot of every prerequisite the OCP / Codex installers
+/// touch. Exposed to the cloud webview so the settings card can show
+/// a real preflight checklist instead of just "click install and hope".
+#[derive(serde::Serialize, Default)]
+pub struct SystemEnvCheck {
+    pub node_version: Option<String>,        // e.g. "v22.5.0" or None if missing
+    pub node_meets_required: bool,           // ≥22.5
+    pub git_version: Option<String>,
+    pub npm_version: Option<String>,
+    pub claude_version: Option<String>,
+    pub claude_authenticated: bool,
+    pub openclaw_present: bool,              // ~/.openclaw/openclaw.json exists
+    pub ocp_repo_installed: bool,            // ~/.sayknowmind/ocp/.git exists
+    pub ocp_admin_key_present: bool,         // ~/.ocp/admin-key non-empty
+    pub ocp_running: bool,                   // localhost:3456/health 200
+    pub codex_authenticated: bool,           // ~/.codex/auth.json exists
+}
+
+fn parse_node_version(raw: &str) -> Option<(u32, u32)> {
+    let s = raw.trim().trim_start_matches('v');
+    let mut parts = s.split('.');
+    let major = parts.next()?.parse::<u32>().ok()?;
+    let minor = parts.next()?.parse::<u32>().ok()?;
+    Some((major, minor))
+}
+
+#[tauri::command]
+fn system_env_check() -> SystemEnvCheck {
+    let mut out = SystemEnvCheck::default();
+
+    // --- node ---
+    if let Ok(s) = run_capture("node", &["--version"], None) {
+        let v = s.trim().to_string();
+        out.node_meets_required = parse_node_version(&v)
+            .map(|(maj, min)| maj > 22 || (maj == 22 && min >= 5))
+            .unwrap_or(false);
+        out.node_version = Some(v);
+    }
+
+    // --- git / npm — just version probes ---
+    if let Ok(s) = run_capture("git", &["--version"], None) {
+        out.git_version = Some(s.trim().to_string());
+    }
+    if let Ok(s) = run_capture("npm", &["--version"], None) {
+        out.npm_version = Some(s.trim().to_string());
+    }
+
+    // --- claude CLI ---
+    if which_in_shell_path("claude").is_some() {
+        if let Ok(s) = run_capture("claude", &["--version"], None) {
+            out.claude_version = Some(s.trim().to_string());
+        }
+        // `claude auth status` exits 0 when authenticated. Treat any
+        // success as "authenticated"; we don't parse the message itself
+        // because it changes across Claude CLI versions.
+        out.claude_authenticated =
+            run_capture("claude", &["auth", "status"], None).is_ok();
+    }
+
+    // --- OCP local state ---
+    if let Some(home) = dirs_next::home_dir() {
+        out.openclaw_present = home.join(".openclaw").join("openclaw.json").exists();
+        out.ocp_repo_installed = ocp_install_dir()
+            .map(|d| d.join(".git").exists())
+            .unwrap_or(false);
+        out.ocp_admin_key_present = home
+            .join(".ocp")
+            .join("admin-key")
+            .metadata()
+            .ok()
+            .map(|m| m.len() > 0)
+            .unwrap_or(false);
+        out.codex_authenticated = home.join(".codex").join("auth.json").exists();
+    }
+
+    // --- proxy reachable? short timeout so the card doesn't hang ---
+    out.ocp_running = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_millis(800))
+        .build()
+        .ok()
+        .and_then(|c| c.get("http://127.0.0.1:3456/health").send().ok())
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
+    out
+}
+
 #[derive(serde::Serialize)]
 struct CodexStatus {
     ready: bool,
@@ -983,6 +1070,7 @@ fn main() {
             provision_ocp_key,
             revoke_ocp_key,
             ocp_install,
+            system_env_check,
         ]);
 
     builder = builder.setup(|app| {

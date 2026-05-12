@@ -335,6 +335,25 @@
         "failed": "インストール失敗"
       },
       "toggleFailed": "切り替えに失敗"
+    },
+    "preflight": {
+      "title": "前提条件",
+      "checking": "環境を確認中…",
+      "recheck": "再確認",
+      "allReady": "すべて満たされています — 自動インストール準備完了。",
+      "nodeOk": "Node.js {version}",
+      "nodeMissing": "Node.js 未インストール — 22.5+ が必要",
+      "nodeTooOld": "Node.js {version} — 22.5+ が必要 (このバージョンでは OCP server を実行できません)",
+      "gitOk": "{version}",
+      "gitMissing": "git 未インストール — インストールが必要",
+      "claudeOk": "Claude CLI {version}",
+      "claudeMissing": "Claude CLI 未インストール — `npm install -g @anthropic-ai/claude-code`、または自動インストールで対応",
+      "claudeNotAuthed": "Claude CLI 未認証 — ターミナルで `claude auth login`",
+      "ocpRepoInstalled": "OCP リポジトリ存在 — 更新のみ実行",
+      "ocpRepoMissing": "OCP 未インストール — 初回クリックでダウンロードされます",
+      "ocpRunning": "OCP サーバー稼働中 (localhost:3456)",
+      "fixIt": "自動で解決",
+      "openTerminal": "ターミナルを開く"
     }
   },
   "profile": {
