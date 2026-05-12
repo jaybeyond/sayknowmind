@@ -5,7 +5,7 @@
     "beforeBuildCommand": "bash scripts/build-desktop.sh full"
   },
   "bundle": {
-    "externalBin": ["binaries/node"],
+    "externalBin": ["binaries/node", "binaries/codex"],
     "resources": {
       "resources/web-standalone": "web-standalone"
     }

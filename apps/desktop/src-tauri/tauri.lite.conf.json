@@ -4,5 +4,8 @@
   "identifier": "com.sayknowmind.desktop.lite",
   "build": {
     "beforeBuildCommand": "bash scripts/build-desktop.sh lite"
+  },
+  "bundle": {
+    "externalBin": ["binaries/codex"]
   }
 }

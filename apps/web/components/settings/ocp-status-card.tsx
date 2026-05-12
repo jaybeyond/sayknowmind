@@ -154,6 +154,35 @@ export function OcpStatusCard() {
     setInstalling(true);
     setInstallStep("cloning");
     setErrorMsg(null);
+
+    // Desktop path: drive the install directly through Tauri so we don't
+    // round-trip through the cloud API (which always returns "desktop-only"
+    // anyway and can't see the user's localhost:3456).
+    const bridge = tauriBridge();
+    if (bridge?.invoke) {
+      try {
+        setInstallStep("installing");
+        const result = await bridge.invoke<{ ok: boolean; step: string; message: string }>(
+          "ocp_install",
+        );
+        if (result?.ok) {
+          setInstallStep("done");
+          setInstalling(false);
+          void refresh();
+        } else {
+          setInstallStep("failed");
+          setErrorMsg(result?.message ?? "OCP 설치 실패");
+          setInstalling(false);
+        }
+      } catch (e) {
+        setInstallStep("failed");
+        setErrorMsg(e instanceof Error ? e.message : "OCP 설치 실패");
+        setInstalling(false);
+      }
+      return;
+    }
+
+    // Browser/dev path: hit the cloud API and poll its progress endpoint.
     try {
       const res = await fetch("/api/integrations/ocp/install", { method: "POST" });
       if (!res.ok && res.status !== 202) {

@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "remote-cloud",
+  "description": "Grant the production cloud webview (loaded in `lite` build) the minimum native permissions it needs for Codex/OCP integration. WARNING: any IPC permission granted here is reachable from JavaScript served by sayknowmind.ypai.click — keep the list tight and prefer custom commands over broad shell perms.",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["https://sayknowmind.ypai.click/*"]
+  },
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:window:default",
+    "core:webview:default",
+    "shell:allow-open"
+  ]
+}

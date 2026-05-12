@@ -14,10 +14,14 @@ RESOURCES_DIR="$DESKTOP_DIR/src-tauri/resources"
 
 echo "=== [desktop-build] Mode: $BUILD_MODE ==="
 
-# ─── Lite mode: nothing to bundle ───
+# ─── Common: fetch external CLIs that ship as Tauri sidecars (codex, …) ───
+echo "=== [desktop-build] Step 0: fetch sidecar binaries (codex) ==="
+bash "$SCRIPT_DIR/fetch-binaries.sh"
+
+# ─── Lite mode: nothing else to bundle ───
 if [ "$BUILD_MODE" = "lite" ]; then
-  echo "=== [desktop-build] Lite mode — no web bundling needed ==="
-  # Clean up any leftover full-mode resources
+  echo "=== [desktop-build] Lite mode — skip web bundling ==="
+  # Clean up any leftover full-mode resources, but KEEP sidecar binaries
   rm -rf "$RESOURCES_DIR/web-standalone"
   rm -f "$DESKTOP_DIR/src-tauri/binaries"/node-*
   echo "=== [desktop-build] Lite build prep done ==="

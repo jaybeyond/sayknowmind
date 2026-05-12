@@ -16,6 +16,7 @@ use tauri::{
     tray::TrayIconBuilder,
     Manager, Runtime,
 };
+use tauri_plugin_shell::ShellExt;
 
 // Command/Stdio are used by both full (server spawn) and lite (codex login
 // spawn) — keep them outside the feature gate. Child is full-only.
@@ -192,12 +193,39 @@ struct OcpStatus {
 
 /// Spawn `codex login` on the user's machine. The CLI opens a localhost
 /// callback server and pops the system browser at the ChatGPT OAuth page;
-/// `~/.codex/auth.json` is written on success. Returns once the child is
-/// detached — callers should poll codex_status() for completion.
+/// `~/.codex/auth.json` is written on success.
+///
+/// Resolution order:
+///   1. Tauri sidecar `codex` (bundled at build time, see fetch-binaries.sh)
+///   2. `codex` on PATH (developer-installed)
+///   3. `npx -y @openai/codex login` (last-resort, needs Node on the machine)
+///
+/// Returns once the child has been spawned — callers should poll
+/// `codex_status()` for completion via the `~/.codex/auth.json` file.
 #[tauri::command]
-fn exec_codex_login() -> Result<u32, String> {
-    // The Codex CLI may or may not be on PATH; prefer `codex` if available,
-    // otherwise fall back to `npx -y @openai/codex` which always resolves.
+fn exec_codex_login(app: tauri::AppHandle) -> Result<u32, String> {
+    // 1) Try the bundled sidecar first. This is the only path that "just
+    //    works" for users who haven't installed Codex on their machine.
+    if let Ok(cmd) = app.shell().sidecar("codex") {
+        match cmd.args(["login"]).spawn() {
+            Ok((mut rx, child)) => {
+                let pid = child.pid();
+                // Drain the event stream so the child's stdio pipes don't
+                // back-pressure into a deadlock while the OAuth flow waits
+                // on the system browser.
+                std::thread::spawn(move || {
+                    while rx.blocking_recv().is_some() {}
+                });
+                return Ok(pid);
+            }
+            Err(e) => {
+                eprintln!("[codex] bundled sidecar spawn failed, falling back to PATH/npx: {e}");
+            }
+        }
+    }
+
+    // 2/3) Legacy PATH lookup → npx fallback. Kept for dev builds and for
+    //      users who already installed Codex outside the bundle.
     let (program, args): (&str, Vec<&str>) = if Command::new("which")
         .arg("codex")
         .output()
@@ -264,6 +292,172 @@ fn provision_ocp_key() -> Result<OcpProvisionResult, String> {
         .ok_or_else(|| "OCP response had no plaintext key".to_string())?
         .to_string();
     Ok(OcpProvisionResult { key })
+}
+
+/// Result of an `ocp_install` run. `step` is the last step that ran (or
+/// failed); the frontend can surface this so the user sees what stalled.
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct OcpInstallResult {
+    pub ok: bool,
+    pub step: String,
+    pub message: String,
+    pub admin_key_path: String,
+}
+
+fn ocp_install_dir() -> Option<PathBuf> {
+    dirs_next::home_dir().map(|h| h.join(".sayknowmind").join("ocp"))
+}
+
+fn run_capture(program: &str, args: &[&str], cwd: Option<&PathBuf>) -> Result<String, String> {
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    let out = cmd
+        .output()
+        .map_err(|e| format!("Failed to spawn {}: {}", program, e))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        return Err(format!(
+            "{} {:?} exited {}: {}{}",
+            program,
+            args,
+            out.status,
+            stdout.trim(),
+            stderr.trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+/// Install OCP (Open Claude Proxy) onto the user's machine and start it.
+///
+/// Steps:
+///   1. Verify node + git are on PATH.
+///   2. Clone (or update) the OCP repo into ~/.sayknowmind/ocp.
+///   3. `npm install` inside that checkout.
+///   4. Install the Anthropic Claude CLI globally if it isn't already.
+///   5. `node setup.mjs` to provision ~/.ocp/admin-key.
+///   6. Spawn `node server.mjs` detached so the proxy survives this call.
+///
+/// Long-running — callers should kick this off from a background task and
+/// poll `ocp_status()` for readiness. Tokio's blocking pool keeps the IPC
+/// runtime responsive.
+#[tauri::command]
+async fn ocp_install() -> Result<OcpInstallResult, String> {
+    tauri::async_runtime::spawn_blocking(ocp_install_sync)
+        .await
+        .map_err(|e| format!("ocp_install join: {}", e))?
+}
+
+fn ocp_install_sync() -> Result<OcpInstallResult, String> {
+    let admin_key_path = dirs_next::home_dir()
+        .map(|h| h.join(".ocp").join("admin-key"))
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let make = |step: &str, msg: &str| OcpInstallResult {
+        ok: false,
+        step: step.to_string(),
+        message: msg.to_string(),
+        admin_key_path: admin_key_path.clone(),
+    };
+
+    // 1) preflight
+    if run_capture("node", &["--version"], None).is_err() {
+        return Err(serde_json::to_string(&make(
+            "preflight",
+            "Node.js not found on PATH. Install Node 22.5+ (https://nodejs.org) and retry.",
+        ))
+        .unwrap_or_else(|_| "Node.js not found".into()));
+    }
+    if run_capture("git", &["--version"], None).is_err() {
+        return Err(serde_json::to_string(&make(
+            "preflight",
+            "git not found on PATH. Install git and retry.",
+        ))
+        .unwrap_or_else(|_| "git not found".into()));
+    }
+
+    let ocp_dir = ocp_install_dir().ok_or_else(|| "no home dir".to_string())?;
+    if let Some(parent) = ocp_dir.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("create ~/.sayknowmind: {}", e))?;
+    }
+
+    // 2) clone or update
+    if ocp_dir.join(".git").exists() {
+        run_capture("git", &["pull", "--ff-only"], Some(&ocp_dir))
+            .map_err(|e| format!("git pull failed: {}", e))?;
+    } else {
+        run_capture(
+            "git",
+            &[
+                "clone",
+                "--depth=1",
+                "https://github.com/dtzp555-max/ocp.git",
+                ocp_dir.to_string_lossy().as_ref(),
+            ],
+            None,
+        )
+        .map_err(|e| format!("git clone failed: {}", e))?;
+    }
+
+    // 3) npm install
+    run_capture("npm", &["install", "--no-audit", "--no-fund"], Some(&ocp_dir))
+        .map_err(|e| format!("npm install failed: {}", e))?;
+
+    // 4) Claude CLI — best-effort. OCP requires `claude -p` on PATH; if the
+    //    user already has it we skip, otherwise try the npm install. A
+    //    failure here is non-fatal: the user can install Claude themselves.
+    let claude_msg = if Command::new("which")
+        .arg("claude")
+        .output()
+        .ok()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        "claude CLI already present".to_string()
+    } else {
+        match run_capture(
+            "npm",
+            &["install", "-g", "@anthropic-ai/claude-code"],
+            None,
+        ) {
+            Ok(_) => "claude CLI installed via npm -g".to_string(),
+            Err(e) => format!("claude CLI auto-install skipped: {} — install manually then re-run setup", e),
+        }
+    };
+
+    // 5) setup.mjs writes ~/.ocp/admin-key
+    run_capture("node", &["setup.mjs"], Some(&ocp_dir))
+        .map_err(|e| format!("node setup.mjs failed: {}", e))?;
+
+    // 6) Start server.mjs detached. We deliberately use raw std::process
+    //    so the child outlives this command and Tauri's IPC runtime.
+    let log_path = ocp_dir.join("server.log");
+    let log_file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|e| format!("open log: {}", e))?;
+    let log_err = log_file
+        .try_clone()
+        .map_err(|e| format!("clone log fd: {}", e))?;
+    Command::new("node")
+        .arg("server.mjs")
+        .current_dir(&ocp_dir)
+        .stdout(Stdio::from(log_file))
+        .stderr(Stdio::from(log_err))
+        .spawn()
+        .map_err(|e| format!("spawn server.mjs: {}", e))?;
+
+    Ok(OcpInstallResult {
+        ok: true,
+        step: "started".to_string(),
+        message: format!("OCP installed at {} — {}", ocp_dir.display(), claude_msg),
+        admin_key_path,
+    })
 }
 
 /// Revoke the SayKnowMind-named key at OCP. Idempotent — silent on 404.
@@ -674,6 +868,7 @@ fn main() {
             exec_codex_login,
             provision_ocp_key,
             revoke_ocp_key,
+            ocp_install,
         ]);
 
     builder = builder.setup(|app| {
