@@ -503,33 +503,68 @@ fn ocp_install_sync() -> Result<OcpInstallResult, String> {
         }
     };
 
-    // 5) setup.mjs writes ~/.ocp/admin-key
-    run_capture("node", &["setup.mjs"], Some(&ocp_dir))
-        .map_err(|e| format!("node setup.mjs failed: {}", e))?;
+    // 5) Provision an admin key. setup.mjs reads $OCP_ADMIN_KEY when
+    //    available and bakes it into the launchd plist; without it the
+    //    proxy's admin endpoints (used by provision_ocp_key) stay
+    //    disabled. We persist the same key at ~/.ocp/admin-key so our
+    //    own provision/revoke commands can reach it.
+    let admin_key = {
+        let home = dirs_next::home_dir().ok_or_else(|| "no home dir".to_string())?;
+        let ocp_state_dir = home.join(".ocp");
+        let key_file = ocp_state_dir.join("admin-key");
+        if let Some(existing) = fs::read_to_string(&key_file)
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+        {
+            existing
+        } else {
+            use std::io::Read;
+            let mut bytes = [0u8; 32];
+            std::fs::File::open("/dev/urandom")
+                .and_then(|mut f| f.read_exact(&mut bytes))
+                .map_err(|e| format!("urandom: {}", e))?;
+            let key: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
+            fs::create_dir_all(&ocp_state_dir).map_err(|e| format!("mkdir ~/.ocp: {}", e))?;
+            fs::write(&key_file, &key).map_err(|e| format!("write admin-key: {}", e))?;
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&key_file, fs::Permissions::from_mode(0o600));
+            key
+        }
+    };
 
-    // 6) Start server.mjs detached. We deliberately use raw std::process
-    //    so the child outlives this command and Tauri's IPC runtime.
-    let log_path = ocp_dir.join("server.log");
-    let log_file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_path)
-        .map_err(|e| format!("open log: {}", e))?;
-    let log_err = log_file
-        .try_clone()
-        .map_err(|e| format!("clone log fd: {}", e))?;
-    // Use the resolved `node` path so the daemon spawns even when PATH
-    // inheritance has stripped brew/volta locations.
-    let node_path = which_in_shell_path("node")
-        .ok_or_else(|| "node not on shell PATH for server.mjs spawn".to_string())?;
-    Command::new(&node_path)
-        .arg("server.mjs")
+    // 6) Run setup.mjs with --no-start. setup.mjs installs the launchd
+    //    plist (dev.ocp.proxy) which keeps server.mjs up across reboots;
+    //    we don't need to spawn it ourselves and would only race with
+    //    launchd for the port if we did.
+    let setup_path = which_in_shell_path("node")
+        .ok_or_else(|| "node not on shell PATH for setup.mjs".to_string())?;
+    let mut setup_cmd = Command::new(&setup_path);
+    setup_cmd
+        .args(["setup.mjs", "--no-start"])
         .current_dir(&ocp_dir)
         .env("PATH", resolve_shell_path())
-        .stdout(Stdio::from(log_file))
-        .stderr(Stdio::from(log_err))
-        .spawn()
-        .map_err(|e| format!("spawn server.mjs: {}", e))?;
+        .env("OCP_ADMIN_KEY", &admin_key);
+    let setup_out = setup_cmd
+        .output()
+        .map_err(|e| format!("spawn setup.mjs: {}", e))?;
+    if !setup_out.status.success() {
+        let stderr = String::from_utf8_lossy(&setup_out.stderr);
+        let stdout = String::from_utf8_lossy(&setup_out.stdout);
+        return Err(format!(
+            "setup.mjs exited {}: {} {}",
+            setup_out.status,
+            stdout.trim(),
+            stderr.trim()
+        ));
+    }
+
+    // 7) Kick the launchd job once so the user doesn't have to wait for
+    //    a re-login. `launchctl start` is idempotent — if the proxy is
+    //    already running it's a no-op.
+    let _ = Command::new("launchctl")
+        .args(["start", "dev.ocp.proxy"])
+        .output();
 
     Ok(OcpInstallResult {
         ok: true,
