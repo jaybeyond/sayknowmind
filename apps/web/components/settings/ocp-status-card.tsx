@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Sparkles, CheckCircle2, RefreshCw, ExternalLink, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/lib/i18n";
 
 /**
  * Lite-build readiness probe: in lite mode the Next.js server lives in the
@@ -64,17 +65,10 @@ async function revokeOcpKeyLocally(): Promise<void> {
 
 type InstallStep = "idle" | "cloning" | "installing" | "configuring" | "starting" | "done" | "failed";
 
-const STEP_LABEL: Record<InstallStep, string> = {
-  idle: "",
-  cloning: "OCP 다운로드 중…",
-  installing: "의존성 설치 중…",
-  configuring: "OCP 구성 중…",
-  starting: "OCP 시작 중…",
-  done: "설치 완료",
-  failed: "설치 실패",
-};
-
 export function OcpStatusCard() {
+  const { t } = useTranslation();
+  const stepLabel = (step: InstallStep): string =>
+    step === "idle" ? "" : t(`settings.ocp.step.${step}`);
   const [ready, setReady] = useState<boolean | null>(null);
   const [active, setActive] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
@@ -130,18 +124,18 @@ export function OcpStatusCard() {
       }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setErrorMsg(body.error ?? "토글 실패");
+        setErrorMsg(body.error ?? t("settings.ocp.toggleFailed"));
         return;
       }
       const data = await res.json();
       setReady(Boolean(data.ready));
       setActive(Boolean(data.active));
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "네트워크 오류");
+      setErrorMsg(e instanceof Error ? e.message : t("settings.ocp.networkError"));
     } finally {
       setToggling(false);
     }
-  }, [active]);
+  }, [active, t]);
 
   useEffect(() => {
     void refresh();
@@ -171,7 +165,7 @@ export function OcpStatusCard() {
           void refresh();
         } else {
           setInstallStep("failed");
-          setErrorMsg(result?.message ?? "OCP 설치 실패");
+          setErrorMsg(result?.message ?? t("settings.ocp.installFailed"));
           setInstalling(false);
         }
       } catch (e) {
@@ -187,7 +181,7 @@ export function OcpStatusCard() {
               ? e.message
               : typeof e === "object" && e !== null
                 ? JSON.stringify(e)
-                : "OCP 설치 실패";
+                : t("settings.ocp.installFailed");
         setErrorMsg(msg);
         setInstalling(false);
       }
@@ -199,7 +193,7 @@ export function OcpStatusCard() {
       const res = await fetch("/api/integrations/ocp/install", { method: "POST" });
       if (!res.ok && res.status !== 202) {
         const body = await res.json().catch(() => ({}));
-        setErrorMsg(body.error ?? "설치 시작 실패");
+        setErrorMsg(body.error ?? t("settings.ocp.startFailed"));
         setInstalling(false);
         setInstallStep("idle");
         return;
@@ -222,23 +216,23 @@ export function OcpStatusCard() {
             if (installTimer.current) clearInterval(installTimer.current);
             installTimer.current = null;
             setInstalling(false);
-            setErrorMsg(d.lastError ?? "설치 실패");
+            setErrorMsg(d.lastError ?? t("settings.ocp.failed"));
           } else if (Date.now() - start > 5 * 60 * 1000) {
             if (installTimer.current) clearInterval(installTimer.current);
             installTimer.current = null;
             setInstalling(false);
-            setErrorMsg("설치 대기 시간 초과");
+            setErrorMsg(t("settings.ocp.timeout"));
           }
         } catch {
           /* keep polling */
         }
       }, 1500);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "네트워크 오류");
+      setErrorMsg(e instanceof Error ? e.message : t("settings.ocp.networkError"));
       setInstalling(false);
       setInstallStep("idle");
     }
-  }, [refresh]);
+  }, [refresh, t]);
 
   return (
     <div className="rounded-lg border border-border p-4">
@@ -246,16 +240,16 @@ export function OcpStatusCard() {
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium">
             <Sparkles className="size-4" />
-            Claude 구독 (OCP)
+            {t("settings.ocp.title")}
             {active && (
               <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400">
                 <CheckCircle2 className="size-3" />
-                연동됨
+                {t("settings.ocp.connected")}
               </span>
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            본인 Claude Pro/Max 구독을 OCP 프록시로 OpenAI 호환 API화. API 키 불필요, 호출 비용 0.
+            {t("settings.ocp.description")}
           </p>
         </div>
         <Button
@@ -263,21 +257,21 @@ export function OcpStatusCard() {
           size="sm"
           onClick={refresh}
           disabled={loading}
-          aria-label="새로고침"
+          aria-label={t("settings.ocp.refresh")}
         >
           <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
 
       {loading ? (
-        <div className="mt-3 text-xs text-muted-foreground">상태 확인 중…</div>
+        <div className="mt-3 text-xs text-muted-foreground">{t("settings.ocp.checking")}</div>
       ) : ready ? (
         <div className="mt-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">
               {active
-                ? "연동됨 — Claude 구독으로 호출됩니다."
-                : "OCP 실행 확인됨. 연동을 누르면 전용 키가 자동 발급됩니다."}
+                ? t("settings.ocp.activeNote")
+                : t("settings.ocp.readyNote")}
             </span>
             <Button
               size="sm"
@@ -285,7 +279,11 @@ export function OcpStatusCard() {
               onClick={toggle}
               disabled={toggling}
             >
-              {toggling ? "처리 중…" : active ? "연동 해제" : "연동"}
+              {toggling
+                ? t("settings.ocp.toggling")
+                : active
+                  ? t("settings.ocp.disconnect")
+                  : t("settings.ocp.connect")}
             </Button>
           </div>
           {errorMsg && <p className="text-xs text-red-500">{errorMsg}</p>}
@@ -294,13 +292,13 @@ export function OcpStatusCard() {
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
             {installing
-              ? STEP_LABEL[installStep]
-              : "버튼을 누르면 OCP를 자동으로 다운로드·설치·시작합니다."}
+              ? stepLabel(installStep)
+              : t("settings.ocp.notReady")}
           </p>
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={startInstall} disabled={installing}>
               <Download className="size-3.5 mr-1" />
-              {installing ? STEP_LABEL[installStep] : "자동 설치 + 시작"}
+              {installing ? stepLabel(installStep) : t("settings.ocp.installButton")}
             </Button>
             <a
               href="https://github.com/dtzp555-max/ocp#installation"
@@ -308,12 +306,12 @@ export function OcpStatusCard() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
             >
-              가이드
+              {t("settings.ocp.guide")}
               <ExternalLink className="size-3" />
             </a>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Claude CLI에 먼저 로그인되어 있어야 합니다 — <code className="text-[11px]">claude auth login</code>
+            {t("settings.ocp.claudeRequired")}
           </p>
           {errorMsg && <p className="text-xs text-red-500 whitespace-pre-wrap">{errorMsg}</p>}
         </div>

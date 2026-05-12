@@ -13,6 +13,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Bot, CheckCircle2, RefreshCw, ExternalLink, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/lib/i18n";
 
 /**
  * Read Codex readiness from the local machine.
@@ -66,12 +67,15 @@ async function startCodexLogin(): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch("/api/integrations/codex/login", { method: "POST" });
   if (!res.ok && res.status !== 202) {
     const body = await res.json().catch(() => ({}));
-    return { ok: false, error: body.error ?? "로그인 시작 실패" };
+    // Leave the localized fallback to the calling component, which has access
+    // to the i18n hook. Callers should `?? t("settings.codex.loginStartFailed")`.
+    return { ok: false, error: body.error };
   }
   return { ok: true };
 }
 
 export function CodexStatusCard() {
+  const { t } = useTranslation();
   const [ready, setReady] = useState<boolean | null>(null);
   const [active, setActive] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,18 +126,18 @@ export function CodexStatusCard() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setErrorMsg(body.error ?? "토글 실패");
+        setErrorMsg(body.error ?? t("settings.codex.toggleFailed"));
         return;
       }
       const data = await res.json();
       setReady(Boolean(data.ready));
       setActive(Boolean(data.active));
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "네트워크 오류");
+      setErrorMsg(e instanceof Error ? e.message : t("settings.codex.networkError"));
     } finally {
       setToggling(false);
     }
-  }, [active]);
+  }, [active, t]);
 
   useEffect(() => {
     void refresh();
@@ -148,7 +152,7 @@ export function CodexStatusCard() {
     try {
       const launched = await startCodexLogin();
       if (!launched.ok) {
-        setErrorMsg(launched.error ?? "로그인 시작 실패");
+        setErrorMsg(launched.error ?? t("settings.codex.loginStartFailed"));
         setLoggingIn(false);
         return;
       }
@@ -176,17 +180,17 @@ export function CodexStatusCard() {
             if (pollTimer.current) clearInterval(pollTimer.current);
             pollTimer.current = null;
             setLoggingIn(false);
-            setErrorMsg("로그인 대기 시간 초과 — 다시 시도해주세요.");
+            setErrorMsg(t("settings.codex.loginTimeout"));
           }
         } catch {
           /* keep polling — transient errors are fine */
         }
       }, 2000);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "네트워크 오류");
+      setErrorMsg(e instanceof Error ? e.message : t("settings.codex.networkError"));
       setLoggingIn(false);
     }
-  }, []);
+  }, [t]);
 
   return (
     <div className="rounded-lg border border-border p-4">
@@ -194,16 +198,16 @@ export function CodexStatusCard() {
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium">
             <Bot className="size-4" />
-            ChatGPT 구독 (Codex)
+            {t("settings.codex.title")}
             {ready && (
               <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400">
                 <CheckCircle2 className="size-3" />
-                인증됨
+                {t("settings.codex.ready")}
               </span>
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            본인 ChatGPT Plus/Pro/Business/Edu/Enterprise 구독으로 OpenAI 모델 호출. API 키 불필요, 호출 비용 0.
+            {t("settings.codex.description")}
           </p>
         </div>
         <Button
@@ -211,21 +215,21 @@ export function CodexStatusCard() {
           size="sm"
           onClick={refresh}
           disabled={loading}
-          aria-label="새로고침"
+          aria-label={t("settings.codex.refresh")}
         >
           <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
 
       {loading ? (
-        <div className="mt-3 text-xs text-muted-foreground">상태 확인 중…</div>
+        <div className="mt-3 text-xs text-muted-foreground">{t("settings.codex.checking")}</div>
       ) : ready ? (
         <div className="mt-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">
               {active
-                ? "연동됨 — 1순위로 호출됩니다."
-                : "ChatGPT 로그인 확인됨. 활성화하면 1순위로 호출됩니다."}
+                ? t("settings.codex.activeNote")
+                : t("settings.codex.readyNote")}
             </span>
             <Button
               size="sm"
@@ -233,7 +237,11 @@ export function CodexStatusCard() {
               onClick={toggle}
               disabled={toggling}
             >
-              {toggling ? "처리 중…" : active ? "연동 해제" : "연동"}
+              {toggling
+                ? t("settings.codex.toggling")
+                : active
+                  ? t("settings.codex.disconnect")
+                  : t("settings.codex.connect")}
             </Button>
           </div>
           {errorMsg && (
@@ -244,13 +252,13 @@ export function CodexStatusCard() {
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
             {loggingIn
-              ? "브라우저에서 ChatGPT 로그인을 완료해주세요. 끝나면 자동으로 인증됩니다…"
-              : "버튼을 누르면 ChatGPT 로그인 창이 자동으로 열립니다."}
+              ? t("settings.codex.loggingIn")
+              : t("settings.codex.notReady")}
           </p>
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={startLogin} disabled={loggingIn}>
               <LogIn className="size-3.5 mr-1" />
-              {loggingIn ? "로그인 대기 중…" : "ChatGPT로 로그인"}
+              {loggingIn ? t("settings.codex.loginWaiting") : t("settings.codex.loginButton")}
             </Button>
             <a
               href="https://developers.openai.com/codex/auth"
@@ -258,7 +266,7 @@ export function CodexStatusCard() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
             >
-              가이드
+              {t("settings.codex.guide")}
               <ExternalLink className="size-3" />
             </a>
           </div>
