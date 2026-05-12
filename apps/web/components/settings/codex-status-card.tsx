@@ -249,16 +249,23 @@ export function CodexStatusCard() {
           )}
         </div>
       ) : (
-        <div className="mt-3 space-y-2">
-          <p className="text-xs text-muted-foreground">
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             {loggingIn
               ? t("settings.codex.loggingIn")
               : t("settings.codex.notReady")}
           </p>
-          <div className="flex items-center gap-2">
-            <Button size="sm" onClick={startLogin} disabled={loggingIn}>
-              <LogIn className="size-3.5 mr-1" />
-              {loggingIn ? t("settings.codex.loginWaiting") : t("settings.codex.loginButton")}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              onClick={startLogin}
+              disabled={loggingIn}
+              className="whitespace-nowrap"
+            >
+              <LogIn className="size-3.5 mr-1 shrink-0" />
+              <span className="whitespace-nowrap">
+                {loggingIn ? t("settings.codex.loginWaiting") : t("settings.codex.loginButton")}
+              </span>
             </Button>
             <a
               href="https://developers.openai.com/codex/auth"

@@ -289,16 +289,23 @@ export function OcpStatusCard() {
           {errorMsg && <p className="text-xs text-red-500">{errorMsg}</p>}
         </div>
       ) : (
-        <div className="mt-3 space-y-2">
-          <p className="text-xs text-muted-foreground">
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             {installing
               ? stepLabel(installStep)
               : t("settings.ocp.notReady")}
           </p>
-          <div className="flex items-center gap-2">
-            <Button size="sm" onClick={startInstall} disabled={installing}>
-              <Download className="size-3.5 mr-1" />
-              {installing ? stepLabel(installStep) : t("settings.ocp.installButton")}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              onClick={startInstall}
+              disabled={installing}
+              className="whitespace-nowrap"
+            >
+              <Download className="size-3.5 mr-1 shrink-0" />
+              <span className="whitespace-nowrap">
+                {installing ? stepLabel(installStep) : t("settings.ocp.installButton")}
+              </span>
             </Button>
             <a
               href="https://github.com/dtzp555-max/ocp#installation"
