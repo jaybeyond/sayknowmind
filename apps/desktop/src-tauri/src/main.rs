@@ -226,25 +226,26 @@ fn exec_codex_login(app: tauri::AppHandle) -> Result<u32, String> {
 
     // 2/3) Legacy PATH lookup → npx fallback. Kept for dev builds and for
     //      users who already installed Codex outside the bundle.
-    let (program, args): (&str, Vec<&str>) = if Command::new("which")
-        .arg("codex")
-        .output()
-        .ok()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        ("codex", vec!["login"])
+    //      which_in_shell_path so brew/volta-installed codex (or npx) is
+    //      actually visible — see resolve_shell_path() comments.
+    let (program, args): (PathBuf, Vec<&str>) = if let Some(codex) = which_in_shell_path("codex") {
+        (codex, vec!["login"])
+    } else if let Some(npx) = which_in_shell_path("npx") {
+        (npx, vec!["-y", "@openai/codex", "login"])
     } else {
-        ("npx", vec!["-y", "@openai/codex", "login"])
+        return Err(
+            "Neither bundled codex sidecar, system `codex`, nor `npx` was found. Install Node 22+ or reinstall the app.".to_string(),
+        );
     };
 
-    Command::new(program)
+    Command::new(&program)
         .args(&args)
+        .env("PATH", resolve_shell_path())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .map(|child| child.id())
-        .map_err(|e| format!("Failed to spawn {}: {}", program, e))
+        .map_err(|e| format!("Failed to spawn {}: {}", program.display(), e))
 }
 
 #[derive(serde::Serialize)]
@@ -308,9 +309,85 @@ fn ocp_install_dir() -> Option<PathBuf> {
     dirs_next::home_dir().map(|h| h.join(".sayknowmind").join("ocp"))
 }
 
+/// Resolve a usable PATH for child processes.
+///
+/// macOS GUI apps inherit a tiny launchd-default PATH (basically
+/// `/usr/bin:/bin:/usr/sbin:/sbin`), which means brew, volta, fnm, nvm,
+/// and pnpm installs are invisible — even though `node`, `git`, `claude`
+/// are clearly on the user's shell PATH when they open Terminal.
+///
+/// We run the user's login shell once and capture its `$PATH`, then merge
+/// that with a hard-coded set of well-known locations as a safety net.
+/// The result is cached for the lifetime of the process.
+fn resolve_shell_path() -> String {
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<String> = OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            let mut parts: Vec<String> = Vec::new();
+
+            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+            if let Ok(out) = Command::new(&shell)
+                .args(["-l", "-i", "-c", "echo $PATH"])
+                .output()
+            {
+                if out.status.success() {
+                    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    if !s.is_empty() {
+                        parts.push(s);
+                    }
+                }
+            }
+
+            // Hardcoded safety net. Order matters — brew prefixes first so
+            // they win over /usr/bin/node (if a stale one ever lands there).
+            parts.push("/opt/homebrew/bin".into());      // Apple Silicon brew
+            parts.push("/opt/homebrew/sbin".into());
+            parts.push("/usr/local/bin".into());          // Intel brew, npm -g default
+            parts.push("/usr/local/sbin".into());
+            if let Ok(home) = std::env::var("HOME") {
+                parts.push(format!("{}/.volta/bin", home));
+                parts.push(format!("{}/.fnm", home));
+                parts.push(format!("{}/.local/bin", home));
+                parts.push(format!("{}/.cargo/bin", home));
+            }
+            parts.push("/usr/bin".into());
+            parts.push("/bin".into());
+            parts.push("/usr/sbin".into());
+            parts.push("/sbin".into());
+
+            // Dedupe while preserving order.
+            let mut seen = std::collections::HashSet::new();
+            let merged: Vec<String> = parts
+                .into_iter()
+                .flat_map(|chunk| chunk.split(':').map(str::to_string).collect::<Vec<_>>())
+                .filter(|p| !p.is_empty() && seen.insert(p.clone()))
+                .collect();
+            merged.join(":")
+        })
+        .clone()
+}
+
+/// `which` that honours `resolve_shell_path()` instead of relying on the
+/// launchd-inherited PATH. Returns the absolute binary path when found.
+fn which_in_shell_path(program: &str) -> Option<PathBuf> {
+    let path = resolve_shell_path();
+    for dir in path.split(':') {
+        if dir.is_empty() {
+            continue;
+        }
+        let candidate = PathBuf::from(dir).join(program);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 fn run_capture(program: &str, args: &[&str], cwd: Option<&PathBuf>) -> Result<String, String> {
     let mut cmd = Command::new(program);
     cmd.args(args);
+    cmd.env("PATH", resolve_shell_path());
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
@@ -410,13 +487,10 @@ fn ocp_install_sync() -> Result<OcpInstallResult, String> {
     // 4) Claude CLI — best-effort. OCP requires `claude -p` on PATH; if the
     //    user already has it we skip, otherwise try the npm install. A
     //    failure here is non-fatal: the user can install Claude themselves.
-    let claude_msg = if Command::new("which")
-        .arg("claude")
-        .output()
-        .ok()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
+    //    Use which_in_shell_path so the user's brew/volta/nvm-installed
+    //    `claude` is visible to us — the launchd-default PATH that GUI
+    //    apps inherit on macOS cannot see those.
+    let claude_msg = if which_in_shell_path("claude").is_some() {
         "claude CLI already present".to_string()
     } else {
         match run_capture(
@@ -444,9 +518,14 @@ fn ocp_install_sync() -> Result<OcpInstallResult, String> {
     let log_err = log_file
         .try_clone()
         .map_err(|e| format!("clone log fd: {}", e))?;
-    Command::new("node")
+    // Use the resolved `node` path so the daemon spawns even when PATH
+    // inheritance has stripped brew/volta locations.
+    let node_path = which_in_shell_path("node")
+        .ok_or_else(|| "node not on shell PATH for server.mjs spawn".to_string())?;
+    Command::new(&node_path)
         .arg("server.mjs")
         .current_dir(&ocp_dir)
+        .env("PATH", resolve_shell_path())
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_err))
         .spawn()
