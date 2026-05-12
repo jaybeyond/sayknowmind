@@ -195,17 +195,114 @@ fn parse_node_version(raw: &str) -> Option<(u32, u32)> {
     Some((major, minor))
 }
 
+fn node_meets_22_5(version: &str) -> bool {
+    parse_node_version(version)
+        .map(|(maj, min)| maj > 22 || (maj == 22 && min >= 5))
+        .unwrap_or(false)
+}
+
+/// Pick the best Node.js for our needs. We prefer a 22.5+ install so OCP's
+/// server.mjs actually runs.
+///
+/// Discovery order — first match wins among "qualifying" candidates:
+///   1. The shell PATH's `node`, but only if it's already 22.5+.
+///   2. Highest version found across fnm / nvm / volta / brew formulas.
+///   3. The shell PATH's `node` regardless of version (last resort — caller
+///      gets to decide whether to run it anyway).
+fn find_best_node() -> Option<(PathBuf, String)> {
+    fn probe(path: &PathBuf) -> Option<String> {
+        let raw = run_capture(path.to_str()?, &["--version"], None).ok()?;
+        Some(raw.trim().to_string())
+    }
+
+    // 1) Shell PATH's node if it's already new enough.
+    let path_node = which_in_shell_path("node");
+    let path_version = path_node.as_ref().and_then(probe);
+    if let (Some(p), Some(v)) = (path_node.clone(), path_version.clone()) {
+        if node_meets_22_5(&v) {
+            return Some((p, v));
+        }
+    }
+
+    // 2) Scan known version managers + brew formulas for the highest 22.5+.
+    let mut candidates: Vec<(PathBuf, (u32, u32), String)> = Vec::new();
+    let home = dirs_next::home_dir();
+
+    let mut scan_versions_dir = |dir: PathBuf, bin_subpath: &[&str]| {
+        if let Ok(entries) = fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy().to_string();
+                let (maj, min) = match parse_node_version(&name_str) {
+                    Some(v) => v,
+                    None => continue,
+                };
+                if !(maj > 22 || (maj == 22 && min >= 5)) {
+                    continue;
+                }
+                let mut bin = entry.path();
+                for seg in bin_subpath {
+                    bin.push(seg);
+                }
+                if bin.is_file() {
+                    candidates.push((bin, (maj, min), name_str));
+                }
+            }
+        }
+    };
+
+    if let Some(ref h) = home {
+        scan_versions_dir(
+            h.join(".local").join("share").join("fnm").join("node-versions"),
+            &["installation", "bin", "node"],
+        );
+        scan_versions_dir(
+            h.join(".nvm").join("versions").join("node"),
+            &["bin", "node"],
+        );
+        scan_versions_dir(
+            h.join(".volta").join("tools").join("image").join("node"),
+            &["bin", "node"],
+        );
+    }
+
+    // brew formula: node@22, node@23, node@24, …
+    for prefix in ["/opt/homebrew/opt", "/usr/local/opt"] {
+        for formula in &["node@22", "node@23", "node@24", "node@25"] {
+            let bin = PathBuf::from(prefix).join(formula).join("bin").join("node");
+            if bin.is_file() {
+                if let Some(v) = probe(&bin) {
+                    if let Some(parsed) = parse_node_version(&v) {
+                        if parsed.0 > 22 || (parsed.0 == 22 && parsed.1 >= 5) {
+                            candidates.push((bin, parsed, v));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Highest version wins.
+    candidates.sort_by_key(|(_, v, _)| *v);
+    if let Some((p, _, v)) = candidates.pop() {
+        return Some((p, v));
+    }
+
+    // 3) Last resort: shell PATH's node even if too old.
+    if let (Some(p), Some(v)) = (path_node, path_version) {
+        return Some((p, v));
+    }
+    None
+}
+
 #[tauri::command]
 fn system_env_check() -> SystemEnvCheck {
     let mut out = SystemEnvCheck::default();
 
-    // --- node ---
-    if let Ok(s) = run_capture("node", &["--version"], None) {
-        let v = s.trim().to_string();
-        out.node_meets_required = parse_node_version(&v)
-            .map(|(maj, min)| maj > 22 || (maj == 22 && min >= 5))
-            .unwrap_or(false);
-        out.node_version = Some(v);
+    // --- node — auto-discovery across fnm / nvm / volta / brew ---
+    if let Some((_, version)) = find_best_node() {
+        out.node_meets_required = node_meets_22_5(&version);
+        out.node_version = Some(version);
     }
 
     // --- git / npm — just version probes ---
@@ -528,14 +625,27 @@ fn ocp_install_sync() -> Result<OcpInstallResult, String> {
         admin_key_path: admin_key_path.clone(),
     };
 
-    // 1) preflight
-    if run_capture("node", &["--version"], None).is_err() {
-        return Err(serde_json::to_string(&make(
-            "preflight",
-            "Node.js not found on PATH. Install Node 22.5+ (https://nodejs.org) and retry.",
-        ))
-        .unwrap_or_else(|_| "Node.js not found".into()));
-    }
+    // 1) preflight — pick a Node ≥22.5 across fnm/nvm/volta/brew. The user's
+    //    shell default may be an older version (e.g. v20) even if 22+ is
+    //    installed via fnm — that's the most common reason ocp_install used
+    //    to silently fail.
+    let (node_path, node_version) = match find_best_node() {
+        Some((p, v)) if node_meets_22_5(&v) => (p, v),
+        Some((_, v)) => {
+            return Err(format!(
+                "No Node ≥22.5 found ({} is too old). OCP's server.mjs requires Node 22.5+. Install via fnm/brew/nodejs.org and retry.",
+                v
+            ));
+        }
+        None => {
+            return Err(
+                "Node.js not found anywhere (PATH, fnm, nvm, volta, brew). Install Node 22.5+ and retry."
+                    .to_string(),
+            );
+        }
+    };
+    eprintln!("[ocp_install] using node {} at {}", node_version, node_path.display());
+
     if run_capture("git", &["--version"], None).is_err() {
         return Err(serde_json::to_string(&make(
             "preflight",
@@ -620,17 +730,22 @@ fn ocp_install_sync() -> Result<OcpInstallResult, String> {
         }
     };
 
-    // 6) Run setup.mjs with --no-start. setup.mjs installs the launchd
-    //    plist (dev.ocp.proxy) which keeps server.mjs up across reboots;
-    //    we don't need to spawn it ourselves and would only race with
-    //    launchd for the port if we did.
-    let setup_path = which_in_shell_path("node")
-        .ok_or_else(|| "node not on shell PATH for setup.mjs".to_string())?;
-    let mut setup_cmd = Command::new(&setup_path);
+    // 6) Run setup.mjs with --no-start using the Node ≥22.5 we resolved
+    //    above. setup.mjs records `process.execPath` style decisions into
+    //    the launchd plist, so picking the right interpreter here is what
+    //    keeps the daemon working after reboot. We also push the new
+    //    node's bin dir to the front of PATH so any child spawn (npm,
+    //    claude, etc.) sees the same toolchain.
+    let node_bin_dir = node_path
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let augmented_path = format!("{}:{}", node_bin_dir, resolve_shell_path());
+    let mut setup_cmd = Command::new(&node_path);
     setup_cmd
         .args(["setup.mjs", "--no-start"])
         .current_dir(&ocp_dir)
-        .env("PATH", resolve_shell_path())
+        .env("PATH", &augmented_path)
         .env("OCP_ADMIN_KEY", &admin_key);
     let setup_out = setup_cmd
         .output()
