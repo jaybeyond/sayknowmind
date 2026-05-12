@@ -176,7 +176,19 @@ export function OcpStatusCard() {
         }
       } catch (e) {
         setInstallStep("failed");
-        setErrorMsg(e instanceof Error ? e.message : "OCP 설치 실패");
+        // Tauri invoke rejects with a plain string when the Rust command
+        // returns Result::Err(String). Without this branch the real reason
+        // (Node missing, git clone failed, npm error, etc.) gets swallowed
+        // and the user only sees the generic fallback.
+        const msg =
+          typeof e === "string"
+            ? e
+            : e instanceof Error
+              ? e.message
+              : typeof e === "object" && e !== null
+                ? JSON.stringify(e)
+                : "OCP 설치 실패";
+        setErrorMsg(msg);
         setInstalling(false);
       }
       return;
