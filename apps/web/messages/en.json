@@ -101,7 +101,8 @@
       "PASSWORD_TOO_LONG": "Password must be less than 128 characters.",
       "RATE_LIMIT_EXCEEDED": "Too many attempts. Please try again later.",
       "UNKNOWN": "Something went wrong. Please try again."
-    }
+    },
+    "rememberMe": "Keep me signed in"
   },
   "chat": {
     "placeholder": "Ask anything about your knowledge...",

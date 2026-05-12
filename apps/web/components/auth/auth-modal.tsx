@@ -76,6 +76,8 @@ export function AuthModal({
   );
 }
 
+const REMEMBER_ME_STORAGE_KEY = "sayknowmind.auth.rememberMe";
+
 function LoginForm() {
   const { t } = useTranslation();
   const [email, setEmail] = React.useState("");
@@ -83,6 +85,19 @@ function LoginForm() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  // Default to "remember me" since the only thing it changes for the user is
+  // session lifetime — unchecking it makes the cookie session-only (cleared
+  // when the window closes).
+  const [rememberMe, setRememberMe] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem(REMEMBER_ME_STORAGE_KEY);
+    return stored === null ? true : stored === "1";
+  });
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(REMEMBER_ME_STORAGE_KEY, rememberMe ? "1" : "0");
+  }, [rememberMe]);
 
   function translateAuthError(code?: string, fallback?: string): string {
     if (code) {
@@ -99,7 +114,7 @@ function LoginForm() {
     setLoading(true);
 
     const { error: authError } = await signIn.email(
-      { email, password, callbackURL: "/" },
+      { email, password, rememberMe, callbackURL: "/" },
       {
         onError: (ctx) => {
           setError(translateAuthError(ctx.error.code, ctx.error.message));
@@ -164,6 +179,15 @@ function LoginForm() {
           </button>
         </div>
       </div>
+      <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+        <input
+          type="checkbox"
+          className="size-4 rounded border-input accent-primary"
+          checked={rememberMe}
+          onChange={(e) => setRememberMe(e.target.checked)}
+        />
+        <span>{t("auth.rememberMe")}</span>
+      </label>
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? t("common.loading") : t("auth.login")}
       </Button>
