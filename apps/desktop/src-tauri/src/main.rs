@@ -1339,12 +1339,67 @@ fn main() {
         #[cfg(feature = "lite")]
         let url = REMOTE_URL.to_string();
 
-        // Inject desktop env
+        // Inject desktop env + intercept window.open / target=_blank / middle-clicks
+        // so external links always hand off to the system browser instead of
+        // silently being swallowed by Tauri's popup blocker.
         let env_data = detect_environment();
         let env_json = serde_json::to_string(&env_data).unwrap_or_else(|_| "{}".to_string());
         let init_js = format!(
-            "window.__SAYKNOW_ENV__ = {}; window.__TAURI_DESKTOP__ = true;",
-            env_json
+            r#"
+            window.__SAYKNOW_ENV__ = {env};
+            window.__TAURI_DESKTOP__ = true;
+
+            (function() {{
+              const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1", "{remote_host}"]);
+              function isExternal(href) {{
+                try {{
+                  const u = new URL(href, location.href);
+                  if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+                  return !ALLOWED_HOSTS.has(u.host);
+                }} catch {{ return false; }}
+              }}
+
+              // window.open() and target=_blank both end up calling window.open
+              // under the hood. Pushing the URL into location.href lets the
+              // Rust on_navigation handler decide whether to allow or open
+              // externally — same path as a direct anchor click.
+              const nativeOpen = window.open.bind(window);
+              window.open = function(url, target, features) {{
+                if (typeof url === "string" && isExternal(url)) {{
+                  window.location.href = url;
+                  return null;
+                }}
+                return nativeOpen(url, target, features);
+              }};
+
+              // Catch <a target="_blank"> + Cmd/Ctrl-click + middle-click on
+              // external anchors that the browser would otherwise want to
+              // open in a popup or a new tab.
+              document.addEventListener("click", function(e) {{
+                const a = e.target && e.target.closest && e.target.closest("a[href]");
+                if (!a) return;
+                const href = a.getAttribute("href");
+                if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+                if (isExternal(href)) {{
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.location.href = a.href;
+                }}
+              }}, true);
+
+              document.addEventListener("auxclick", function(e) {{
+                if (e.button !== 1) return; // middle-click
+                const a = e.target && e.target.closest && e.target.closest("a[href]");
+                if (!a) return;
+                if (isExternal(a.href)) {{
+                  e.preventDefault();
+                  window.location.href = a.href;
+                }}
+              }}, true);
+            }})();
+            "#,
+            env = env_json,
+            remote_host = REMOTE_HOST,
         );
 
         let window = tauri::WebviewWindowBuilder::new(
