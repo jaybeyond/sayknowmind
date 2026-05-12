@@ -353,7 +353,13 @@
       "ocpRepoMissing": "OCP 未インストール — 初回クリックでダウンロードされます",
       "ocpRunning": "OCP サーバー稼働中 (localhost:3456)",
       "fixIt": "自動で解決",
-      "openTerminal": "ターミナルを開く"
+      "openTerminal": "ターミナルを開く",
+      "fixDownload": "ダウンロードページを開く",
+      "fixInstall": "今すぐインストール",
+      "fixAuthLogin": "ログインを開始",
+      "fixInstalling": "インストール中…",
+      "fixError": "失敗 — ターミナルで手動実行してください",
+      "claudeInstalled": "Claude CLI インストール完了 — 更新を押してください"
     }
   },
   "profile": {

@@ -353,7 +353,13 @@
       "ocpRepoMissing": "OCP not installed yet — first click will download it",
       "ocpRunning": "OCP server running (localhost:3456)",
       "fixIt": "Fix automatically",
-      "openTerminal": "Open terminal"
+      "openTerminal": "Open terminal",
+      "fixDownload": "Open download page",
+      "fixInstall": "Install now",
+      "fixAuthLogin": "Sign in",
+      "fixInstalling": "Installing…",
+      "fixError": "Failed — please run manually in a terminal",
+      "claudeInstalled": "Claude CLI installed — hit refresh"
     }
   },
   "profile": {

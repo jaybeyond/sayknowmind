@@ -353,7 +353,13 @@
       "ocpRepoMissing": "OCP 미설치 — 처음 클릭 시 다운로드됩니다",
       "ocpRunning": "OCP 서버 실행 중 (localhost:3456)",
       "fixIt": "자동 해결",
-      "openTerminal": "터미널 열기"
+      "openTerminal": "터미널 열기",
+      "fixDownload": "다운로드 페이지 열기",
+      "fixInstall": "지금 설치",
+      "fixAuthLogin": "로그인 시작",
+      "fixInstalling": "설치 중…",
+      "fixError": "실패 — 터미널에서 수동 실행해주세요",
+      "claudeInstalled": "Claude CLI 설치 완료 — 새로고침을 눌러주세요"
     }
   },
   "profile": {

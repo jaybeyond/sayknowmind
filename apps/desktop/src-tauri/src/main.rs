@@ -353,6 +353,37 @@ fn system_env_check() -> SystemEnvCheck {
     out
 }
 
+/// Open `claude auth login` on the user's machine. The Claude CLI opens its
+/// own OAuth flow in the system browser; we just kick it off and detach.
+#[tauri::command]
+fn claude_auth_login() -> Result<u32, String> {
+    let claude = which_in_shell_path("claude")
+        .ok_or_else(|| "Claude CLI not on PATH. Install it first (npm install -g @anthropic-ai/claude-code).".to_string())?;
+    Command::new(&claude)
+        .args(["auth", "login"])
+        .env("PATH", resolve_shell_path())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map(|c| c.id())
+        .map_err(|e| format!("Failed to spawn claude: {}", e))
+}
+
+/// Best-effort `npm install -g @anthropic-ai/claude-code`. Used by the
+/// preflight UI's "Fix automatically" button when the CLI is missing.
+#[tauri::command]
+async fn install_claude_cli() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(|| -> Result<String, String> {
+        run_capture(
+            "npm",
+            &["install", "-g", "@anthropic-ai/claude-code"],
+            None,
+        )
+    })
+    .await
+    .map_err(|e| format!("join: {}", e))?
+}
+
 #[derive(serde::Serialize)]
 struct CodexStatus {
     ready: bool,
@@ -1186,6 +1217,8 @@ fn main() {
             revoke_ocp_key,
             ocp_install,
             system_env_check,
+            claude_auth_login,
+            install_claude_cli,
         ]);
 
     builder = builder.setup(|app| {

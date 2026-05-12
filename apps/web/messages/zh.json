@@ -353,7 +353,13 @@
       "ocpRepoMissing": "OCP 尚未安装 — 首次点击会自动下载",
       "ocpRunning": "OCP 服务运行中 (localhost:3456)",
       "fixIt": "自动解决",
-      "openTerminal": "打开终端"
+      "openTerminal": "打开终端",
+      "fixDownload": "打开下载页面",
+      "fixInstall": "立即安装",
+      "fixAuthLogin": "开始登录",
+      "fixInstalling": "正在安装…",
+      "fixError": "失败 — 请在终端中手动运行",
+      "claudeInstalled": "Claude CLI 安装完成 — 请点击刷新"
     }
   },
   "profile": {
