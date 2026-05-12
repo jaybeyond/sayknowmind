@@ -353,6 +353,100 @@ fn system_env_check() -> SystemEnvCheck {
     out
 }
 
+/// OpenAI-compatible chat message — what the OCP proxy and Codex SDK both
+/// expect on POST /v1/chat/completions.
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct ChatReply {
+    pub content: String,
+    pub model: String,
+}
+
+/// Direct chat through the user's local OCP proxy. Cloud cascade can't see
+/// localhost:3456, so the lite webview calls this Tauri command instead and
+/// the cloud chat API stays out of the loop entirely.
+#[tauri::command]
+async fn chat_via_ocp(
+    messages: Vec<ChatMessage>,
+    model: Option<String>,
+) -> Result<ChatReply, String> {
+    let chosen_model = model.unwrap_or_else(|| "claude-opus-4-7".to_string());
+    tauri::async_runtime::spawn_blocking(move || -> Result<ChatReply, String> {
+        // OCP exposes the OpenAI shape with no API key required from the
+        // client side — `auth-mode=none` is the default we install with.
+        let body = serde_json::json!({
+            "model": chosen_model,
+            "messages": messages,
+            "stream": false,
+        });
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .build()
+            .map_err(|e| format!("http client: {}", e))?;
+        let res = client
+            .post("http://127.0.0.1:3456/v1/chat/completions")
+            .header("Content-Type", "application/json")
+            .body(serde_json::to_vec(&body).unwrap_or_default())
+            .send()
+            .map_err(|e| format!("OCP fetch failed: {} — is the proxy running?", e))?;
+        let status = res.status();
+        let raw = res.text().unwrap_or_default();
+        if !status.is_success() {
+            return Err(format!("OCP returned {}: {}", status, raw.chars().take(500).collect::<String>()));
+        }
+        let parsed: serde_json::Value = serde_json::from_str(&raw)
+            .map_err(|e| format!("OCP response not JSON: {} — body: {}", e, raw.chars().take(200).collect::<String>()))?;
+        let content = parsed["choices"][0]["message"]["content"]
+            .as_str()
+            .ok_or_else(|| format!("OCP response missing choices[0].message.content: {}", raw.chars().take(300).collect::<String>()))?
+            .to_string();
+        let returned_model = parsed["model"].as_str().unwrap_or(&chosen_model).to_string();
+        Ok(ChatReply { content, model: returned_model })
+    })
+    .await
+    .map_err(|e| format!("join: {}", e))?
+}
+
+/// List the OCP proxy's available models so the picker has something real to
+/// show. Falls back to a stock list if the endpoint is unreachable.
+#[tauri::command]
+async fn list_ocp_models() -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(|| -> Result<Vec<String>, String> {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(3))
+            .build()
+            .map_err(|e| format!("http: {}", e))?;
+        let res = client
+            .get("http://127.0.0.1:3456/v1/models")
+            .send()
+            .map_err(|e| format!("OCP /v1/models failed: {}", e))?;
+        if !res.status().is_success() {
+            return Err(format!("OCP /v1/models returned {}", res.status()));
+        }
+        let body: serde_json::Value = res.json().map_err(|e| format!("parse: {}", e))?;
+        let arr = body["data"].as_array().ok_or("no data[]")?;
+        let mut ids: Vec<String> = arr
+            .iter()
+            .filter_map(|m| m["id"].as_str().map(str::to_string))
+            .collect();
+        if ids.is_empty() {
+            ids = vec![
+                "claude-opus-4-7".into(),
+                "claude-sonnet-4-6".into(),
+                "claude-haiku-4-5".into(),
+            ];
+        }
+        Ok(ids)
+    })
+    .await
+    .map_err(|e| format!("join: {}", e))?
+}
+
 /// Open `claude auth login` on the user's machine. The Claude CLI opens its
 /// own OAuth flow in the system browser; we just kick it off and detach.
 #[tauri::command]
@@ -1219,6 +1313,8 @@ fn main() {
             system_env_check,
             claude_auth_login,
             install_claude_cli,
+            chat_via_ocp,
+            list_ocp_models,
         ]);
 
     builder = builder.setup(|app| {

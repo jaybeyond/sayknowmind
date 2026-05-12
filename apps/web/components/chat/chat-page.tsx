@@ -198,6 +198,64 @@ export function ChatPage() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    // ────────────────────────────────────────────────────────────────────
+    // Lite-desktop fast path: if the user's local OCP proxy is ready, call
+    // it directly via Tauri so the cloud cascade — which can't reach the
+    // user's localhost:3456 — is skipped entirely. This is the whole point
+    // of the OCP integration on lite builds. RAG / phase events / sources
+    // are sacrificed for now; we just stream a single completion.
+    const tauri = (window as unknown as {
+      __TAURI_INTERNALS__?: {
+        invoke?: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+      };
+    }).__TAURI_INTERNALS__;
+    if (tauri?.invoke) {
+      try {
+        const status = await tauri.invoke<{ ready?: boolean }>("ocp_status");
+        if (status?.ready) {
+          // Build a system+history payload from the visible conversation.
+          const history = [...messages, userMsg]
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))
+            .filter((m) => m.content && m.content.trim().length > 0);
+          const reply = await tauri.invoke<{ content: string; model: string }>(
+            "chat_via_ocp",
+            { messages: history, model: null },
+          );
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id
+                ? {
+                    ...m,
+                    content: reply.content,
+                    isStreaming: false,
+                    phase: "done",
+                  }
+                : m,
+            ),
+          );
+          setIsStreaming(false);
+          abortRef.current = null;
+          return;
+        }
+      } catch (err) {
+        // OCP path failed — surface the real reason and stop. We don't
+        // silently fall back to the cloud here because the user explicitly
+        // wired up OCP and the cloud cascade can't reach it anyway.
+        const msg = err instanceof Error ? err.message : String(err);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsg.id
+              ? { ...m, content: `[OCP error] ${msg}`, isStreaming: false, phase: "done" }
+              : m,
+          ),
+        );
+        setIsStreaming(false);
+        abortRef.current = null;
+        return;
+      }
+    }
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
