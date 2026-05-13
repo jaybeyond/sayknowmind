@@ -139,6 +139,7 @@ apply_sql db/migrations/038_user_provider_configs.sql || exit 3
 # rows in those tables, so it's safe only when they hold no data we
 # care about (currently always true: chat was broken before this).
 apply_sql db/migrations/031_conversations_simple.sql  || exit 3
+apply_sql db/migrations/032_document_relations.sql    || exit 3
 # 028/029/030/037 build the channel_links table used by every
 # messaging integration (Telegram, Slack, Discord). Without these
 # verifyAndSave from the integrations tab dies with
@@ -178,6 +179,9 @@ apply_sql db/migrations/047_telegram_processed_updates.sql || exit 3
 # 048 resets Codex rows that selected API-only model IDs (for example
 # "gpt-5") which ChatGPT-account Codex rejects at runtime.
 apply_sql db/migrations/048_fix_codex_chatgpt_models.sql || exit 3
+# 049 adds compatibility columns expected by web ingestion/knowledge graph
+# routes when production's entities table was created by EdgeQuake first.
+apply_sql db/migrations/049_web_graph_schema_compat.sql || exit 3
 
 # better-auth rateLimit (no migration file ships this)
 echo "creating rateLimit table (if missing)"

@@ -86,12 +86,14 @@ migrate:production:
         db/migrations/029_add_bot_token_to_channel_links.sql
         db/migrations/030_add_lang_to_channel_links.sql
         db/migrations/037_channel_links_unique_channel_user.sql
+        db/migrations/032_document_relations.sql
         db/migrations/041_user_mcp_keys.sql
         db/migrations/042_tags_table.sql
         db/migrations/045_fix_ocp_base_url.sql
         db/migrations/046_fix_provider_models.sql
         db/migrations/047_telegram_processed_updates.sql
-        db/migrations/048_fix_codex_chatgpt_models.sql ; do
+        db/migrations/048_fix_codex_chatgpt_models.sql
+        db/migrations/049_web_graph_schema_compat.sql ; do
         echo "Applying: $f" ;
         psql "$DATABASE_URL" -f "$f" ;
       done
