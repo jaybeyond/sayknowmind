@@ -222,6 +222,11 @@ services:
     environment:
       EDGEQUAKE_URL: http://edgequake:8080
       AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      # When set, the MCP server requires Authorization: Bearer <key>
+      # (or ?api_key=<key>) on every /mcp, /sse, /messages request.
+      # Empty defaults so dev compose-up without this var still boots
+      # in open mode for local testing.
+      MCP_API_KEY: ${MCP_API_KEY:-}
     depends_on:
       - edgequake
     restart: unless-stopped
