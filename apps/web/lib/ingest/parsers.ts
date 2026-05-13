@@ -87,20 +87,21 @@ function countWords(text: string): number {
 }
 
 async function parsePdf(buffer: Buffer): Promise<ParsedContent> {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
-  const info = await parser.getInfo();
-  const textResult = await parser.getText();
-  const content = textResult.text.trim();
-  await parser.destroy();
+  // pdf-parse@1.x is the maintained Node-compatible build. The v2 line
+  // dragged in pdfjs-dist's browser build, which crashes on the server
+  // with "DOMMatrix is not defined". Types come from
+  // apps/web/types/pdf-parse.d.ts since the package ships no .d.ts.
+  const { default: pdfParse } = await import("pdf-parse");
+  const data = await pdfParse(buffer);
+  const content = (data.text ?? "").trim();
   return {
-    title: info?.info?.Title || info?.info?.title || "",
+    title: data.info?.Title || data.info?.title || "",
     content,
     wordCount: countWords(content),
     fileType: "pdf",
     metadata: {
-      author: info?.info?.Author || info?.info?.author,
-      pageCount: info.total,
+      author: data.info?.Author || data.info?.author,
+      pageCount: data.numpages,
     },
   };
 }

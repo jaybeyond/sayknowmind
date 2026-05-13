@@ -23,9 +23,12 @@ import { isCodexReady, invalidateCodexReadyCache } from "@/lib/codex";
 
 const PROVIDER_ID = "codex";
 const PLACEHOLDER_PLAINTEXT = "codex-oauth";
-// We pin a known model id so the catalog has something to render — Codex
-// CLI ignores this and uses whatever the ChatGPT subscription provides.
-const PINNED_MODEL = "codex-default";
+// Leave empty so cloud-chat/cloud-ai's relay path does NOT push a
+// --model arg to the CLI — Codex then falls back to its own default
+// which is what the user's ChatGPT subscription actually backs.
+// Previously this was "codex-default" which Codex CLI rejected with
+// exit status 1 ("Unknown model: codex-default").
+const PINNED_MODEL = "";
 // Symbolic base URL — Codex CLI handles the real endpoint internally.
 const PINNED_BASE_URL = "https://auth.openai.com";
 

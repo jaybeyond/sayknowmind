@@ -22,7 +22,10 @@ import {
 } from "@/lib/ocp";
 
 const PROVIDER_ID = "ocp";
-const PINNED_MODEL = "claude-opus";
+// OCP rejects bare aliases like "claude-opus" — its `/v1/models` lists
+// concrete IDs. Pin to the most capable Opus revision; users wanting a
+// different tier can override per-call (or via a future model picker).
+const PINNED_MODEL = "claude-opus-4-7";
 
 async function isOcpActiveForUser(userId: string): Promise<boolean> {
   const result = await pool.query(

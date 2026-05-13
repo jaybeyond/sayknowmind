@@ -132,11 +132,23 @@ apply_sql() {
 
 apply_sql db/init/10-integration-tokens.sql           || exit 3
 apply_sql db/migrations/038_user_provider_configs.sql || exit 3
+# 031 replaces the legacy EdgeQuake multi-tenant conversations/messages
+# tables (conversation_id PK + tenant_id) with the simple better-auth
+# schema (id PK + user_id TEXT) the web app actually queries against.
+# DROPs are guarded by IF EXISTS — but the migration *will* delete any
+# rows in those tables, so it's safe only when they hold no data we
+# care about (currently always true: chat was broken before this).
+apply_sql db/migrations/031_conversations_simple.sql  || exit 3
 # 045 strips the bogus trailing /v1 from existing OCP rows so the
 # cloud-ai cascade composes /v1/chat/completions cleanly instead of
 # /v1/v1/chat/completions. Idempotent — UPDATE only matches rows
 # that still have the suffix.
 apply_sql db/migrations/045_fix_ocp_base_url.sql      || exit 3
+# 046 corrects OCP/Codex `model` values so the LLM relay can dispatch:
+# OCP's CLI rejects the bare "claude-opus" alias, and Codex's exec
+# fails on "--model codex-default". Both are remapped to working
+# values. Idempotent.
+apply_sql db/migrations/046_fix_provider_models.sql   || exit 3
 
 # better-auth rateLimit (no migration file ships this)
 echo "creating rateLimit table (if missing)"
