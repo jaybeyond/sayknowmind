@@ -16,7 +16,7 @@ import { getSession } from "@/lib/admin";
 import {
   isOcpReady,
   invalidateOcpHealthCache,
-  ocpOpenAIBaseUrl,
+  ocpBaseUrl,
   provisionOcpKey,
   revokeProvisionedKey,
 } from "@/lib/ocp";
@@ -97,7 +97,9 @@ export async function POST(req: NextRequest) {
        base_url          = EXCLUDED.base_url,
        is_active         = true,
        updated_at        = NOW()`,
-    [session.user.id, PROVIDER_ID, encrypted, PINNED_MODEL, ocpOpenAIBaseUrl()],
+    // Store the bare host (no /v1) so cloud-ai.ts/cloud-chat.ts append
+    // /v1/chat/completions cleanly, matching the OpenRouter/OpenAI convention.
+    [session.user.id, PROVIDER_ID, encrypted, PINNED_MODEL, ocpBaseUrl()],
   );
 
   return NextResponse.json({ ready: true, active: true });
