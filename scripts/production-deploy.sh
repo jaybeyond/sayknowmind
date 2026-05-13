@@ -130,8 +130,13 @@ apply_sql() {
   fi
 }
 
-apply_sql db/init/10-integration-tokens.sql        || exit 3
+apply_sql db/init/10-integration-tokens.sql           || exit 3
 apply_sql db/migrations/038_user_provider_configs.sql || exit 3
+# 045 strips the bogus trailing /v1 from existing OCP rows so the
+# cloud-ai cascade composes /v1/chat/completions cleanly instead of
+# /v1/v1/chat/completions. Idempotent — UPDATE only matches rows
+# that still have the suffix.
+apply_sql db/migrations/045_fix_ocp_base_url.sql      || exit 3
 
 # better-auth rateLimit (no migration file ships this)
 echo "creating rateLimit table (if missing)"
@@ -142,14 +147,22 @@ maybe sudo psql "$DBURL" -c 'CREATE TABLE IF NOT EXISTS "rateLimit" (
 # ─── Image pull ─────────────────────────────────────────────────────
 log "STEP 4: DOCKER COMPOSE PULL"
 cd "$(dirname "$COMPOSE")"
-maybe sudo docker compose pull 2>&1 | tail -15
+# Best-effort pull — services declared with `image:` (e.g. redis) get
+# refreshed here. Services with `build:` ignore pull, so the heavy
+# lifting happens in `up -d --build` below.
+maybe sudo docker compose pull 2>&1 | tail -15 || true
 
 # ─── Restart ────────────────────────────────────────────────────────
 if [ "${SKIP_RESTART:-0}" = "1" ]; then
   echo "SKIP_RESTART=1 — leaving containers alone"
 else
   log "STEP 5: ROLLING RESTART"
-  maybe sudo docker compose up -d --remove-orphans 2>&1 | tail -15
+  # --build forces a rebuild of any service with a `build:` directive
+  # (web, ai-server, edgequake, ocr, dashboard) so the new git commit
+  # we just pulled actually lands in the running container. Without
+  # this flag `up -d` would reuse the cached image from the last
+  # build and silently ship stale code.
+  maybe sudo docker compose up -d --build --remove-orphans 2>&1 | tail -30
   sleep 5
   sudo docker compose ps 2>&1 | head
 fi
