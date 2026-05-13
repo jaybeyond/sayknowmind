@@ -49,6 +49,7 @@ Identity at every surface resolves to a single canonical `userId` from the `"use
 | Web `/api/search` | better-auth cookie via `getUserIdFromRequest()` | `WHERE d.user_id = me` (private-only, no shared) |
 | Web `/api/documents` | same | same |
 | Web `/api/chat` (RAG pipeline) | same | searchKnowledge uses user_id |
+| Web `/api/categories` / `/api/knowledge/*` | same | `WHERE user_id = me` (private-only, no shared) |
 | MCP `sayknowmind_search` (proxies cloud) | `AUTH_SECRET` shared bearer | ⛔ no user context forwarded |
 | MCP `query` / `document_*` / `graph_*` (EdgeQuake SDK direct) | none — uses global tenant/workspace | ⛔ all users see all data |
 | Telegram webhook | `channel_links.user_id` lookup | uses user_id |
@@ -77,7 +78,7 @@ writable_by(me) := (resource.user_id = me)
 
 `shared` access is **read-only**.
 
-Recommendation: centralize this in one helper per layer (`lib/visibility.ts` for cloud, `with_user_filter()` for raw SQL builders, EdgeQuake metadata filter for graph queries) so no route hand-rolls the WHERE clause.
+Recommendation: centralize this in one helper per layer (`lib/visibility.ts` for cloud, `with_user_filter()` for raw SQL builders, EdgeQuake metadata filter for graph queries) so no route hand-rolls the WHERE clause. The helper must accept a SQL table alias because current routes use multiple aliases (`d`, `documents`, `c`, `categories`, etc.).
 
 ---
 
@@ -99,31 +100,39 @@ Returns `null` if no source matches. All API routes already check for `null` and
 
 ## 6. Cloud-side query updates
 
-Every API route that currently does `WHERE user_id = $1` for read operations on documents/categories must become:
+Every API route that currently does `WHERE user_id = $1` for read operations on documents/categories/knowledge projections must become:
 
 ```sql
-WHERE (d.user_id = $1 OR d.privacy_level = 'shared')
+WHERE (resource.user_id = $1 OR resource.privacy_level = 'shared')
 ```
 
 Routes affected (read paths only — list, search, get-by-id, related, recent, gallery):
 
-* `apps/web/app/api/search/route.ts` — keyword + filtered search
+* `apps/web/app/api/search/route.ts` — keyword + filtered search + EdgeQuake source enrichment
 * `apps/web/app/api/documents/route.ts` — list
 * `apps/web/app/api/documents/[id]/route.ts` — single document GET (PATCH/DELETE still private)
-* `apps/web/lib/agents/pipeline.ts::searchKnowledge` — RAG retrieval
-* `apps/web/app/api/share/gallery/route.ts` — likely already shared-only, audit
+* `apps/web/app/api/documents/[id]/related/route.ts` — related-document reads
+* `apps/web/lib/agents/pipeline.ts::searchKnowledge` — RAG retrieval + catalog fallback
+* `apps/web/app/api/categories/route.ts` and `apps/web/lib/categories/store.ts` — category read/list paths
+* `apps/web/app/api/categories/[id]/documents/route.ts` — document reads under a category
+* `apps/web/app/api/knowledge/graph/route.ts` and `apps/web/app/api/knowledge/node/[nodeId]/route.ts` — graph/node reads
+* `apps/web/app/api/share/gallery/route.ts` — already shared-only, audit to preserve that invariant
 * Telegram inline search (`/api/integrations/telegram/webhook/route.ts` — search-by-message path)
 
 Helper:
 
 ```ts
 // lib/visibility.ts
-export function visibilityClause(userIdParam: number): string {
-  return `(d.user_id = $${userIdParam} OR d.privacy_level = 'shared')`;
+export function visibilityClause(alias: string, userIdParam: number): string {
+  return `(${alias}.user_id = $${userIdParam} OR ${alias}.privacy_level = 'shared')`;
+}
+
+export function writableClause(alias: string, userIdParam: number): string {
+  return `${alias}.user_id = $${userIdParam}`;
 }
 ```
 
-Each route swaps its existing `d.user_id = $N` for `visibilityClause(N)`.
+Each route swaps its existing read-path `alias.user_id = $N` for `visibilityClause(alias, N)`. Write paths keep `writableClause(alias, N)` or their existing strict owner check.
 
 **Test coverage:** at least one integration test per route asserting:
 1. user A sees their private doc
@@ -192,12 +201,14 @@ Phase 3 lands Option C — see §10.
 
 ## 8. EdgeQuake ingestion contract (forward-compatible)
 
-To make Phase 3 cheaper, start tagging EdgeQuake documents with `user_id` metadata **now**, even though queries don't filter on it yet:
+To make Phase 3 cheaper, every EdgeQuake upload must carry `metadata.user_id`, even though queries don't filter on it yet:
 
-* `apps/web/lib/edgequake/client.ts::indexDocument` adds `metadata.user_id` to every upload.
-* Once Phase 3 query-side filter exists, we don't need to re-ingest.
+* The main ingestion job already passes `metadata: { language, user_id: userId }` before `indexDocument()`.
+* `syncUnindexedToEdgeQuake()` also passes `user_id`.
+* Audit all remaining `indexDocument()` callers and enforce the invariant in `apps/web/lib/edgequake/client.ts` when a `document_id` belongs to a known user.
+* Once Phase 3 query-side filter exists, we avoid a full re-ingest for documents that were indexed after this invariant shipped.
 
-This is a one-line change in the ingestion path and harmless if Phase 3 slips.
+This is forward-compatible and harmless if Phase 3 slips.
 
 ---
 
@@ -214,8 +225,8 @@ Outcome: every authenticated path knows its user.
 
 ### Phase 2 — Visibility rule everywhere (1 PR, ~2 h)
 
-* §6: `lib/visibility.ts` helper + swap WHERE clauses in every listed route.
-* §8: tag EdgeQuake uploads with `metadata.user_id`.
+* §6: `lib/visibility.ts` helper + swap WHERE clauses in every listed read route, including categories and knowledge graph projections.
+* §8: audit/enforce EdgeQuake uploads with `metadata.user_id`.
 * Integration tests for the 4-case matrix per route.
 
 Outcome: web search + MCP `sayknowmind_*` see own + shared correctly.
@@ -248,6 +259,8 @@ A user is correctly isolated iff, for two test users A and B with `A_private`, `
 |---|---|---|---|---|
 | A's web search | ✓ | ✓ | ✗ | ✓ |
 | A's `/api/documents` list | ✓ | ✓ | ✗ | ✓ |
+| A's `/api/categories` list | ✓ | ✓ | ✗ | ✓ |
+| A's `/api/knowledge/graph` projections | ✓ | ✓ | ✗ | ✓ |
 | A's MCP `sayknowmind_search` | ✓ | ✓ | ✗ | ✓ |
 | A's MCP `query` (EdgeQuake direct, Phase 1) | 403 | 403 | 403 | 403 |
 | A's GET `/api/documents/B_private` | n/a | n/a | 404 | n/a |
@@ -260,7 +273,7 @@ Integration test suite at `apps/web/__tests__/multitenant-isolation.test.ts` (ne
 
 ## 12. Open questions
 
-1. Should `categories` follow the same rule? (Yes per current schema, but UX implication: shared categories appearing in a user's sidebar may be confusing.)
+1. Category UX: `categories` follow the same visibility rule for reads, but shared categories appearing in a user's sidebar may need visual ownership labels.
 2. Should `conversations` ever be shareable? (Probably not — keep private.)
 3. Tag visibility — shared docs' tags appear in the tag picker even if you didn't author them?
 4. Quota: does a shared doc count against the sharer's storage only, or against every reader?
@@ -287,9 +300,15 @@ apps/web/lib/visibility.ts                   (new — single source of truth for
 apps/web/app/api/search/route.ts             (swap WHERE)
 apps/web/app/api/documents/route.ts          (swap WHERE)
 apps/web/app/api/documents/[id]/route.ts     (GET only; PATCH/DELETE stay private)
+apps/web/app/api/documents/[id]/related/route.ts (visible related docs)
+apps/web/app/api/categories/route.ts         (visible category reads)
+apps/web/lib/categories/store.ts             (visible category list/get; owner-only writes)
+apps/web/app/api/categories/[id]/documents/route.ts (visible docs under visible category)
+apps/web/app/api/knowledge/graph/route.ts    (visible graph projections)
+apps/web/app/api/knowledge/node/[nodeId]/route.ts (visible node/doc reads)
 apps/web/lib/agents/pipeline.ts              (searchKnowledge WHERE)
 apps/web/app/api/share/gallery/route.ts      (audit)
 apps/web/app/api/integrations/telegram/webhook/route.ts (search-from-chat path)
-apps/web/lib/edgequake/client.ts             (tag user_id in metadata)
+apps/web/lib/edgequake/client.ts             (audit/enforce user_id metadata)
 apps/web/__tests__/multitenant-isolation.test.ts (new)
 ```
