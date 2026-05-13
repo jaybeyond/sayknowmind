@@ -21,11 +21,23 @@ import {
   revokeProvisionedKey,
 } from "@/lib/ocp";
 
+// Per-user state, never cacheable. Without this, Cloudflare in front of
+// sayknowmind.ypai.click will happily serve a stale `active=false` back
+// to a webview whose user has actually activated OCP — UI then shows
+// the "Connect" button while the backend cascade keeps routing to OCP.
+export const dynamic = "force-dynamic";
+
 const PROVIDER_ID = "ocp";
 // OCP rejects bare aliases like "claude-opus" — its `/v1/models` lists
 // concrete IDs. Pin to the most capable Opus revision; users wanting a
 // different tier can override per-call (or via a future model picker).
 const PINNED_MODEL = "claude-opus-4-7";
+
+/** Standard no-cache headers for every response on this route. */
+const NO_STORE_HEADERS = {
+  "Cache-Control": "private, no-store, no-cache, must-revalidate",
+  "Pragma": "no-cache",
+};
 
 async function isOcpActiveForUser(userId: string): Promise<boolean> {
   const result = await pool.query(
@@ -39,18 +51,24 @@ async function isOcpActiveForUser(userId: string): Promise<boolean> {
 export async function GET() {
   const session = await getSession();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
   invalidateOcpHealthCache();
   const ready = await isOcpReady();
   const active = await isOcpActiveForUser(session.user.id);
-  return NextResponse.json({ ready, active });
+  return NextResponse.json({ ready, active }, { headers: NO_STORE_HEADERS });
 }
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
 
   // Two paths to obtain the API key we'll store:
@@ -77,14 +95,14 @@ export async function POST(req: NextRequest) {
           error:
             "OCP not reachable on http://localhost:3456 or admin-key missing — install and start OCP first.",
         },
-        { status: 412 },
+        { status: 412, headers: NO_STORE_HEADERS },
       );
     }
     try {
       key = await provisionOcpKey();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "OCP provisioning failed";
-      return NextResponse.json({ error: msg }, { status: 502 });
+      return NextResponse.json({ error: msg }, { status: 502, headers: NO_STORE_HEADERS });
     }
   }
 
@@ -105,13 +123,16 @@ export async function POST(req: NextRequest) {
     [session.user.id, PROVIDER_ID, encrypted, PINNED_MODEL, ocpBaseUrl()],
   );
 
-  return NextResponse.json({ ready: true, active: true });
+  return NextResponse.json({ ready: true, active: true }, { headers: NO_STORE_HEADERS });
 }
 
 export async function DELETE() {
   const session = await getSession();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
 
   // Best-effort revoke the key at OCP so it can't be reused if leaked.
@@ -128,5 +149,5 @@ export async function DELETE() {
 
   invalidateOcpHealthCache();
   const ready = await isOcpReady();
-  return NextResponse.json({ ready, active: false });
+  return NextResponse.json({ ready, active: false }, { headers: NO_STORE_HEADERS });
 }

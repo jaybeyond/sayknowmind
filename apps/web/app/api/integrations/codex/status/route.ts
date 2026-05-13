@@ -21,6 +21,18 @@ import { encryptForUser } from "@/lib/encryption";
 import { getSession } from "@/lib/admin";
 import { isCodexReady, invalidateCodexReadyCache } from "@/lib/codex";
 
+// Per-user state; never cache. Without this Cloudflare in front of
+// sayknowmind.ypai.click can serve a stale `active=false` to a webview
+// whose user has activated Codex — the card then renders "Connect"
+// while the cascade keeps using Codex anyway.
+export const dynamic = "force-dynamic";
+
+/** Standard no-cache headers for every response on this route. */
+const NO_STORE_HEADERS = {
+  "Cache-Control": "private, no-store, no-cache, must-revalidate",
+  "Pragma": "no-cache",
+};
+
 const PROVIDER_ID = "codex";
 const PLACEHOLDER_PLAINTEXT = "codex-oauth";
 // Leave empty so cloud-chat/cloud-ai's relay path does NOT push a
@@ -44,18 +56,24 @@ async function isCodexActiveForUser(userId: string): Promise<boolean> {
 export async function GET() {
   const session = await getSession();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
   invalidateCodexReadyCache();
   const ready = isCodexReady();
   const active = await isCodexActiveForUser(session.user.id);
-  return NextResponse.json({ ready, active });
+  return NextResponse.json({ ready, active }, { headers: NO_STORE_HEADERS });
 }
 
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
   invalidateCodexReadyCache();
 
@@ -69,7 +87,7 @@ export async function POST(request: Request) {
   if (!ready) {
     return NextResponse.json(
       { error: "Codex not authenticated on this machine — run `codex login` first." },
-      { status: 412 },
+      { status: 412, headers: NO_STORE_HEADERS },
     );
   }
 
@@ -82,13 +100,16 @@ export async function POST(request: Request) {
      DO UPDATE SET is_active = true, updated_at = NOW()`,
     [session.user.id, PROVIDER_ID, encrypted, PINNED_MODEL, PINNED_BASE_URL],
   );
-  return NextResponse.json({ ready: true, active: true });
+  return NextResponse.json({ ready: true, active: true }, { headers: NO_STORE_HEADERS });
 }
 
 export async function DELETE() {
   const session = await getSession();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
   // Soft-deactivate: keep the row so we don't lose history, just flip the flag.
   await pool.query(
@@ -97,5 +118,8 @@ export async function DELETE() {
     [session.user.id, PROVIDER_ID],
   );
   invalidateCodexReadyCache();
-  return NextResponse.json({ ready: isCodexReady(), active: false });
+  return NextResponse.json(
+    { ready: isCodexReady(), active: false },
+    { headers: NO_STORE_HEADERS },
+  );
 }
