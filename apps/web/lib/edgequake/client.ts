@@ -11,14 +11,29 @@ const EDGEQUAKE_TIMEOUT = 30_000;
 const EDGEQUAKE_WORKSPACE_ID = process.env.EDGEQUAKE_WORKSPACE_ID ?? "00000000-0000-0000-0000-000000000003";
 const EDGEQUAKE_TENANT_ID = process.env.EDGEQUAKE_TENANT_ID ?? "00000000-0000-0000-0000-000000000002";
 
-function headers(): Record<string, string> {
+export interface EdgeQuakeScope {
+  userId?: string;
+  tenantId?: string;
+  workspaceId?: string;
+}
+
+function headers(scope?: EdgeQuakeScope): Record<string, string> {
   const h: Record<string, string> = {
     "Content-Type": "application/json",
-    "X-Workspace-ID": EDGEQUAKE_WORKSPACE_ID,
-    "X-Tenant-ID": EDGEQUAKE_TENANT_ID,
+    "X-Workspace-ID": scope?.workspaceId ?? EDGEQUAKE_WORKSPACE_ID,
+    "X-Tenant-ID": scope?.tenantId ?? EDGEQUAKE_TENANT_ID,
   };
+  if (scope?.userId) h["X-User-ID"] = scope.userId;
   if (EDGEQUAKE_API_KEY) h["Authorization"] = `Bearer ${EDGEQUAKE_API_KEY}`;
   return h;
+}
+
+function scopeFromRequest(request: EdgeQuakeScope): EdgeQuakeScope {
+  return {
+    userId: request.userId,
+    tenantId: request.tenantId,
+    workspaceId: request.workspaceId,
+  };
 }
 
 // ── Query Types (subset of EdgeQuake API) ──────────────────────
@@ -32,6 +47,9 @@ export interface EQQueryRequest {
   max_results?: number;
   llm_provider?: string;
   llm_model?: string;
+  userId?: string;
+  tenantId?: string;
+  workspaceId?: string;
 }
 
 export interface EQSourceReference {
@@ -80,11 +98,18 @@ export interface EQGraphResponse {
 // ── Client Functions ───────────────────────────────────────────
 
 export async function queryEdgeQuake(request: EQQueryRequest): Promise<EQQueryResponse> {
+  const {
+    userId: _userId,
+    tenantId: _tenantId,
+    workspaceId: _workspaceId,
+    ...payload
+  } = request;
+
   const response = await fetch(`${EDGEQUAKE_URL}/api/v1/query`, {
     method: "POST",
-    headers: headers(),
+    headers: headers(scopeFromRequest(request)),
     body: JSON.stringify({
-      ...request,
+      ...payload,
       include_references: request.include_references ?? true,
     }),
     signal: AbortSignal.timeout(EDGEQUAKE_TIMEOUT),
@@ -125,10 +150,17 @@ export async function getGraph(options?: {
 export async function streamQuery(
   request: EQQueryRequest,
 ): Promise<ReadableStream<Uint8Array>> {
+  const {
+    userId: _userId,
+    tenantId: _tenantId,
+    workspaceId: _workspaceId,
+    ...payload
+  } = request;
+
   const response = await fetch(`${EDGEQUAKE_URL}/api/v1/query/stream`, {
     method: "POST",
-    headers: headers(),
-    body: JSON.stringify(request),
+    headers: headers(scopeFromRequest(request)),
+    body: JSON.stringify(payload),
     signal: AbortSignal.timeout(60_000),
   });
 
@@ -147,6 +179,9 @@ export interface EQIndexRequest {
   document_id?: string;
   metadata?: Record<string, unknown>;
   async_processing?: boolean;
+  userId?: string;
+  tenantId?: string;
+  workspaceId?: string;
 }
 
 export interface EQIndexResponse {
@@ -160,13 +195,26 @@ export interface EQIndexResponse {
 // ── Index Function ───────────────────────────────────────────
 
 export async function indexDocument(request: EQIndexRequest): Promise<EQIndexResponse> {
+  const metadataUserId = typeof request.metadata?.user_id === "string"
+    ? request.metadata.user_id
+    : undefined;
+  const userId = request.userId ?? metadataUserId;
+  const scope = scopeFromRequest({ ...request, userId });
+  const metadata = {
+    ...request.metadata,
+    ...(userId ? { user_id: userId } : {}),
+    ...(scope.tenantId ? { tenant_id: scope.tenantId } : {}),
+    ...(scope.workspaceId ? { workspace_id: scope.workspaceId } : {}),
+    sayknowmind_document_id: request.document_id,
+  };
+
   const response = await fetch(`${EDGEQUAKE_URL}/api/v1/documents`, {
     method: "POST",
-    headers: headers(),
+    headers: headers(scope),
     body: JSON.stringify({
       content: request.content,
       title: request.title,
-      metadata: { ...request.metadata, sayknowmind_document_id: request.document_id },
+      metadata,
       async_processing: request.async_processing ?? true,
     }),
     signal: AbortSignal.timeout(EDGEQUAKE_TIMEOUT),
@@ -262,6 +310,7 @@ export async function syncUnindexedToEdgeQuake(
         content: doc.content,
         title: doc.title ?? undefined,
         document_id: doc.id,
+        userId,
         metadata: {
           language: doc.metadata?.language,
           user_id: userId,

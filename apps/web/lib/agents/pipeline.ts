@@ -197,6 +197,7 @@ async function searchKnowledge(
       mode: "naive",
       include_references: true,
       max_results: 5,
+      userId,
     });
 
     const count = result.sources?.length ?? 0;

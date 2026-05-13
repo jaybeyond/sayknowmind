@@ -113,6 +113,7 @@ async function executeStep(
             mode: "hybrid",
             include_references: true,
             max_results: 5,
+            userId,
           }),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error("Step timeout")), STEP_TIMEOUT_MS),

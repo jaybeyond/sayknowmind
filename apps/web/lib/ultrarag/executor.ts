@@ -101,6 +101,8 @@ async function executeStep(
   step: PipelineStep,
   context: Record<string, unknown>,
 ): Promise<unknown> {
+  const userId = getUserIdFromContext(context);
+
   switch (step.type) {
     case "crawl":
       throw new Error("Crawl step not supported — use the ingest pipeline directly");
@@ -128,6 +130,8 @@ async function executeStep(
         content: String(step.config.content ?? context.content ?? ""),
         title: String(step.config.title ?? ""),
         document_id: String(step.config.document_id ?? ""),
+        userId,
+        metadata: userId ? { user_id: userId } : undefined,
       });
 
     case "search":
@@ -135,6 +139,7 @@ async function executeStep(
         query: String(step.config.query ?? ""),
         mode: (step.config.mode as "hybrid") ?? "hybrid",
         include_references: true,
+        userId,
       });
 
     case "transform":
@@ -169,6 +174,12 @@ async function executeStep(
     default:
       throw new Error(`Unknown step type: ${step.type}`);
   }
+}
+
+function getUserIdFromContext(context: Record<string, unknown>): string | undefined {
+  return typeof context.userId === "string" && context.userId.length > 0
+    ? context.userId
+    : undefined;
 }
 
 async function callAiServer(path: string, body: unknown): Promise<unknown> {

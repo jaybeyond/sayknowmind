@@ -382,6 +382,7 @@ async function processJob(job: JobRow): Promise<void> {
           title: doc.title ?? undefined,
           document_id: documentId,
           metadata: { language, user_id: userId },
+          userId,
           async_processing: false,
         });
         // Mark document as indexed in PostgreSQL
@@ -416,6 +417,7 @@ async function processJob(job: JobRow): Promise<void> {
             mode: "naive",
             max_results: 6,
             include_references: true,
+            userId,
           });
 
           const relatedDocs = similar.sources

@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
         mode: (MODE_MAP[mode] ?? "hybrid") as "naive" | "local" | "global" | "hybrid" | "mix",
         include_references: true,
         max_results: limit,
+        userId,
       });
     } catch {
       // Fallback: direct PostgreSQL full-text search if EdgeQuake is unavailable
