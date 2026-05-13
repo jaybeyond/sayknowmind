@@ -211,15 +211,29 @@ async function getBotToken(): Promise<string | null> {
   }
 }
 
-async function getBotTokenForTelegramUser(telegramUserId: string): Promise<{ token: string | null; lang: Lang }> {
+async function getBotTokenForTelegramUser(
+  telegramUserId: string,
+  pinnedBotToken?: string | null,
+): Promise<{ token: string | null; lang: Lang }> {
   try {
     // Join with user table to get the browser-set locale as primary language source
+    const params: unknown[] = [telegramUserId];
+    let botScope = "";
+    if (pinnedBotToken) {
+      params.push(pinnedBotToken);
+      botScope = "AND cl.bot_token = $2";
+    }
     const result = await pool.query(
       `SELECT cl.bot_token, cl.user_id, u.locale, cl.lang
        FROM channel_links cl
        LEFT JOIN "user" u ON u.id = cl.user_id
-       WHERE cl.channel = 'telegram' AND cl.channel_user_id = $1`,
-      [telegramUserId],
+       WHERE cl.channel = 'telegram'
+         AND cl.channel_user_id = $1
+         AND cl.user_id NOT LIKE 'pending:%'
+         ${botScope}
+       ORDER BY cl.linked_at DESC NULLS LAST
+       LIMIT 1`,
+      params,
     );
     const row = result.rows[0];
     if (row) {
@@ -237,20 +251,31 @@ async function getBotTokenForTelegramUser(telegramUserId: string): Promise<{ tok
       };
     }
   } catch { /* fallback */ }
-  const fb = await getBotToken();
+  const fb = pinnedBotToken ?? await getBotToken();
   return { token: fb, lang: "en" };
 }
 
 // ── Language Preference ──────────────────────────────────────
 
-async function getUserLang(tgUserId: string): Promise<Lang> {
+async function getUserLang(tgUserId: string, pinnedBotToken?: string | null): Promise<Lang> {
   try {
+    const params: unknown[] = [tgUserId];
+    let botScope = "";
+    if (pinnedBotToken) {
+      params.push(pinnedBotToken);
+      botScope = "AND cl.bot_token = $2";
+    }
     const result = await pool.query(
       `SELECT u.locale, cl.lang
        FROM channel_links cl
        LEFT JOIN "user" u ON u.id = cl.user_id
-       WHERE cl.channel = 'telegram' AND cl.channel_user_id = $1`,
-      [tgUserId],
+       WHERE cl.channel = 'telegram'
+         AND cl.channel_user_id = $1
+         AND cl.user_id NOT LIKE 'pending:%'
+         ${botScope}
+       ORDER BY cl.linked_at DESC NULLS LAST
+       LIMIT 1`,
+      params,
     );
     const row = result.rows[0];
     if (row) {
@@ -263,12 +288,22 @@ async function getUserLang(tgUserId: string): Promise<Lang> {
   return "en";
 }
 
-async function setUserLang(tgUserId: string, lang: Lang): Promise<void> {
+async function setUserLang(tgUserId: string, lang: Lang, pinnedBotToken?: string | null): Promise<void> {
   // Update both channel_links.lang AND user.locale to keep them in sync
+  const params: unknown[] = [lang, tgUserId];
+  let botScope = "";
+  if (pinnedBotToken) {
+    params.push(pinnedBotToken);
+    botScope = "AND bot_token = $3";
+  }
   const result = await pool.query(
     `UPDATE channel_links SET lang = $1, updated_at = NOW()
-     WHERE channel = 'telegram' AND channel_user_id = $2 RETURNING user_id`,
-    [lang, tgUserId],
+     WHERE channel = 'telegram'
+       AND channel_user_id = $2
+       AND user_id NOT LIKE 'pending:%'
+       ${botScope}
+     RETURNING user_id`,
+    params,
   );
   const userId = result.rows[0]?.user_id;
   if (userId) {
@@ -571,6 +606,51 @@ async function searchKnowledge(userId: string, query: string): Promise<string> {
   return "";
 }
 
+async function findLinkedTelegramUserId(
+  telegramUserId: string,
+  pinnedBotToken?: string | null,
+): Promise<string | undefined> {
+  const params: unknown[] = [telegramUserId];
+  let botScope = "";
+  if (pinnedBotToken) {
+    params.push(pinnedBotToken);
+    botScope = "AND bot_token = $2";
+  }
+  const linked = await pool.query(
+    `SELECT user_id FROM channel_links
+     WHERE channel = 'telegram'
+       AND channel_user_id = $1
+       AND user_id NOT LIKE 'pending:%'
+       ${botScope}
+     ORDER BY linked_at DESC NULLS LAST
+     LIMIT 1`,
+    params,
+  ).catch(() => ({ rows: [] }));
+
+  return linked.rows[0]?.user_id as string | undefined;
+}
+
+async function deleteTelegramLinksForBot(
+  telegramUserId: string,
+  exceptLinkCode: string | null,
+  pinnedBotToken?: string | null,
+): Promise<void> {
+  const params: unknown[] = [telegramUserId, exceptLinkCode];
+  let botScope = "";
+  if (pinnedBotToken) {
+    params.push(pinnedBotToken);
+    botScope = "AND (bot_token = $3 OR (user_id LIKE 'pending:%' AND bot_token IS NULL))";
+  }
+  await pool.query(
+    `DELETE FROM channel_links
+     WHERE channel = 'telegram'
+       AND channel_user_id = $1
+       AND link_code IS DISTINCT FROM $2
+       ${botScope}`,
+    params,
+  ).catch(() => {});
+}
+
 // ── Main Handler ─────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -699,15 +779,11 @@ export async function handleTelegramUpdate(
     const cbChatId = cbq.message!.chat.id;
     const cbMessageId = cbq.message!.message_id;
     const cbTgUserId = String(cbq.from.id);
-    const { token: cbUserToken, lang: cbLang } = await getBotTokenForTelegramUser(cbTgUserId);
+    const pinnedBotToken = opts.pinnedBotToken ?? null;
+    const { token: cbUserToken, lang: cbLang } = await getBotTokenForTelegramUser(cbTgUserId, pinnedBotToken);
     const cbBotToken = cbUserToken ?? fallbackToken;
 
-    const cbLinked = await pool.query(
-      `SELECT user_id FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1
-       ORDER BY linked_at DESC NULLS LAST LIMIT 1`,
-      [cbTgUserId],
-    ).catch(() => ({ rows: [] }));
-    const cbUserId = cbLinked.rows[0]?.user_id as string | undefined;
+    const cbUserId = await findLinkedTelegramUserId(cbTgUserId, pinnedBotToken);
 
     if (!cbUserId) {
       await answerCallbackQuery(cbBotToken, cbq.id, msg("accountNotLinked", cbLang));
@@ -720,7 +796,7 @@ export async function handleTelegramUpdate(
     if (data.startsWith("lang:")) {
       const chosen = data.split(":")[1] as Lang;
       if (SUPPORTED_LANGS.includes(chosen)) {
-        await setUserLang(cbTgUserId, chosen);
+        await setUserLang(cbTgUserId, chosen, pinnedBotToken);
         await answerCallbackQuery(cbBotToken, cbq.id, `✅ ${LANG_LABELS[chosen]}`);
         await editMessageText(cbBotToken, cbChatId, cbMessageId,
           `✅ ${msg("langSet", chosen)}`);
@@ -874,19 +950,15 @@ export async function handleTelegramUpdate(
   const chatId = message.chat.id;
   const tgUserId = String(message.from.id);
   const text = message.text?.trim() ?? message.caption?.trim() ?? "";
-  const { token: userToken, lang: userLang } = await getBotTokenForTelegramUser(tgUserId);
+  const pinnedBotToken = opts.pinnedBotToken ?? null;
+  const { token: userToken, lang: userLang } = await getBotTokenForTelegramUser(tgUserId, pinnedBotToken);
   // Prefer per-user token; fall back to global only if user has none
   const botToken = userToken ?? fallbackToken;
   const L = userLang;
   console.log(`[telegram/webhook] msg from=${tgUserId} type=${msgType} userToken=${userToken ? "yes" : "no"} fallback=${fallbackToken ? "yes" : "no"}`);
 
   // Look up linked SayKnowMind user (prefer most recently linked if duplicates exist)
-  const linked = await pool.query(
-    `SELECT user_id FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1
-     ORDER BY linked_at DESC NULLS LAST LIMIT 1`,
-    [tgUserId],
-  ).catch(() => ({ rows: [] }));
-  let userId = linked.rows[0]?.user_id as string | undefined;
+  let userId = await findLinkedTelegramUserId(tgUserId, pinnedBotToken);
 
   // ── Commands ────────────────────────────────────────────
 
@@ -896,18 +968,24 @@ export async function handleTelegramUpdate(
       const linkCode = text.split(" ")[1];
       if (linkCode) {
         // Link (or re-link) with code from web settings
-        // Delete ALL existing links for this telegram user to prevent duplicates
-        await pool.query(
-          `DELETE FROM channel_links
-           WHERE channel = 'telegram' AND channel_user_id = $1 AND link_code IS DISTINCT FROM $2`,
-          [tgUserId, linkCode],
-        ).catch(() => {});
+        // Delete existing links only for this bot. A Telegram account can talk
+        // to multiple user-owned bots, so scoping by bot token is required for
+        // true per-user integration.
+        await deleteTelegramLinksForBot(tgUserId, linkCode, pinnedBotToken);
         const linkResult = await pool.query(
           `UPDATE channel_links
-           SET channel_user_id = $1, channel_username = $2, linked_at = NOW()
-           WHERE channel = 'telegram' AND link_code = $3 AND channel_user_id IS NULL
+           SET channel_user_id = $1,
+               channel_username = $2,
+               linked_at = NOW(),
+               link_code = NULL,
+               bot_token = COALESCE(bot_token, $4),
+               updated_at = NOW()
+           WHERE channel = 'telegram'
+             AND link_code = $3
+             AND channel_user_id IS NULL
+             AND ($4::text IS NULL OR bot_token IS NULL OR bot_token = $4)
            RETURNING user_id`,
-          [tgUserId, message.from.username ?? null, linkCode],
+          [tgUserId, message.from.username ?? null, linkCode, pinnedBotToken],
         ).catch(() => ({ rows: [] }));
 
         if (linkResult.rows.length > 0) {
@@ -922,17 +1000,21 @@ export async function handleTelegramUpdate(
         // Generate a 6-digit verification code and store as pending link
         try {
           const code = String(Math.floor(100000 + Math.random() * 900000));
-          // Remove any existing pending entries for this telegram user
+          // Remove any existing pending entries for this telegram user on this bot.
           await pool.query(
-            `DELETE FROM channel_links WHERE channel = 'telegram' AND channel_user_id = $1 AND user_id LIKE 'pending:%'`,
-            [tgUserId],
+            `DELETE FROM channel_links
+             WHERE channel = 'telegram'
+               AND channel_user_id = $1
+               AND user_id LIKE 'pending:%'
+               AND ($2::text IS NULL OR bot_token = $2 OR bot_token IS NULL)`,
+            [tgUserId, pinnedBotToken],
           ).catch(() => {});
           // Store pending record — user_id encodes the code for easy lookup
           await pool.query(
-            `INSERT INTO channel_links (user_id, channel, link_code, channel_user_id, channel_username, linked_at)
-             VALUES ($1, 'telegram', $2, $3, $4, NOW())
+            `INSERT INTO channel_links (user_id, channel, link_code, channel_user_id, channel_username, linked_at, bot_token)
+             VALUES ($1, 'telegram', $2, $3, $4, NOW(), $5)
              ON CONFLICT DO NOTHING`,
-            [`pending:${code}`, code, tgUserId, message.from.username ?? null],
+            [`pending:${code}`, code, tgUserId, message.from.username ?? null, pinnedBotToken],
           );
           await sendMessage(botToken, chatId, msg("verificationCode", L, { code }));
         } catch (err) {

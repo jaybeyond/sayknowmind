@@ -179,12 +179,31 @@ export async function POST(
     if (!channelUserId) {
       return NextResponse.json({ error: "Channel user ID is required" }, { status: 400 });
     }
+    const current = await pool.query(
+      `SELECT bot_token FROM channel_links WHERE user_id = $1 AND channel = $2`,
+      [userId, channel],
+    ).catch(() => ({ rows: [] }));
+    const botToken = (current.rows[0]?.bot_token as string | null) ?? null;
+
     await pool.query(
-      `INSERT INTO channel_links (user_id, channel, channel_user_id, channel_username, linked_at)
-       VALUES ($1, $2, $3, $4, NOW())
+      `DELETE FROM channel_links
+       WHERE channel = $1
+         AND channel_user_id = $2
+         AND user_id LIKE 'pending:%'
+         AND ($3::text IS NULL OR bot_token = $3 OR bot_token IS NULL)`,
+      [channel, channelUserId, botToken],
+    ).catch(() => {});
+
+    await pool.query(
+      `INSERT INTO channel_links (user_id, channel, channel_user_id, channel_username, linked_at, bot_token)
+       VALUES ($1, $2, $3, $4, NOW(), $5)
        ON CONFLICT (user_id, channel)
-       DO UPDATE SET channel_user_id = $3, channel_username = $4, linked_at = NOW()`,
-      [userId, channel, channelUserId, channelUsername ?? null],
+       DO UPDATE SET channel_user_id = $3,
+                     channel_username = $4,
+                     linked_at = NOW(),
+                     bot_token = COALESCE(channel_links.bot_token, $5),
+                     updated_at = NOW()`,
+      [userId, channel, channelUserId, channelUsername ?? null, botToken],
     );
     return NextResponse.json({ ok: true, linked: true });
   }
@@ -258,11 +277,24 @@ export async function POST(
 
     // Find the pending record (expires after 10 minutes)
     const pendingRow = await pool.query(
-      `SELECT user_id, channel_user_id, channel_username, linked_at
-       FROM channel_links
-       WHERE channel = 'telegram' AND link_code = $1 AND user_id LIKE 'pending:%'
+      `SELECT p.user_id,
+              p.channel_user_id,
+              p.channel_username,
+              p.linked_at,
+              p.bot_token
+       FROM channel_links p
+       LEFT JOIN channel_links current
+         ON current.user_id = $2 AND current.channel = 'telegram'
+       WHERE p.channel = 'telegram'
+         AND p.link_code = $1
+         AND p.user_id LIKE 'pending:%'
+         AND (
+           current.bot_token IS NULL
+           OR p.bot_token IS NULL
+           OR current.bot_token = p.bot_token
+         )
        LIMIT 1`,
-      [code],
+      [code, userId],
     ).catch(() => ({ rows: [] }));
 
     if (!pendingRow.rows[0]) {
@@ -271,6 +303,7 @@ export async function POST(
 
     const row = pendingRow.rows[0];
     const linkedAt: Date = row.linked_at;
+    const pendingBotToken = row.bot_token as string | null;
     const ageMs = Date.now() - new Date(linkedAt).getTime();
     if (ageMs > 10 * 60 * 1000) {
       // Clean up expired record
@@ -292,11 +325,16 @@ export async function POST(
 
     // Link the telegram user to the current web user
     await pool.query(
-      `INSERT INTO channel_links (user_id, channel, channel_user_id, channel_username, linked_at)
-       VALUES ($1, $2, $3, $4, NOW())
+      `INSERT INTO channel_links (user_id, channel, channel_user_id, channel_username, linked_at, bot_token)
+       VALUES ($1, $2, $3, $4, NOW(), $5)
        ON CONFLICT (user_id, channel)
-       DO UPDATE SET channel_user_id = $3, channel_username = $4, linked_at = NOW(), link_code = NULL`,
-      [userId, channel, tgUserId, tgUsername],
+       DO UPDATE SET channel_user_id = $3,
+                     channel_username = $4,
+                     linked_at = NOW(),
+                     link_code = NULL,
+                     bot_token = COALESCE(channel_links.bot_token, $5),
+                     updated_at = NOW()`,
+      [userId, channel, tgUserId, tgUsername, pendingBotToken],
     );
 
     return NextResponse.json({ ok: true, linked: true, username: tgUsername });

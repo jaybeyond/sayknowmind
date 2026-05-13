@@ -182,6 +182,9 @@ apply_sql db/migrations/048_fix_codex_chatgpt_models.sql || exit 3
 # 049 adds compatibility columns expected by web ingestion/knowledge graph
 # routes when production's entities table was created by EdgeQuake first.
 apply_sql db/migrations/049_web_graph_schema_compat.sql || exit 3
+# 050 scopes Telegram sender links by bot token and excludes pending
+# verification-code rows from uniqueness, so user-owned bots remain isolated.
+apply_sql db/migrations/050_telegram_per_bot_link_scope.sql || exit 3
 
 # better-auth rateLimit (no migration file ships this)
 echo "creating rateLimit table (if missing)"
