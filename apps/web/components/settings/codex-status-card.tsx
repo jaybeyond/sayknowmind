@@ -74,6 +74,22 @@ async function startCodexLogin(): Promise<{ ok: boolean; error?: string }> {
   return { ok: true };
 }
 
+// Codex CLI accepts whatever the OpenAI ChatGPT subscription exposes;
+// there's no `/v1/models` to query. Curated list of the commonly
+// available IDs as of Codex CLI rust-v0.130.0 — empty string =
+// "let the CLI pick" (recommended default).
+const CODEX_MODEL_CHOICES: Array<{ value: string; label: string }> = [
+  { value: "", label: "Default (CLI picks)" },
+  { value: "gpt-5", label: "gpt-5" },
+  { value: "gpt-5-mini", label: "gpt-5-mini" },
+  { value: "gpt-4o", label: "gpt-4o" },
+  { value: "gpt-4o-mini", label: "gpt-4o-mini" },
+  { value: "o3", label: "o3" },
+  { value: "o3-mini", label: "o3-mini" },
+  { value: "o1", label: "o1" },
+  { value: "o1-mini", label: "o1-mini" },
+];
+
 export function CodexStatusCard() {
   const { t } = useTranslation();
   const [ready, setReady] = useState<boolean | null>(null);
@@ -82,6 +98,11 @@ export function CodexStatusCard() {
   const [toggling, setToggling] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Empty = "let CLI pick". Stored independently of `active` so the
+  // dropdown carries the choice into the Connect POST when the user
+  // activates Codex for the first time.
+  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [modelSaving, setModelSaving] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
@@ -98,6 +119,7 @@ export function CodexStatusCard() {
       if (apiRes?.ok) {
         const data = await apiRes.json();
         setActive(Boolean(data.active));
+        if (typeof data.model === "string") setSelectedModel(data.model);
       } else {
         setActive(false);
       }
@@ -122,7 +144,7 @@ export function CodexStatusCard() {
       const res = await fetch("/api/integrations/codex/status", {
         method: next ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: next ? JSON.stringify({ clientReady: localReady }) : undefined,
+        body: next ? JSON.stringify({ clientReady: localReady, model: selectedModel }) : undefined,
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -132,12 +154,43 @@ export function CodexStatusCard() {
       const data = await res.json();
       setReady(Boolean(data.ready));
       setActive(Boolean(data.active));
+      if (typeof data.model === "string") setSelectedModel(data.model);
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : t("settings.codex.networkError"));
     } finally {
       setToggling(false);
     }
-  }, [active, t]);
+  }, [active, selectedModel, t]);
+
+  /**
+   * Live-update the model while Codex is already active. modelOnly POST
+   * leaves is_active and the encrypted placeholder key alone. When
+   * Codex is inactive the change is held locally and shipped on Connect.
+   */
+  const handleModelChange = useCallback(
+    async (next: string) => {
+      setSelectedModel(next);
+      if (!active) return;
+      setModelSaving(true);
+      setErrorMsg(null);
+      try {
+        const res = await fetch("/api/integrations/codex/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: next, modelOnly: true }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setErrorMsg(body.error ?? t("settings.codex.toggleFailed"));
+        }
+      } catch (e) {
+        setErrorMsg(e instanceof Error ? e.message : t("settings.codex.networkError"));
+      } finally {
+        setModelSaving(false);
+      }
+    },
+    [active, t],
+  );
 
   useEffect(() => {
     void refresh();
@@ -243,6 +296,31 @@ export function CodexStatusCard() {
                   ? t("settings.codex.disconnect")
                   : t("settings.codex.connect")}
             </Button>
+          </div>
+          {/* Model picker — held locally until Connect, then patched
+              live via modelOnly POST while Codex is active. Codex CLI
+              has no /v1/models endpoint, so the list is curated. */}
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <label className="text-xs text-muted-foreground" htmlFor="codex-model-select">
+              {t("settings.codex.modelLabel") || "Model"}
+            </label>
+            <select
+              id="codex-model-select"
+              className="text-xs rounded-md border border-border bg-background px-2 py-1 min-w-[200px]"
+              value={selectedModel}
+              onChange={(e) => void handleModelChange(e.target.value)}
+              disabled={toggling || modelSaving}
+            >
+              {CODEX_MODEL_CHOICES.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+              {/* Show the stored model if it isn't in our curated list
+                  — covers users who switched to a model we don't know
+                  about yet. */}
+              {selectedModel && !CODEX_MODEL_CHOICES.some((c) => c.value === selectedModel) && (
+                <option value={selectedModel}>{selectedModel}</option>
+              )}
+            </select>
           </div>
           {errorMsg && (
             <p className="text-xs text-red-500">{errorMsg}</p>

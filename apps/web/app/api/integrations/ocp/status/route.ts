@@ -39,13 +39,20 @@ const NO_STORE_HEADERS = {
   "Pragma": "no-cache",
 };
 
-async function isOcpActiveForUser(userId: string): Promise<boolean> {
+/** Reads is_active + current model in one round-trip. */
+async function getOcpStateForUser(userId: string): Promise<{ active: boolean; model: string }> {
   const result = await pool.query(
-    `SELECT is_active FROM user_provider_configs
+    `SELECT is_active, model FROM user_provider_configs
      WHERE user_id = $1 AND provider_id = $2`,
     [userId, PROVIDER_ID],
   );
-  return result.rows[0]?.is_active === true;
+  const row = result.rows[0];
+  return {
+    active: row?.is_active === true,
+    // Fall back to the pinned default when the row exists with an empty
+    // model (legacy seed) or no row at all (user never activated).
+    model: typeof row?.model === "string" && row.model.length > 0 ? row.model : PINNED_MODEL,
+  };
 }
 
 export async function GET() {
@@ -58,8 +65,8 @@ export async function GET() {
   }
   invalidateOcpHealthCache();
   const ready = await isOcpReady();
-  const active = await isOcpActiveForUser(session.user.id);
-  return NextResponse.json({ ready, active }, { headers: NO_STORE_HEADERS });
+  const { active, model } = await getOcpStateForUser(session.user.id);
+  return NextResponse.json({ ready, active, model }, { headers: NO_STORE_HEADERS });
 }
 
 export async function POST(req: NextRequest) {
@@ -71,17 +78,49 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Two paths to obtain the API key we'll store:
-  //   1. `clientKey` in the request body — the Tauri webview minted it
-  //      locally via the provision_ocp_key invoke command. This is the
-  //      lite-build path because the cloud server can't see OCP itself.
-  //   2. No body — we're on the same machine as OCP, ask its admin
-  //      endpoint directly via lib/ocp's provisionOcpKey().
-  let body: { clientKey?: string } = {};
+  // Three modes for POST:
+  //   * `modelOnly: true` + `model` — patch the model column on an
+  //     existing active row; no key rotation, no readiness check.
+  //   * `clientKey` (no modelOnly) — full activation, key was minted
+  //     locally by the Tauri webview (lite-desktop path).
+  //   * neither — full activation, cloud server mints the key itself
+  //     via its own admin-key file (only works when the cloud and
+  //     OCP run on the same host).
+  let body: { clientKey?: string; model?: string; modelOnly?: boolean } = {};
   try {
     body = await req.json();
   } catch {
     /* body optional */
+  }
+
+  const requestedModel =
+    typeof body.model === "string" && body.model.length > 0 ? body.model.slice(0, 200) : "";
+
+  // Model-only update — used when the user changes the dropdown while
+  // OCP is already active. Avoids re-provisioning the OCP API key.
+  if (body.modelOnly === true) {
+    if (!requestedModel) {
+      return NextResponse.json(
+        { error: "model is required when modelOnly=true" },
+        { status: 400, headers: NO_STORE_HEADERS },
+      );
+    }
+    const result = await pool.query(
+      `UPDATE user_provider_configs SET model = $1, updated_at = NOW()
+       WHERE user_id = $2 AND provider_id = $3
+       RETURNING is_active, model`,
+      [requestedModel, session.user.id, PROVIDER_ID],
+    );
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        { error: "OCP not activated for this user — connect before changing model." },
+        { status: 404, headers: NO_STORE_HEADERS },
+      );
+    }
+    return NextResponse.json(
+      { ready: true, active: result.rows[0].is_active === true, model: result.rows[0].model },
+      { headers: NO_STORE_HEADERS },
+    );
   }
 
   let key: string;
@@ -106,6 +145,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const modelToStore = requestedModel || PINNED_MODEL;
   const encrypted = encryptForUser(session.user.id, key);
   await pool.query(
     `INSERT INTO user_provider_configs
@@ -120,10 +160,13 @@ export async function POST(req: NextRequest) {
        updated_at        = NOW()`,
     // Store the bare host (no /v1) so cloud-ai.ts/cloud-chat.ts append
     // /v1/chat/completions cleanly, matching the OpenRouter/OpenAI convention.
-    [session.user.id, PROVIDER_ID, encrypted, PINNED_MODEL, ocpBaseUrl()],
+    [session.user.id, PROVIDER_ID, encrypted, modelToStore, ocpBaseUrl()],
   );
 
-  return NextResponse.json({ ready: true, active: true }, { headers: NO_STORE_HEADERS });
+  return NextResponse.json(
+    { ready: true, active: true, model: modelToStore },
+    { headers: NO_STORE_HEADERS },
+  );
 }
 
 export async function DELETE() {

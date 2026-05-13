@@ -64,6 +64,35 @@ async function revokeOcpKeyLocally(): Promise<void> {
   }
 }
 
+/**
+ * Ask the local OCP proxy what models it can serve, via the Tauri
+ * `list_ocp_models` invoke command. Returns null outside of Tauri so
+ * the caller can fall back to a hardcoded list.
+ */
+async function listOcpModelsLocally(): Promise<string[] | null> {
+  const bridge = tauriBridge();
+  if (!bridge?.invoke) return null;
+  try {
+    const result = await bridge.invoke<string[]>("list_ocp_models");
+    if (Array.isArray(result) && result.length > 0) return result;
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+// Mirror the static list from main.rs's list_ocp_models fallback so the
+// dropdown still works on builds where Tauri isn't reachable yet.
+const OCP_MODEL_FALLBACKS = [
+  "claude-opus-4-7",
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5-20251001",
+  "claude-opus-4-6",
+  "claude-opus-4",
+  "claude-haiku-4-5",
+  "claude-haiku-4",
+];
+
 type InstallStep = "idle" | "cloning" | "installing" | "configuring" | "starting" | "done" | "failed";
 
 export function OcpStatusCard() {
@@ -85,17 +114,33 @@ export function OcpStatusCard() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const installTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Model picker state. `availableModels` is fetched once from the local
+  // OCP proxy (or a hardcoded fallback). `selectedModel` is what the
+  // user picked in the dropdown — stored independently of `active` so
+  // the user can choose a model before Connect, then we ship the choice
+  // on activation.
+  const [availableModels, setAvailableModels] = useState<string[]>(OCP_MODEL_FALLBACKS);
+  const [selectedModel, setSelectedModel] = useState<string>(OCP_MODEL_FALLBACKS[0]);
+  const [modelSaving, setModelSaving] = useState(false);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [localReady, apiRes] = await Promise.all([
+      const [localReady, apiRes, modelsFromProxy] = await Promise.all([
         fetchOcpReady(),
         fetch("/api/integrations/ocp/status").catch(() => null),
+        listOcpModelsLocally(),
       ]);
       setReady(localReady);
+      if (modelsFromProxy && modelsFromProxy.length > 0) {
+        setAvailableModels(modelsFromProxy);
+      }
       if (apiRes?.ok) {
         const data = await apiRes.json();
         setActive(Boolean(data.active));
+        if (typeof data.model === "string" && data.model.length > 0) {
+          setSelectedModel(data.model);
+        }
       } else {
         setActive(false);
       }
@@ -114,14 +159,18 @@ export function OcpStatusCard() {
       const next = !active;
       let res: Response;
       if (next) {
-        // Activation. In a Tauri build we mint the key locally and ship the
-        // plaintext to the API in the body; otherwise the API mints it
-        // server-side using its own admin-key file.
+        // Activation. In a Tauri build we mint the key locally and ship
+        // the plaintext to the API in the body; otherwise the API mints
+        // it server-side using its own admin-key file. The currently
+        // selected model travels with the request so the user's choice
+        // is the model that gets stored.
         const localKey = await provisionOcpKeyLocally();
+        const payload: Record<string, unknown> = { model: selectedModel };
+        if (localKey) payload.clientKey = localKey;
         res = await fetch("/api/integrations/ocp/status", {
           method: "POST",
-          headers: localKey ? { "Content-Type": "application/json" } : undefined,
-          body: localKey ? JSON.stringify({ clientKey: localKey }) : undefined,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         });
       } else {
         // Deactivation. Revoke locally first when we can — the API will
@@ -137,12 +186,45 @@ export function OcpStatusCard() {
       const data = await res.json();
       setReady(Boolean(data.ready));
       setActive(Boolean(data.active));
+      if (typeof data.model === "string" && data.model.length > 0) {
+        setSelectedModel(data.model);
+      }
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : t("settings.ocp.networkError"));
     } finally {
       setToggling(false);
     }
-  }, [active, t]);
+  }, [active, selectedModel, t]);
+
+  /**
+   * Live-update the model while OCP is already active. Sends a
+   * `modelOnly` request so the API key isn't rotated and is_active stays
+   * true — UI feels like "pick from dropdown, it persists immediately".
+   */
+  const handleModelChange = useCallback(
+    async (next: string) => {
+      setSelectedModel(next);
+      if (!active) return; // not yet connected — change is local-only
+      setModelSaving(true);
+      setErrorMsg(null);
+      try {
+        const res = await fetch("/api/integrations/ocp/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: next, modelOnly: true }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setErrorMsg(body.error ?? t("settings.ocp.toggleFailed"));
+        }
+      } catch (e) {
+        setErrorMsg(e instanceof Error ? e.message : t("settings.ocp.networkError"));
+      } finally {
+        setModelSaving(false);
+      }
+    },
+    [active, t],
+  );
 
   useEffect(() => {
     void refresh();
@@ -292,6 +374,32 @@ export function OcpStatusCard() {
                   ? t("settings.ocp.disconnect")
                   : t("settings.ocp.connect")}
             </Button>
+          </div>
+          {/* Model picker — visible whenever OCP is reachable. When
+              inactive the choice is held locally and shipped on Connect;
+              when active, changing the dropdown patches the DB
+              immediately via the modelOnly POST path. */}
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <label className="text-xs text-muted-foreground" htmlFor="ocp-model-select">
+              {t("settings.ocp.modelLabel") || "Model"}
+            </label>
+            <select
+              id="ocp-model-select"
+              className="text-xs rounded-md border border-border bg-background px-2 py-1 min-w-[200px]"
+              value={selectedModel}
+              onChange={(e) => void handleModelChange(e.target.value)}
+              disabled={toggling || modelSaving}
+            >
+              {availableModels.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+              {/* If the stored model isn't in the fetched list (older
+                  revision), still let the user see it instead of silently
+                  swapping. */}
+              {!availableModels.includes(selectedModel) && (
+                <option value={selectedModel}>{selectedModel}</option>
+              )}
+            </select>
           </div>
           {errorMsg && <p className="text-xs text-red-500">{errorMsg}</p>}
         </div>

@@ -44,13 +44,20 @@ const PINNED_MODEL = "";
 // Symbolic base URL — Codex CLI handles the real endpoint internally.
 const PINNED_BASE_URL = "https://auth.openai.com";
 
-async function isCodexActiveForUser(userId: string): Promise<boolean> {
+/** Reads is_active + current model in one round-trip. */
+async function getCodexStateForUser(userId: string): Promise<{ active: boolean; model: string }> {
   const result = await pool.query(
-    `SELECT is_active FROM user_provider_configs
+    `SELECT is_active, model FROM user_provider_configs
      WHERE user_id = $1 AND provider_id = $2`,
     [userId, PROVIDER_ID],
   );
-  return result.rows[0]?.is_active === true;
+  const row = result.rows[0];
+  return {
+    active: row?.is_active === true,
+    // Empty string means "let the Codex CLI pick" — that's the default
+    // we keep for the relay path so `--model` isn't forwarded.
+    model: typeof row?.model === "string" ? row.model : PINNED_MODEL,
+  };
 }
 
 export async function GET() {
@@ -63,8 +70,8 @@ export async function GET() {
   }
   invalidateCodexReadyCache();
   const ready = isCodexReady();
-  const active = await isCodexActiveForUser(session.user.id);
-  return NextResponse.json({ ready, active }, { headers: NO_STORE_HEADERS });
+  const { active, model } = await getCodexStateForUser(session.user.id);
+  return NextResponse.json({ ready, active, model }, { headers: NO_STORE_HEADERS });
 }
 
 export async function POST(request: Request) {
@@ -77,12 +84,50 @@ export async function POST(request: Request) {
   }
   invalidateCodexReadyCache();
 
-  // Desktop builds (lite + full) probe Codex on the user's machine via the
-  // Tauri `codex_status` invoke and forward the result here as
-  // `clientReady`. The server only sees its own filesystem, which in cloud
-  // mode never has ~/.codex/auth.json — trusting the client lets the
+  // Desktop builds probe Codex via the Tauri `codex_status` invoke and
+  // forward the result here as `clientReady`. The cloud server never has
+  // ~/.codex/auth.json in lite mode, so trusting the client lets the
   // desktop flow activate without faking auth.json on the server.
-  const body = (await request.json().catch(() => ({}))) as { clientReady?: boolean };
+  //
+  // Body fields:
+  //   * clientReady  — boolean, see above
+  //   * model        — optional override; empty string means "let CLI pick"
+  //   * modelOnly    — if true, only patch the model column on an
+  //                    already-active row; skip the readiness check and
+  //                    leave is_active alone.
+  const body = (await request
+    .json()
+    .catch(() => ({}))) as { clientReady?: boolean; model?: string; modelOnly?: boolean };
+
+  // `model` may be intentionally empty (means "let Codex CLI pick"), so
+  // we distinguish "field present" from "field missing" via typeof.
+  const requestedModel = typeof body.model === "string" ? body.model.slice(0, 200) : null;
+
+  if (body.modelOnly === true) {
+    if (requestedModel === null) {
+      return NextResponse.json(
+        { error: "model is required when modelOnly=true" },
+        { status: 400, headers: NO_STORE_HEADERS },
+      );
+    }
+    const result = await pool.query(
+      `UPDATE user_provider_configs SET model = $1, updated_at = NOW()
+       WHERE user_id = $2 AND provider_id = $3
+       RETURNING is_active, model`,
+      [requestedModel, session.user.id, PROVIDER_ID],
+    );
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        { error: "Codex not activated for this user — connect before changing model." },
+        { status: 404, headers: NO_STORE_HEADERS },
+      );
+    }
+    return NextResponse.json(
+      { ready: isCodexReady(), active: result.rows[0].is_active === true, model: result.rows[0].model },
+      { headers: NO_STORE_HEADERS },
+    );
+  }
+
   const ready = body.clientReady === true || isCodexReady();
   if (!ready) {
     return NextResponse.json(
@@ -91,16 +136,20 @@ export async function POST(request: Request) {
     );
   }
 
+  const modelToStore = requestedModel !== null ? requestedModel : PINNED_MODEL;
   const encrypted = encryptForUser(session.user.id, PLACEHOLDER_PLAINTEXT);
   await pool.query(
     `INSERT INTO user_provider_configs
        (user_id, provider_id, encrypted_api_key, model, base_url, is_active, extra_fields)
      VALUES ($1, $2, $3, $4, $5, true, '{}'::jsonb)
      ON CONFLICT (user_id, provider_id)
-     DO UPDATE SET is_active = true, updated_at = NOW()`,
-    [session.user.id, PROVIDER_ID, encrypted, PINNED_MODEL, PINNED_BASE_URL],
+     DO UPDATE SET model = EXCLUDED.model, is_active = true, updated_at = NOW()`,
+    [session.user.id, PROVIDER_ID, encrypted, modelToStore, PINNED_BASE_URL],
   );
-  return NextResponse.json({ ready: true, active: true }, { headers: NO_STORE_HEADERS });
+  return NextResponse.json(
+    { ready: true, active: true, model: modelToStore },
+    { headers: NO_STORE_HEADERS },
+  );
 }
 
 export async function DELETE() {
