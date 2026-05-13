@@ -1494,13 +1494,14 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
 fn setup_global_shortcut<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
+    // Existing toggle-visibility shortcut.
     #[cfg(target_os = "macos")]
-    let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyK);
+    let toggle = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyK);
     #[cfg(not(target_os = "macos"))]
-    let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyK);
+    let toggle = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyK);
 
     let handle = app.handle().clone();
-    if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _sc, _ev| {
+    if let Err(e) = app.global_shortcut().on_shortcut(toggle, move |_app, _sc, _ev| {
         if let Some(w) = handle.get_webview_window("main") {
             if w.is_visible().unwrap_or(false) {
                 let _ = w.hide();
@@ -1510,7 +1511,39 @@ fn setup_global_shortcut<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
             }
         }
     }) {
-        eprintln!("[desktop] Failed to register global shortcut: {}", e);
+        eprintln!("[desktop] Failed to register toggle shortcut: {}", e);
+    }
+
+    // Escape hatch — Cmd+Shift+H (Ctrl+Shift+H elsewhere) navigates
+    // the webview back to the SayKnowMind home URL. Useful when an
+    // OAuth consent page gets stuck and the user has no other way out
+    // of the embedded browser (no back button on a remote page that
+    // SayKnowMind didn't navigate to first).
+    #[cfg(target_os = "macos")]
+    let home = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyH);
+    #[cfg(not(target_os = "macos"))]
+    let home = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyH);
+
+    let handle_home = app.handle().clone();
+    if let Err(e) = app.global_shortcut().on_shortcut(home, move |_app, _sc, _ev| {
+        if let Some(w) = handle_home.get_webview_window("main") {
+            // For lite builds the home target is the remote app; for
+            // full builds it's localhost:SERVER_PORT. Both have an
+            // existing entry in is_allowed_navigation.
+            #[cfg(feature = "lite")]
+            let target = REMOTE_URL.to_string();
+            #[cfg(feature = "full")]
+            let target = format!("http://localhost:{}", SERVER_PORT);
+
+            eprintln!("[desktop] home shortcut → navigating webview to {}", target);
+            if let Ok(url) = target.parse::<tauri::Url>() {
+                let _ = w.navigate(url);
+            }
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    }) {
+        eprintln!("[desktop] Failed to register home shortcut: {}", e);
     }
 
     Ok(())
@@ -1539,18 +1572,20 @@ fn is_allowed_navigation(url: &tauri::Url) -> bool {
 }
 
 fn is_oauth_navigation(host: &str) -> bool {
-    // Google's OAuth + login flow hops between several hosts (consent
-    // screen, identity service, optional risk checks); allow the
-    // common parents rather than chasing every subdomain.
-    matches!(
-        host,
-        "accounts.google.com"
-            | "accounts.youtube.com"  // YouTube shares Google login
-            | "oauth2.googleapis.com"
-            | "ssl.gstatic.com"       // Google's static assets during consent
-            | "www.google.com"        // reCAPTCHA / extra prompts during login
-    ) || host.ends_with(".accounts.google.com")
-        || host.ends_with(".googleusercontent.com") // profile picture host
+    // Be permissive across the entire google.com tree during OAuth so
+    // intermediate redirects (consent submit, risk assessment, account
+    // chooser, captcha challenges, etc.) all stay in the webview that
+    // owns the session cookie. Without this, a single intermediate hop
+    // hitting an un-allowlisted Google subdomain bounces the user to
+    // the system browser and they lose the session.
+    host == "google.com"
+        || host.ends_with(".google.com")
+        || host == "googleusercontent.com"
+        || host.ends_with(".googleusercontent.com")
+        || host == "gstatic.com"
+        || host.ends_with(".gstatic.com")
+        || host == "googleapis.com"
+        || host.ends_with(".googleapis.com")
 }
 
 fn open_external(url_str: &str) {
@@ -1695,7 +1730,18 @@ fn main() {
         .disable_drag_drop_handler()
         .initialization_script(&init_js)
         .on_navigation(|nav_url| {
-            if is_allowed_navigation(nav_url) {
+            let allowed = is_allowed_navigation(nav_url);
+            // Trace every top-level navigation. When the OAuth flow
+            // ends up stuck on a Google consent page that won't move
+            // on, this is the line that tells us which URL got
+            // shipped to the system browser by mistake.
+            eprintln!(
+                "[nav] {} host={} scheme={}",
+                if allowed { "ALLOW" } else { "EXTERNAL" },
+                nav_url.host_str().unwrap_or("(none)"),
+                nav_url.scheme(),
+            );
+            if allowed {
                 true
             } else {
                 open_external(nav_url.as_str());
