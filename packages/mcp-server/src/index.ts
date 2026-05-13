@@ -13,6 +13,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 import pg from "pg";
+import { requestContext } from "./auth-context.js";
 import { createServer } from "./server.js";
 
 const PORT = parseInt(process.env.PORT ?? "8082", 10);
@@ -54,6 +55,16 @@ async function findUserByApiKey(token: string): Promise<string | null> {
   }
 }
 
+function extractAuthToken(req: express.Request): string | undefined {
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (match?.[1]) return match[1].trim();
+  }
+  const apiKey = req.query.api_key;
+  return typeof apiKey === "string" ? apiKey : undefined;
+}
+
 // ── Auth middleware ──────────────────────────────────────────
 // Priority:
 //   1. No ADMIN_API_KEY *and* no DATABASE_URL  → open mode (dev only)
@@ -65,11 +76,12 @@ async function authMiddleware(
   res: express.Response,
   next: express.NextFunction,
 ): Promise<void> {
-  if (!ADMIN_API_KEY && !DATABASE_URL) return next();
+  if (!ADMIN_API_KEY && !DATABASE_URL) {
+    requestContext.run({ userId: null, rawToken: "", isAdmin: true }, () => next());
+    return;
+  }
 
-  const token =
-    req.headers.authorization?.replace("Bearer ", "") ??
-    (req.query.api_key as string);
+  const token = extractAuthToken(req);
   if (!token) {
     res.status(401).json({ error: "Unauthorized" });
     return;
@@ -77,7 +89,7 @@ async function authMiddleware(
 
   if (ADMIN_API_KEY && token === ADMIN_API_KEY) {
     // Admin/legacy shared key — does not correspond to a single user.
-    next();
+    requestContext.run({ userId: null, rawToken: token, isAdmin: true }, () => next());
     return;
   }
 
@@ -90,7 +102,7 @@ async function authMiddleware(
   // user when that wiring is added (currently tools share the global
   // tenant/workspace — see client.ts).
   (req as unknown as { userId?: string }).userId = userId;
-  next();
+  requestContext.run({ userId, rawToken: token, isAdmin: false }, () => next());
 }
 
 // ── HTTP server ─────────────────────────────────────────────

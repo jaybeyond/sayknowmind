@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
+import { visibilityClause } from "@/lib/visibility";
 
 export async function GET(
   _request: NextRequest,
@@ -11,13 +12,6 @@ export async function GET(
   try {
     userId = await getUserIdFromRequest();
   } catch { /* auth failed */ }
-
-  if (!userId) {
-    try {
-      const fallback = await pool.query(`SELECT id FROM "user" LIMIT 1`);
-      userId = fallback.rows[0]?.id ?? null;
-    } catch { /* ignore */ }
-  }
 
   if (!userId) {
     return NextResponse.json(
@@ -31,8 +25,9 @@ export async function GET(
   try {
     // Try as document
     const docResult = await pool.query(
-      `SELECT id, title, url, source_type, metadata, created_at FROM documents
-       WHERE id = $1 AND user_id = $2`,
+      `SELECT d.id, d.title, d.url, d.source_type, d.metadata, d.created_at
+       FROM documents d
+       WHERE d.id = $1 AND ${visibilityClause("d", 2)}`,
       [nodeId, userId],
     );
 
@@ -63,7 +58,7 @@ export async function GET(
       `SELECT e.id, e.name, e.type, e.confidence, e.properties, e.document_id
        FROM entities e
        JOIN documents d ON d.id = e.document_id
-       WHERE e.id = $1 AND d.user_id = $2`,
+       WHERE e.id = $1 AND ${visibilityClause("d", 2)}`,
       [nodeId, userId],
     );
 
@@ -74,7 +69,7 @@ export async function GET(
         `SELECT DISTINCT d.id, d.title, d.url
          FROM documents d
          JOIN entities e ON e.document_id = d.id
-         WHERE e.name = $1 AND d.user_id = $2`,
+         WHERE e.name = $1 AND ${visibilityClause("d", 2)}`,
         [entity.name, userId],
       );
 
@@ -96,8 +91,9 @@ export async function GET(
 
     // Try as category
     const catResult = await pool.query(
-      `SELECT id, name, description, depth, path FROM categories
-       WHERE id = $1 AND user_id = $2`,
+      `SELECT c.id, c.name, c.description, c.depth, c.path
+       FROM categories c
+       WHERE c.id = $1 AND ${visibilityClause("c", 2)}`,
       [nodeId, userId],
     );
 
@@ -107,8 +103,8 @@ export async function GET(
         `SELECT d.id, d.title, d.url
          FROM documents d
          JOIN document_categories dc ON dc.document_id = d.id
-         WHERE dc.category_id = $1`,
-        [nodeId],
+         WHERE dc.category_id = $1 AND ${visibilityClause("d", 2)}`,
+        [nodeId, userId],
       );
 
       return NextResponse.json({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
+import { visibilityClause } from "@/lib/visibility";
 
 /** GET /api/categories/[id]/documents — List documents in a category */
 export async function GET(
@@ -19,9 +20,9 @@ export async function GET(
   const { id } = await params;
 
   try {
-    // Verify category belongs to user
+    // Verify category is visible to the user.
     const catCheck = await pool.query(
-      `SELECT id FROM categories WHERE id = $1 AND user_id = $2`,
+      `SELECT c.id FROM categories c WHERE c.id = $1 AND ${visibilityClause("c", 2)}`,
       [id, userId],
     );
     if (catCheck.rowCount === 0) {
@@ -39,7 +40,7 @@ export async function GET(
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM documents d
        JOIN document_categories dc ON dc.document_id = d.id
-       WHERE dc.category_id = $1 AND d.user_id = $2`,
+       WHERE dc.category_id = $1 AND ${visibilityClause("d", 2)}`,
       [id, userId],
     );
     const total = Number(countResult.rows[0].count);
@@ -48,7 +49,7 @@ export async function GET(
       `SELECT d.id, d.title, d.url, d.source_type, d.created_at
        FROM documents d
        JOIN document_categories dc ON dc.document_id = d.id
-       WHERE dc.category_id = $1 AND d.user_id = $2
+       WHERE dc.category_id = $1 AND ${visibilityClause("d", 2)}
        ORDER BY d.created_at DESC
        LIMIT $3 OFFSET $4`,
       [id, userId, limit, offset],
@@ -101,6 +102,17 @@ export async function DELETE(
     if (catCheck.rowCount === 0) {
       return NextResponse.json(
         { code: ErrorCode.CATEGORY_NOT_FOUND, message: "Category not found", timestamp: new Date().toISOString() },
+        { status: 404 },
+      );
+    }
+
+    const docCheck = await pool.query(
+      `SELECT id FROM documents WHERE id = $1 AND user_id = $2`,
+      [documentId, userId],
+    );
+    if (docCheck.rowCount === 0) {
+      return NextResponse.json(
+        { code: ErrorCode.SEARCH_NO_RESULTS, message: "Document not found", timestamp: new Date().toISOString() },
         { status: 404 },
       );
     }

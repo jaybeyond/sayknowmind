@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
+import { visibilityClause } from "@/lib/visibility";
 
 export async function GET(request: NextRequest) {
   let userId: string | null = null;
@@ -34,10 +35,10 @@ export async function GET(request: NextRequest) {
     const edges: Array<{ source: string; target: string; label: string }> = [];
 
     // Fetch documents
-    let docQuery = `SELECT id, title FROM documents WHERE user_id = $1`;
+    let docQuery = `SELECT d.id, d.title FROM documents d WHERE ${visibilityClause("d", 1)}`;
     const docParams: unknown[] = [userId];
     if (search) {
-      docQuery += ` AND (title ILIKE $2 OR content ILIKE $2)`;
+      docQuery += ` AND (d.title ILIKE $2 OR d.content ILIKE $2)`;
       docParams.push(`%${search}%`);
     }
     docQuery += ` LIMIT 100`;
@@ -91,7 +92,9 @@ export async function GET(request: NextRequest) {
     // Fetch categories
     if (!typeFilter || typeFilter === "category") {
       const cats = await pool.query(
-        `SELECT id, name, parent_id FROM categories WHERE user_id = $1`,
+        `SELECT c.id, c.name, c.parent_id
+         FROM categories c
+         WHERE ${visibilityClause("c", 1)}`,
         [userId],
       );
       for (const cat of cats.rows) {
@@ -111,9 +114,11 @@ export async function GET(request: NextRequest) {
       // Document-category edges
       if (docs.rows.length > 0) {
         const docCats = await pool.query(
-          `SELECT document_id, category_id FROM document_categories
-           WHERE document_id = ANY($1)`,
-          [docs.rows.map((d: { id: string }) => d.id)],
+          `SELECT dc.document_id, dc.category_id
+           FROM document_categories dc
+           JOIN categories c ON c.id = dc.category_id
+           WHERE dc.document_id = ANY($1) AND ${visibilityClause("c", 2)}`,
+          [docs.rows.map((d: { id: string }) => d.id), userId],
         );
         for (const dc of docCats.rows) {
           edges.push({ source: dc.document_id, target: dc.category_id, label: "belongs_to" });

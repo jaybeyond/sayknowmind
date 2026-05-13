@@ -1,4 +1,5 @@
 import { pool } from "@/lib/db";
+import { visibilityClause } from "@/lib/visibility";
 
 export interface CategoryRow {
   id: string;
@@ -14,15 +15,27 @@ export interface CategoryRow {
   updated_at: Date;
 }
 
-export async function listCategories(userId: string): Promise<CategoryRow[]> {
+export async function listCategories(
+  userId: string,
+  options: { includeShared?: boolean } = {},
+): Promise<CategoryRow[]> {
+  const scope = options.includeShared === false ? "c.user_id = $1" : visibilityClause("c", 1);
   const result = await pool.query(
-    `SELECT * FROM categories WHERE user_id = $1 ORDER BY path, name`,
+    `SELECT c.* FROM categories c WHERE ${scope} ORDER BY c.path, c.name`,
     [userId],
   );
   return result.rows;
 }
 
 export async function getCategory(id: string, userId: string): Promise<CategoryRow | null> {
+  const result = await pool.query(
+    `SELECT c.* FROM categories c WHERE c.id = $1 AND ${visibilityClause("c", 2)}`,
+    [id, userId],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function getOwnedCategory(id: string, userId: string): Promise<CategoryRow | null> {
   const result = await pool.query(
     `SELECT * FROM categories WHERE id = $1 AND user_id = $2`,
     [id, userId],
@@ -44,7 +57,7 @@ export async function createCategory(params: {
 
   // If parent specified, compute depth, path, and inherit privacy
   if (params.parentId) {
-    const parent = await getCategory(params.parentId, params.userId);
+    const parent = await getOwnedCategory(params.parentId, params.userId);
     if (!parent) {
       throw new Error("Parent category not found");
     }
@@ -94,7 +107,7 @@ export async function updateCategory(
     privacyLevel?: string;
   },
 ): Promise<CategoryRow | null> {
-  const current = await getCategory(id, userId);
+  const current = await getOwnedCategory(id, userId);
   if (!current) return null;
 
   const name = updates.name ?? current.name;
@@ -109,7 +122,7 @@ export async function updateCategory(
       if (parentId === id) {
         throw Object.assign(new Error("Circular reference"), { code: 4003 });
       }
-      const parent = await getCategory(parentId, userId);
+      const parent = await getOwnedCategory(parentId, userId);
       if (!parent) throw new Error("Parent category not found");
       if (parent.path.startsWith(current.path + "/")) {
         throw Object.assign(new Error("Circular reference"), { code: 4003 });
@@ -175,6 +188,11 @@ export async function deleteCategory(
   id: string,
   userId: string,
 ): Promise<{ success: boolean; movedDocuments: number }> {
+  const cat = await getOwnedCategory(id, userId);
+  if (!cat) {
+    return { success: false, movedDocuments: 0 };
+  }
+
   // Move documents to uncategorized (remove category assignment)
   const docResult = await pool.query(
     `DELETE FROM document_categories WHERE category_id = $1
@@ -183,16 +201,13 @@ export async function deleteCategory(
   );
 
   // Move children to parent
-  const cat = await getCategory(id, userId);
-  if (cat) {
-    await pool.query(
-      `UPDATE categories SET parent_id = $1,
-         depth = GREATEST(0, depth - 1),
-         updated_at = NOW()
-       WHERE parent_id = $2 AND user_id = $3`,
-      [cat.parent_id, id, userId],
-    );
-  }
+  await pool.query(
+    `UPDATE categories SET parent_id = $1,
+       depth = GREATEST(0, depth - 1),
+       updated_at = NOW()
+     WHERE parent_id = $2 AND user_id = $3`,
+    [cat.parent_id, id, userId],
+  );
 
   await pool.query(
     `DELETE FROM categories WHERE id = $1 AND user_id = $2`,
@@ -211,13 +226,16 @@ export async function mergeCategories(
   userId: string,
 ): Promise<{ success: boolean; mergedCount: number }> {
   // Verify target exists
-  const target = await getCategory(targetId, userId);
+  const target = await getOwnedCategory(targetId, userId);
   if (!target) throw new Error("Target category not found");
 
   let mergedCount = 0;
 
   for (const sourceId of sourceIds) {
     if (sourceId === targetId) continue;
+
+    const source = await getOwnedCategory(sourceId, userId);
+    if (!source) continue;
 
     // Move document assignments from source to target
     await pool.query(

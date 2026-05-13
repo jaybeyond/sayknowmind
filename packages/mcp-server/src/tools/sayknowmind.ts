@@ -10,6 +10,7 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { getRequestContext } from "../auth-context.js";
 import { formatError } from "../errors.js";
 
 const WEB_APP_URL = process.env.SAYKNOWMIND_URL ?? "http://localhost:3000";
@@ -17,7 +18,10 @@ const AUTH_SECRET = process.env.AUTH_SECRET ?? "";
 
 function apiHeaders(): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (AUTH_SECRET) {
+  const context = getRequestContext();
+  if (context?.rawToken) {
+    h["Authorization"] = `Bearer ${context.rawToken}`;
+  } else if (AUTH_SECRET) {
     h["Authorization"] = `Bearer ${AUTH_SECRET}`;
   }
   return h;
@@ -27,6 +31,7 @@ function apiHeaders(): Record<string, string> {
  * Validate auth token. Returns true if valid.
  */
 function verifyAuthToken(token?: string): boolean {
+  if (getRequestContext()?.rawToken) return true;
   if (!AUTH_SECRET) return true; // No auth configured
   return token === AUTH_SECRET;
 }

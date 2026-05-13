@@ -4,6 +4,7 @@ import { pool } from "@/lib/db";
 import { assignDocumentCategory } from "@/lib/ingest/document-store";
 import { createCategory } from "@/lib/categories/store";
 import { ErrorCode } from "@/lib/types";
+import { visibilityClause } from "@/lib/visibility";
 
 /** GET /api/categories/suggest/[documentId] - Get suggestions for a document */
 export async function GET(
@@ -22,7 +23,9 @@ export async function GET(
 
   try {
     const doc = await pool.query(
-      `SELECT metadata FROM documents WHERE id = $1 AND user_id = $2`,
+      `SELECT d.metadata
+       FROM documents d
+       WHERE d.id = $1 AND ${visibilityClause("d", 2)}`,
       [documentId, userId],
     );
 
@@ -104,6 +107,17 @@ export async function POST(
         return NextResponse.json(
           { code: ErrorCode.SYSTEM_INTERNAL_ERROR, message: "categoryId is required for approval", timestamp: new Date().toISOString() },
           { status: 400 },
+        );
+      }
+
+      const category = await pool.query(
+        `SELECT id FROM categories WHERE id = $1 AND user_id = $2`,
+        [targetCategoryId, userId],
+      );
+      if (category.rows.length === 0) {
+        return NextResponse.json(
+          { code: ErrorCode.CATEGORY_NOT_FOUND, message: "Category not found", timestamp: new Date().toISOString() },
+          { status: 404 },
         );
       }
 

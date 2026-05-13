@@ -5,6 +5,7 @@ import { queryEdgeQuake } from "@/lib/edgequake/client";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import type { QueryMode, SearchResponse, SearchResult, Citation } from "@/lib/types";
+import { visibilityClause } from "@/lib/visibility";
 
 // Map our QueryMode to EdgeQuake modes
 const MODE_MAP: Record<QueryMode, string> = {
@@ -82,8 +83,9 @@ export async function POST(request: NextRequest) {
     // Fetch document details for citations
     if (documentIds.size > 0) {
       const docResult = await pool.query(
-        `SELECT id, title, url, content, summary FROM documents
-         WHERE id = ANY($1) AND user_id = $2`,
+        `SELECT d.id, d.title, d.url, d.content, d.summary
+         FROM documents d
+         WHERE d.id = ANY($1) AND ${visibilityClause("d", 2)}`,
         [Array.from(documentIds), userId],
       );
 
@@ -123,16 +125,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // If EdgeQuake returned an answer but no document sources, return the answer as context
-    if (results.length === 0 && eqResponse.answer) {
-      results.push({
-        documentId: "",
-        title: "AI Answer",
-        snippet: eqResponse.answer,
-        score: 1.0,
-        citations: [],
-        entities: [],
-      });
+    // EdgeQuake is still a shared workspace. Never return an uncited answer
+    // because it may have been synthesized from documents that are not visible
+    // to this user. Use the PostgreSQL scoped fallback instead.
+    if (results.length === 0) {
+      return await fallbackSearch(query, userId, limit, offset, filters, startTime);
     }
 
     // Apply offset
@@ -164,7 +161,7 @@ async function fallbackSearch(
   filters: { categoryIds?: string[]; dateRange?: { start: string; end: string }; tags?: string[] } | undefined,
   startTime: number,
 ): Promise<NextResponse> {
-  const conditions: string[] = ["d.user_id = $1"];
+  const conditions: string[] = [visibilityClause("d", 1)];
   const params: unknown[] = [userId];
   let idx = 2;
 
@@ -175,7 +172,14 @@ async function fallbackSearch(
 
   // Category filter
   if (filters?.categoryIds?.length) {
-    conditions.push(`d.id IN (SELECT document_id FROM document_categories WHERE category_id = ANY($${idx}))`);
+    conditions.push(
+      `d.id IN (
+        SELECT dc.document_id
+        FROM document_categories dc
+        JOIN categories c ON c.id = dc.category_id
+        WHERE dc.category_id = ANY($${idx}) AND ${visibilityClause("c", 1)}
+      )`,
+    );
     params.push(filters.categoryIds);
     idx++;
   }

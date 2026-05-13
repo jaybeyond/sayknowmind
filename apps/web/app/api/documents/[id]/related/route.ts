@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
+import { visibilityClause } from "@/lib/visibility";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -19,9 +20,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   try {
-    // Verify the document belongs to the user
+    // Verify the document is visible to the user.
     const docCheck = await pool.query(
-      `SELECT id FROM documents WHERE id = $1 AND user_id = $2`,
+      `SELECT d.id FROM documents d WHERE d.id = $1 AND ${visibilityClause("d", 2)}`,
       [id, userId],
     );
     if (docCheck.rows.length === 0) {
@@ -35,10 +36,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       `SELECT dr.related_document_id AS id, d.title, dr.score
        FROM document_relations dr
        JOIN documents d ON d.id = dr.related_document_id
-       WHERE dr.document_id = $1
+       WHERE dr.document_id = $1 AND ${visibilityClause("d", 2)}
        ORDER BY dr.score DESC
        LIMIT 10`,
-      [id],
+      [id, userId],
     );
 
     return NextResponse.json({ relations: result.rows });

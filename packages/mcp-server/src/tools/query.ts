@@ -3,6 +3,7 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { rejectUserScopedEdgeQuakeTool } from "../auth-context.js";
 import { getClient } from "../client.js";
 import { formatError } from "../errors.js";
 
@@ -38,6 +39,9 @@ export function registerQueryTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const result = await client.query.execute({
           query: params.query,

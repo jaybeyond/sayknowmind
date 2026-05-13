@@ -10,6 +10,7 @@ import { StreamWriter, type StreamSource } from "./stream-writer";
 import { queryEdgeQuake } from "@/lib/edgequake/client";
 import { pool } from "@/lib/db";
 import { loadPrompts } from "@/app/api/settings/prompts/route";
+import { visibilityClause } from "@/lib/visibility";
 
 interface PipelineInput {
   message: string;
@@ -202,15 +203,47 @@ async function searchKnowledge(
     writer.log(`EdgeQuake: ${count} results (${result.stats?.total_time_ms ?? "?"}ms)`);
 
     if (result.sources?.length) {
+      const candidateIds = Array.from(
+        new Set(
+          result.sources
+            .map((src) => src.document_id ?? src.id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+      const visibleDocMap = new Map<
+        string,
+        { title: string; url: string | null; summary: string | null; content: string | null }
+      >();
+      if (candidateIds.length > 0) {
+        const visibleDocs = await pool.query(
+          `SELECT d.id, d.title, d.url, d.summary, d.content
+           FROM documents d
+           WHERE d.id = ANY($1) AND ${visibilityClause("d", 2)}`,
+          [candidateIds, userId],
+        );
+        for (const row of visibleDocs.rows as Array<{
+          id: string;
+          title: string;
+          url: string | null;
+          summary: string | null;
+          content: string | null;
+        }>) {
+          visibleDocMap.set(row.id, row);
+        }
+      }
+
       for (const src of result.sources) {
         const docId = src.document_id ?? src.id;
-        if (seenIds.has(docId)) continue;
+        if (!docId || seenIds.has(docId)) continue;
+        const doc = visibleDocMap.get(docId);
+        if (!doc) continue;
         seenIds.add(docId);
 
         allSources.push({
           id: docId,
-          title: docId,
-          excerpt: src.snippet ?? "",
+          title: doc.title,
+          url: doc.url ?? undefined,
+          excerpt: src.snippet || doc.summary || doc.content?.slice(0, 500) || "",
           score: src.score,
         });
       }
@@ -231,7 +264,7 @@ async function searchKnowledge(
 
       if (keywords.length > 0) {
         const conditions = keywords.map(
-          (_, i) => `(title ILIKE $${i + 2} OR content ILIKE $${i + 2})`,
+          (_, i) => `(d.title ILIKE $${i + 2} OR d.content ILIKE $${i + 2})`,
         );
         const params: (string | number)[] = [userId];
         for (const kw of keywords) {
@@ -239,14 +272,14 @@ async function searchKnowledge(
         }
 
         const sqlQuery = `
-          SELECT id, title, url, LEFT(content, 500) as excerpt,
+          SELECT d.id, d.title, d.url, LEFT(d.content, 500) as excerpt,
                  (${keywords.map((_, i) =>
-                   `(CASE WHEN title ILIKE $${i + 2} THEN 2 ELSE 0 END + CASE WHEN content ILIKE $${i + 2} THEN 1 ELSE 0 END)`,
+                   `(CASE WHEN d.title ILIKE $${i + 2} THEN 2 ELSE 0 END + CASE WHEN d.content ILIKE $${i + 2} THEN 1 ELSE 0 END)`,
                  ).join(" + ")}) as relevance
-          FROM documents
-          WHERE user_id = $1
+          FROM documents d
+          WHERE ${visibilityClause("d", 1)}
             AND (${conditions.join(" OR ")})
-          ORDER BY relevance DESC, updated_at DESC
+          ORDER BY relevance DESC, d.updated_at DESC
           LIMIT 5
         `;
 
@@ -280,12 +313,12 @@ async function searchKnowledge(
     writer.log("No keyword matches — loading document catalog for LLM filtering...");
     try {
       const catalogResult = await pool.query(
-        `SELECT id, title, url, source_type, LEFT(content, 200) as excerpt,
-                metadata->>'fileType' as file_type
-         FROM documents
-         WHERE user_id = $1
-           AND content IS NOT NULL AND content != ''
-         ORDER BY updated_at DESC
+        `SELECT d.id, d.title, d.url, d.source_type, LEFT(d.content, 200) as excerpt,
+                d.metadata->>'fileType' as file_type
+         FROM documents d
+         WHERE ${visibilityClause("d", 1)}
+           AND d.content IS NOT NULL AND d.content != ''
+         ORDER BY d.updated_at DESC
          LIMIT 20`,
         [userId],
       );
@@ -311,8 +344,10 @@ async function searchKnowledge(
     try {
       const ids = allSources.map((s) => s.id);
       const metaResult = await pool.query(
-        `SELECT id, title, url FROM documents WHERE id = ANY($1)`,
-        [ids],
+        `SELECT d.id, d.title, d.url
+         FROM documents d
+         WHERE d.id = ANY($1) AND ${visibilityClause("d", 2)}`,
+        [ids, userId],
       );
       const metaMap = new Map<string, { title: string; url: string | null }>(
         metaResult.rows.map((r: { id: string; title: string; url: string | null }) => [

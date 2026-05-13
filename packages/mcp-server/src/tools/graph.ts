@@ -3,6 +3,7 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { rejectUserScopedEdgeQuakeTool } from "../auth-context.js";
 import { getClient } from "../client.js";
 import { formatError } from "../errors.js";
 
@@ -26,6 +27,9 @@ export function registerGraphTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const entities = await client.graph.entities.list({
           search: params.search,
@@ -66,6 +70,9 @@ export function registerGraphTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const entity = await client.graph.entities.get(params.entity_name);
 
@@ -92,6 +99,9 @@ export function registerGraphTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const neighborhood = await client.graph.entities.neighborhood(
           params.entity_name,
@@ -142,6 +152,9 @@ export function registerGraphTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const relationships = await client.graph.relationships.list({
           source: params.source,

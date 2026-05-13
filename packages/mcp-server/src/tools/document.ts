@@ -5,6 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { readFile } from "fs/promises";
 import { basename, extname } from "path";
 import { z } from "zod";
+import { rejectUserScopedEdgeQuakeTool } from "../auth-context.js";
 import { getClient } from "../client.js";
 import { formatError } from "../errors.js";
 
@@ -29,6 +30,9 @@ export function registerDocumentTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const result = await client.documents.upload({
           content: params.content,
@@ -87,6 +91,9 @@ export function registerDocumentTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const fileExt = extname(params.file_path).toLowerCase();
         const fileName = basename(params.file_path);
@@ -235,6 +242,9 @@ export function registerDocumentTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const result = await client.documents.list({
           page: params.page,
@@ -285,6 +295,9 @@ export function registerDocumentTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const doc = await client.documents.get(params.document_id);
 
@@ -328,6 +341,9 @@ export function registerDocumentTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         await client.documents.delete(params.document_id);
 
@@ -357,6 +373,9 @@ export function registerDocumentTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const doc = await client.documents.get(params.document_id);
 

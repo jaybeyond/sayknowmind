@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
+import { visibilityClause } from "@/lib/visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
   const isFavorite = searchParams.get("isFavorite");
 
   try {
-    const conditions: string[] = ["d.user_id = $1"];
+    const conditions: string[] = [visibilityClause("d", 1)];
     const params: unknown[] = [userId];
     let paramIdx = 2;
 
@@ -36,7 +37,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (categoryId) {
-      conditions.push(`EXISTS (SELECT 1 FROM document_categories dc WHERE dc.document_id = d.id AND dc.category_id = $${paramIdx})`);
+      conditions.push(
+        `EXISTS (
+          SELECT 1 FROM document_categories dc
+          JOIN categories c ON c.id = dc.category_id
+          WHERE dc.document_id = d.id AND dc.category_id = $${paramIdx}
+            AND ${visibilityClause("c", 1)}
+        )`,
+      );
       params.push(categoryId);
       paramIdx++;
     }
@@ -73,7 +81,7 @@ export async function GET(request: NextRequest) {
                 (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'color', c.color))
                  FROM document_categories dc
                  JOIN categories c ON c.id = dc.category_id
-                 WHERE dc.document_id = d.id), '[]'
+                 WHERE dc.document_id = d.id AND ${visibilityClause("c", 1)}), '[]'
               ) AS categories,
               (SELECT ij.status FROM ingestion_jobs ij
                WHERE ij.document_id = d.id

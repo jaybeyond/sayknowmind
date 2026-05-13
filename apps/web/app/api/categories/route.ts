@@ -4,6 +4,7 @@ import { checkAntiBot } from "@/lib/antibot";
 import { listCategories, createCategory } from "@/lib/categories/store";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
+import { visibilityClause } from "@/lib/visibility";
 
 /** GET /api/categories - List all categories for user */
 export async function GET(request: NextRequest) {
@@ -23,7 +24,8 @@ export async function GET(request: NextRequest) {
       `SELECT dc.category_id, COUNT(*)::int as count
        FROM document_categories dc
        JOIN categories c ON c.id = dc.category_id
-       WHERE c.user_id = $1
+       JOIN documents d ON d.id = dc.document_id
+       WHERE ${visibilityClause("c", 1)} AND ${visibilityClause("d", 1)}
        GROUP BY dc.category_id`,
       [userId],
     );

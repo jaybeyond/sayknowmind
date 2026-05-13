@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
+import { visibilityClause } from "@/lib/visibility";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -25,10 +26,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
                 (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'color', c.color))
                  FROM document_categories dc
                  JOIN categories c ON c.id = dc.category_id
-                 WHERE dc.document_id = d.id), '[]'
+                 WHERE dc.document_id = d.id AND ${visibilityClause("c", 2)}), '[]'
               ) AS categories
        FROM documents d
-       WHERE d.id = $1 AND d.user_id = $2`,
+       WHERE d.id = $1 AND ${visibilityClause("d", 2)}`,
       [id, userId],
     );
 
@@ -108,6 +109,30 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     // Handle category change separately (document_categories table)
     if (categoryId !== undefined) {
+      const docCheck = await pool.query(
+        `SELECT id FROM documents WHERE id = $1 AND user_id = $2`,
+        [id, userId],
+      );
+      if (docCheck.rows.length === 0) {
+        return NextResponse.json(
+          { code: ErrorCode.SEARCH_NO_RESULTS, message: "Document not found", timestamp: new Date().toISOString() },
+          { status: 404 },
+        );
+      }
+
+      if (categoryId) {
+        const categoryCheck = await pool.query(
+          `SELECT id FROM categories WHERE id = $1 AND user_id = $2`,
+          [categoryId, userId],
+        );
+        if (categoryCheck.rows.length === 0) {
+          return NextResponse.json(
+            { code: ErrorCode.CATEGORY_NOT_FOUND, message: "Category not found", timestamp: new Date().toISOString() },
+            { status: 404 },
+          );
+        }
+      }
+
       // Remove all existing categories
       await pool.query(`DELETE FROM document_categories WHERE document_id = $1`, [id]);
       // Assign new category if provided

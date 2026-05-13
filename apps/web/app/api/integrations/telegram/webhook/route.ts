@@ -22,6 +22,7 @@ import { saveFile } from "@/lib/ingest/file-storage";
 import { listCategories, type CategoryRow } from "@/lib/categories/store";
 import { callAiCloudFirst } from "@/lib/agents/cloud-ai";
 import { checkAndIncrementUsage } from "@/lib/usage-limit";
+import { visibilityClause } from "@/lib/visibility";
 
 // ── i18n Message Map ─────────────────────────────────────────
 
@@ -553,9 +554,11 @@ async function searchKnowledge(userId: string, query: string): Promise<string> {
   // Fallback: simple SQL search
   try {
     const sqlRes = await pool.query(
-      `SELECT title, LEFT(content, 300) as snippet FROM documents
-       WHERE user_id = $1 AND (title ILIKE '%' || $2 || '%' OR content ILIKE '%' || $2 || '%')
-       ORDER BY created_at DESC LIMIT 3`,
+      `SELECT d.title, LEFT(d.content, 300) as snippet
+       FROM documents d
+       WHERE ${visibilityClause("d", 1)}
+         AND (d.title ILIKE '%' || $2 || '%' OR d.content ILIKE '%' || $2 || '%')
+       ORDER BY d.created_at DESC LIMIT 3`,
       [userId, query.split(/\s+/)[0]],
     );
     if (sqlRes.rows.length > 0) {
@@ -793,7 +796,7 @@ export async function handleTelegramUpdate(
           await answerCallbackQuery(cbBotToken, cbq.id, "✅");
           await editMessageText(cbBotToken, cbChatId, cbMessageId, msg("dupSaved", L, { title: newTitle }));
           await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
-          const categories = await listCategories(cbUserId);
+          const categories = await listCategories(cbUserId, { includeShared: false });
           if (categories.length > 0) {
             await sendMessage(cbBotToken, cbChatId, msg("urlSaved", L, { title: newTitle }), {
               replyMarkup: buildCategoryKeyboard(categories, documentId, L),
@@ -835,7 +838,7 @@ export async function handleTelegramUpdate(
           await answerCallbackQuery(cbBotToken, cbq.id, "✅");
           await editMessageText(cbBotToken, cbChatId, cbMessageId, msg("dupSaved", L, { title: newTitle }));
           await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
-          const categories = await listCategories(cbUserId);
+          const categories = await listCategories(cbUserId, { includeShared: false });
           if (categories.length > 0) {
             const savedMsg = pending.type === "photo" ? "photoSaved" : "fileSaved";
             await sendMessage(cbBotToken, cbChatId, msg(savedMsg, L, { title: newTitle }), {
@@ -1010,7 +1013,7 @@ export async function handleTelegramUpdate(
 
     // /categories
     if (text === "/categories" && userId) {
-      const categories = await listCategories(userId);
+      const categories = await listCategories(userId, { includeShared: false });
       if (categories.length === 0) {
         await sendMessage(botToken, chatId, msg("noCats", L));
       } else {
@@ -1040,7 +1043,7 @@ export async function handleTelegramUpdate(
         });
         const jobId = await createJob(userId, documentId);
 
-        const categories = await listCategories(userId);
+        const categories = await listCategories(userId, { includeShared: false });
         await sendMessage(botToken, chatId, msg("memoSaved", L, { title }), {
           replyToMessageId: message.message_id,
           replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
@@ -1120,7 +1123,7 @@ export async function handleTelegramUpdate(
       });
       const jobId = await createJob(userId, documentId);
 
-      const categories = await listCategories(userId);
+      const categories = await listCategories(userId, { includeShared: false });
       await sendMessage(botToken, chatId, msg("urlSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
@@ -1206,7 +1209,7 @@ export async function handleTelegramUpdate(
 
       const jobId = await createJob(userId, documentId);
 
-      const categories = await listCategories(userId);
+      const categories = await listCategories(userId, { includeShared: false });
       await sendMessage(botToken, chatId, msg("photoSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
@@ -1294,7 +1297,7 @@ export async function handleTelegramUpdate(
 
       const jobId = await createJob(userId, documentId);
 
-      const categories = await listCategories(userId);
+      const categories = await listCategories(userId, { includeShared: false });
       await sendMessage(botToken, chatId, msg("fileSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
@@ -1328,7 +1331,7 @@ export async function handleTelegramUpdate(
       });
       const jobId = await createJob(userId, documentId);
 
-      const categories = await listCategories(userId);
+      const categories = await listCategories(userId, { includeShared: false });
       await sendMessage(botToken, chatId, msg("memoSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,

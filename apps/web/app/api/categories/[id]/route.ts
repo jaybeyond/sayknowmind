@@ -119,6 +119,12 @@ export async function DELETE(
     const { id } = await params;
 
     const result = await deleteCategory(id, userId);
+    if (!result.success) {
+      return NextResponse.json(
+        { code: ErrorCode.CATEGORY_NOT_FOUND, message: "Category not found", timestamp: new Date().toISOString() },
+        { status: 404 },
+      );
+    }
     return NextResponse.json(result);
   } catch (err) {
     console.error("[categories/[id]] DELETE error:", err);
