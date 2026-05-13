@@ -92,3 +92,6 @@ docs/*
 *.bak
 db/init/*.bak
 docker-compose.yml.bak
+
+# Local env backups
+.env.bak*
