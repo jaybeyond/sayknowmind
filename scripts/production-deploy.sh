@@ -175,6 +175,9 @@ apply_sql db/migrations/046_fix_provider_models.sql   || exit 3
 # same AI failure/unavailable message repeatedly when a user's local relay is
 # offline.
 apply_sql db/migrations/047_telegram_processed_updates.sql || exit 3
+# 048 resets Codex rows that selected API-only model IDs (for example
+# "gpt-5") which ChatGPT-account Codex rejects at runtime.
+apply_sql db/migrations/048_fix_codex_chatgpt_models.sql || exit 3
 
 # better-auth rateLimit (no migration file ships this)
 echo "creating rateLimit table (if missing)"

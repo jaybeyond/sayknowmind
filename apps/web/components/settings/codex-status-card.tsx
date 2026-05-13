@@ -14,6 +14,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Bot, CheckCircle2, RefreshCw, ExternalLink, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
+import { CODEX_MODEL_CHOICES } from "@/lib/codex-models";
 
 /**
  * Read Codex readiness from the local machine.
@@ -73,22 +74,6 @@ async function startCodexLogin(): Promise<{ ok: boolean; error?: string }> {
   }
   return { ok: true };
 }
-
-// Codex CLI accepts whatever the OpenAI ChatGPT subscription exposes;
-// there's no `/v1/models` to query. Curated list of the commonly
-// available IDs as of Codex CLI rust-v0.130.0 — empty string =
-// "let the CLI pick" (recommended default).
-const CODEX_MODEL_CHOICES: Array<{ value: string; label: string }> = [
-  { value: "", label: "Default (CLI picks)" },
-  { value: "gpt-5", label: "gpt-5" },
-  { value: "gpt-5-mini", label: "gpt-5-mini" },
-  { value: "gpt-4o", label: "gpt-4o" },
-  { value: "gpt-4o-mini", label: "gpt-4o-mini" },
-  { value: "o3", label: "o3" },
-  { value: "o3-mini", label: "o3-mini" },
-  { value: "o1", label: "o1" },
-  { value: "o1-mini", label: "o1-mini" },
-];
 
 export function CodexStatusCard() {
   const { t } = useTranslation();

@@ -10,6 +10,7 @@
 import { getOrderedProviders, type ProviderEntry } from "@/lib/provider-config";
 import { getUserProviders } from "@/lib/provider-db";
 import { enqueueAndWait, hasActiveWebview, type RelayProvider } from "@/lib/llm-relay/queue";
+import { codexRelayModel } from "@/lib/codex-models";
 
 const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 const AI_TIMEOUT = 60_000;
@@ -20,6 +21,11 @@ const AI_TIMEOUT = 60_000;
 const RELAY_PROVIDER_IDS: ReadonlyArray<string> = ["ocp", "codex"];
 function isRelayProvider(id: string): id is RelayProvider {
   return RELAY_PROVIDER_IDS.includes(id);
+}
+
+function modelForRelay(provider: ProviderEntry): string | null {
+  if (provider.id === "codex") return codexRelayModel(provider.model);
+  return provider.model?.trim() || null;
 }
 
 export interface AiCallOptions {
@@ -101,7 +107,7 @@ async function callCloudProvider(
     }
     const result = await enqueueAndWait(
       userId,
-      { system, user: message, model: provider.model || null, provider: provider.id },
+      { system, user: message, model: modelForRelay(provider), provider: provider.id },
       timeout,
     );
     if (!result.content) throw new Error(`${provider.id} returned empty content via relay`);

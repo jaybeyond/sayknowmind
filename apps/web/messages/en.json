@@ -295,6 +295,7 @@
       "toggling": "Working…",
       "disconnect": "Disconnect",
       "connect": "Connect",
+      "modelLabel": "Model",
       "loggingIn": "Complete the ChatGPT login in your browser — we'll authenticate automatically when done…",
       "notReady": "Click to open the ChatGPT login window automatically.",
       "loginWaiting": "Waiting for login…",

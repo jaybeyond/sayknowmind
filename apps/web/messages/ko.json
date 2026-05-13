@@ -295,6 +295,7 @@
       "toggling": "처리 중…",
       "disconnect": "연동 해제",
       "connect": "연동",
+      "modelLabel": "모델",
       "loggingIn": "브라우저에서 ChatGPT 로그인을 완료해주세요. 끝나면 자동으로 인증됩니다…",
       "notReady": "버튼을 누르면 ChatGPT 로그인 창이 자동으로 열립니다.",
       "loginWaiting": "로그인 대기 중…",

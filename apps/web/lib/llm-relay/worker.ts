@@ -16,6 +16,8 @@
  * is fine: the server's queue gives a job to exactly one poller.
  */
 
+import { codexRelayModel } from "@/lib/codex-models";
+
 type TauriInvoke = <T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 
 interface TauriBridge {
@@ -54,7 +56,7 @@ async function executeJob(job: RelayJob): Promise<{ content?: string; model?: st
     const reply = await b.invoke<{ content: string; model: string }>(cmd, {
       system: job.system,
       user: job.user,
-      model: job.model ?? null,
+      model: job.provider === "codex" ? codexRelayModel(job.model) : (job.model ?? null),
     });
     if (!reply?.content) {
       return { error: `${cmd} returned empty content` };

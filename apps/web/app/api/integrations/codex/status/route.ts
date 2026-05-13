@@ -20,6 +20,7 @@ import { pool } from "@/lib/db";
 import { encryptForUser } from "@/lib/encryption";
 import { getSession } from "@/lib/admin";
 import { isCodexReady, invalidateCodexReadyCache } from "@/lib/codex";
+import { CODEX_DEFAULT_MODEL, normalizeCodexModel } from "@/lib/codex-models";
 
 // Per-user state; never cache. Without this Cloudflare in front of
 // sayknowmind.ypai.click can serve a stale `active=false` to a webview
@@ -40,7 +41,7 @@ const PLACEHOLDER_PLAINTEXT = "codex-oauth";
 // which is what the user's ChatGPT subscription actually backs.
 // Previously this was "codex-default" which Codex CLI rejected with
 // exit status 1 ("Unknown model: codex-default").
-const PINNED_MODEL = "";
+const PINNED_MODEL = CODEX_DEFAULT_MODEL;
 // Symbolic base URL — Codex CLI handles the real endpoint internally.
 const PINNED_BASE_URL = "https://auth.openai.com";
 
@@ -56,7 +57,7 @@ async function getCodexStateForUser(userId: string): Promise<{ active: boolean; 
     active: row?.is_active === true,
     // Empty string means "let the Codex CLI pick" — that's the default
     // we keep for the relay path so `--model` isn't forwarded.
-    model: typeof row?.model === "string" ? row.model : PINNED_MODEL,
+    model: normalizeCodexModel(row?.model),
   };
 }
 
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
 
   // `model` may be intentionally empty (means "let Codex CLI pick"), so
   // we distinguish "field present" from "field missing" via typeof.
-  const requestedModel = typeof body.model === "string" ? body.model.slice(0, 200) : null;
+  const requestedModel = typeof body.model === "string" ? normalizeCodexModel(body.model) : null;
 
   if (body.modelOnly === true) {
     if (requestedModel === null) {

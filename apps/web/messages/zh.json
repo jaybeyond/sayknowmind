@@ -295,6 +295,7 @@
       "toggling": "处理中…",
       "disconnect": "断开连接",
       "connect": "连接",
+      "modelLabel": "模型",
       "loggingIn": "请在浏览器中完成 ChatGPT 登录，完成后将自动认证…",
       "notReady": "点击按钮自动打开 ChatGPT 登录窗口。",
       "loginWaiting": "正在等待登录…",

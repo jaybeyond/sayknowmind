@@ -89,7 +89,9 @@ migrate:production:
         db/migrations/041_user_mcp_keys.sql
         db/migrations/042_tags_table.sql
         db/migrations/045_fix_ocp_base_url.sql
-        db/migrations/046_fix_provider_models.sql ; do
+        db/migrations/046_fix_provider_models.sql
+        db/migrations/047_telegram_processed_updates.sql
+        db/migrations/048_fix_codex_chatgpt_models.sql ; do
         echo "Applying: $f" ;
         psql "$DATABASE_URL" -f "$f" ;
       done
