@@ -1345,7 +1345,7 @@ fn main() {
         let env_data = detect_environment();
         let env_json = serde_json::to_string(&env_data).unwrap_or_else(|_| "{}".to_string());
         let init_js = format!(
-            r#"
+            r##"
             window.__SAYKNOW_ENV__ = {env};
             window.__TAURI_DESKTOP__ = true;
 
@@ -1397,7 +1397,7 @@ fn main() {
                 }}
               }}, true);
             }})();
-            "#,
+            "##,
             env = env_json,
             remote_host = REMOTE_HOST,
         );
