@@ -412,6 +412,262 @@ async fn chat_via_ocp(
     .map_err(|e| format!("join: {}", e))?
 }
 
+/// Resolve which `codex` binary to spawn for non-interactive runs. Mirrors
+/// the order in `exec_codex_login`:
+///   1. bundled Tauri sidecar (always wins so users without Node still work)
+///   2. system `codex` on PATH (dev installs, brew, npm -g)
+///   3. `npx -y @openai/codex` (last resort)
+/// Returns `(program, base_args)` — caller appends `exec` + its own args.
+///
+/// Unlike `exec_codex_login` we spawn via std::process::Command rather
+/// than the shell plugin's sidecar runner, because we need raw stdin
+/// piping and JSONL stdout parsing — neither survives the IPC event
+/// channel wrapper that `app.shell().sidecar("codex").spawn()` enforces.
+fn resolve_codex_invocation(app: &tauri::AppHandle) -> Result<(PathBuf, Vec<String>), String> {
+    use tauri::Manager;
+    // Sidecar binaries get unpacked next to the executable under
+    // `binaries/codex-<TARGET_TRIPLE>(.exe)`. Tauri 2's `app.path()`
+    // resolver doesn't expose this directly, but the resource dir +
+    // target triple from the bundle suffix gets us there.
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let candidate_names: [&str; 6] = [
+            "codex-aarch64-apple-darwin",
+            "codex-x86_64-apple-darwin",
+            "codex-x86_64-unknown-linux-musl",
+            "codex-aarch64-unknown-linux-musl",
+            "codex-x86_64-pc-windows-msvc.exe",
+            "codex-aarch64-pc-windows-msvc.exe",
+        ];
+        for name in candidate_names {
+            let p = resource_dir.join("binaries").join(name);
+            if p.is_file() {
+                return Ok((p, Vec::new()));
+            }
+            let p2 = resource_dir.join(name);
+            if p2.is_file() {
+                return Ok((p2, Vec::new()));
+            }
+        }
+    }
+    if let Some(p) = which_in_shell_path("codex") {
+        return Ok((p, Vec::new()));
+    }
+    if let Some(npx) = which_in_shell_path("npx") {
+        return Ok((npx, vec!["-y".into(), "@openai/codex".into()]));
+    }
+    Err("Codex CLI not found. Run `codex login` once, install Node 22+, or reinstall the app with the bundled sidecar.".to_string())
+}
+
+/// Run `codex exec --experimental-json` with the given prompt on stdin and
+/// return the final agent_message text. Matches what
+/// `@openai/codex-sdk`'s `Thread.run()` does so non-streaming callers
+/// (chat, summary) get the same final answer that the server-side path
+/// would have produced.
+fn run_codex_exec(app: &tauri::AppHandle, prompt: &str, model: Option<&str>) -> Result<String, String> {
+    let (program, prefix_args) = resolve_codex_invocation(app)?;
+
+    let mut args: Vec<String> = prefix_args;
+    args.push("exec".into());
+    args.push("--experimental-json".into());
+    // Mirror server-side `codexChat()` thread options: read-only sandbox, no
+    // network, no web search, never prompt for approval, skip the
+    // "are you in a git repo?" preflight. Working directory is tmpdir so
+    // Codex doesn't poke at the app bundle.
+    args.push("--skip-git-repo-check".into());
+    args.push("--sandbox".into());
+    args.push("read-only".into());
+    let workdir = std::env::temp_dir();
+    args.push("--cd".into());
+    args.push(workdir.to_string_lossy().into_owned());
+    args.push("--config".into());
+    args.push("approval_policy=\"never\"".into());
+    args.push("--config".into());
+    args.push("web_search=\"disabled\"".into());
+    args.push("--config".into());
+    args.push("sandbox_workspace_write.network_access=false".into());
+    if let Some(m) = model {
+        if !m.is_empty() {
+            args.push("--model".into());
+            args.push(m.into());
+        }
+    }
+
+    let mut child = Command::new(&program)
+        .args(&args)
+        .env("PATH", resolve_shell_path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("spawn codex: {}", e))?;
+
+    {
+        use std::io::Write;
+        let mut stdin = child.stdin.take().ok_or("codex stdin not available")?;
+        stdin
+            .write_all(prompt.as_bytes())
+            .map_err(|e| format!("write prompt: {}", e))?;
+        // Drop closes stdin so the CLI knows the prompt is complete.
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("wait codex: {}", e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "codex exec failed ({}): {}",
+            output.status,
+            stderr.chars().take(500).collect::<String>()
+        ));
+    }
+
+    // Parse JSONL events on stdout, keep the last agent_message text — the
+    // SDK's run() method does exactly this (see codex-sdk dist/index.js).
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut final_text = String::new();
+    let mut last_error: Option<String> = None;
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let parsed: serde_json::Value = match serde_json::from_str(trimmed) {
+            Ok(v) => v,
+            Err(_) => continue, // ignore non-JSON noise lines defensively
+        };
+        let ev_type = parsed["type"].as_str().unwrap_or("");
+        if ev_type == "item.completed" {
+            if parsed["item"]["type"].as_str() == Some("agent_message") {
+                if let Some(t) = parsed["item"]["text"].as_str() {
+                    final_text = t.to_string();
+                }
+            }
+        } else if ev_type == "turn.failed" {
+            if let Some(msg) = parsed["error"]["message"].as_str() {
+                last_error = Some(msg.to_string());
+            }
+        }
+    }
+
+    if final_text.is_empty() {
+        if let Some(err) = last_error {
+            return Err(format!("codex turn failed: {}", err));
+        }
+        return Err("codex exec produced no agent_message".to_string());
+    }
+    Ok(final_text)
+}
+
+/// Direct chat through Codex's local CLI, mirroring `chat_via_ocp`. The
+/// webview hands over the same `messages` array; we serialize it into a
+/// transcript prompt and let Codex reply as the assistant.
+#[tauri::command]
+async fn chat_via_codex(
+    app: tauri::AppHandle,
+    messages: Vec<ChatMessage>,
+    model: Option<String>,
+) -> Result<ChatReply, String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<ChatReply, String> {
+        // Codex `exec` is single-turn — no thread resume — so we collapse
+        // the conversation history into one prompt. Mark each turn with a
+        // role prefix so the model can tell who said what.
+        let mut prompt = String::new();
+        for m in &messages {
+            let role = match m.role.as_str() {
+                "user" => "User",
+                "assistant" => "Assistant",
+                "system" => "System",
+                other => other,
+            };
+            prompt.push_str(role);
+            prompt.push_str(": ");
+            prompt.push_str(&m.content);
+            prompt.push_str("\n\n");
+        }
+        prompt.push_str("Reply as the assistant to the latest user message.");
+
+        let text = run_codex_exec(&app, &prompt, model.as_deref())?;
+        let chosen_model = model.unwrap_or_else(|| "codex-default".to_string());
+        Ok(ChatReply { content: text, model: chosen_model })
+    })
+    .await
+    .map_err(|e| format!("join: {}", e))?
+}
+
+/// One-shot completion through Codex — the Codex counterpart to
+/// `complete_via_ocp`. Same call shape so the webview bridge can fall
+/// through OCP → Codex without restructuring the caller.
+#[tauri::command]
+async fn complete_via_codex(
+    app: tauri::AppHandle,
+    system: String,
+    user: String,
+    model: Option<String>,
+) -> Result<ChatReply, String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<ChatReply, String> {
+        let prompt = if system.trim().is_empty() {
+            user
+        } else {
+            format!("{}\n\n{}", system, user)
+        };
+        let text = run_codex_exec(&app, &prompt, model.as_deref())?;
+        let chosen_model = model.unwrap_or_else(|| "codex-default".to_string());
+        Ok(ChatReply { content: text, model: chosen_model })
+    })
+    .await
+    .map_err(|e| format!("join: {}", e))?
+}
+
+/// Generic one-shot completion through OCP — used by the lite webview for
+/// non-chat LLM work like structured-metadata summarization, entity
+/// extraction, and category suggestion. Same transport as `chat_via_ocp`
+/// but the caller provides system + user content directly instead of a
+/// conversation history.
+#[tauri::command]
+async fn complete_via_ocp(
+    system: String,
+    user: String,
+    model: Option<String>,
+) -> Result<ChatReply, String> {
+    let chosen_model = model.unwrap_or_else(|| "claude-opus-4-7".to_string());
+    tauri::async_runtime::spawn_blocking(move || -> Result<ChatReply, String> {
+        let body = serde_json::json!({
+            "model": chosen_model,
+            "messages": [
+                { "role": "system", "content": system },
+                { "role": "user",   "content": user   },
+            ],
+            "stream": false,
+        });
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(180))
+            .build()
+            .map_err(|e| format!("http client: {}", e))?;
+        let res = client
+            .post("http://127.0.0.1:3456/v1/chat/completions")
+            .header("Content-Type", "application/json")
+            .body(serde_json::to_vec(&body).unwrap_or_default())
+            .send()
+            .map_err(|e| format!("OCP fetch failed: {} — is the proxy running?", e))?;
+        let status = res.status();
+        let raw = res.text().unwrap_or_default();
+        if !status.is_success() {
+            return Err(format!("OCP returned {}: {}", status, raw.chars().take(500).collect::<String>()));
+        }
+        let parsed: serde_json::Value = serde_json::from_str(&raw)
+            .map_err(|e| format!("OCP response not JSON: {} — body: {}", e, raw.chars().take(200).collect::<String>()))?;
+        let content = parsed["choices"][0]["message"]["content"]
+            .as_str()
+            .ok_or_else(|| format!("OCP response missing choices[0].message.content: {}", raw.chars().take(300).collect::<String>()))?
+            .to_string();
+        let returned_model = parsed["model"].as_str().unwrap_or(&chosen_model).to_string();
+        Ok(ChatReply { content, model: returned_model })
+    })
+    .await
+    .map_err(|e| format!("join: {}", e))?
+}
+
 /// List the OCP proxy's available models so the picker has something real to
 /// show. Falls back to a stock list if the endpoint is unreachable.
 #[tauri::command]
@@ -1314,6 +1570,9 @@ fn main() {
             claude_auth_login,
             install_claude_cli,
             chat_via_ocp,
+            complete_via_ocp,
+            chat_via_codex,
+            complete_via_codex,
             list_ocp_models,
         ]);
 

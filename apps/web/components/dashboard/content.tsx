@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
+import { summarizeDocLocally } from "@/lib/ocp-bridge";
 
 // ---------------------------------------------------------------------------
 // Gallery View (shared public content, inline in content area)
@@ -189,7 +190,7 @@ function GalleryView() {
 // ---------------------------------------------------------------------------
 
 export function MemoryContent() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const {
     selectedCollection,
     selectedTab,
@@ -250,6 +251,21 @@ export function MemoryContent() {
       if (res.ok) {
         const data = await res.json();
         toast.success(t("content.reprocessQueued").replace("{{count}}", String(data.reprocessed)));
+        // Lite-desktop fast path: race the cloud job-queue by summarizing
+        // through whichever local LLM (OCP or Codex) is reachable. The
+        // cloud job sees summary already filled (see job-queue.ts step 1
+        // guard) and skips its own LLM call.
+        const docs: Array<{ id: string }> = Array.isArray(data.documents) ? data.documents : [];
+        if (docs.length > 0) {
+          void (async () => {
+            let anyOk = false;
+            for (const d of docs) {
+              const ok = await summarizeDocLocally(d.id, locale);
+              if (ok) anyOk = true;
+            }
+            if (anyOk) void fetchMemories();
+          })();
+        }
         setTimeout(() => fetchMemories(), 2000);
       } else {
         toast.error(t("content.reprocessFailed"));

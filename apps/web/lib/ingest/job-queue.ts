@@ -230,36 +230,53 @@ async function processJob(job: JobRow): Promise<void> {
       await failJob(jobId, "Document deleted during processing");
       return;
     }
-    try {
-      const wordCount = doc.content ? doc.content.split(/\s+/).length : 0;
+    // Skip metadata generation if the client (lite-desktop webview via OCP)
+    // has already raced ahead and filled summary in. Avoids burning a paid
+    // cloud LLM call after the local Claude subscription has done it for $0.
+    const freshDoc = await getDocument(documentId);
+    const alreadySummarized = Boolean(freshDoc?.summary && freshDoc.summary.trim().length > 0);
+    if (alreadySummarized) {
+      console.info(`[job-queue] Skipping metadata step for job ${jobId} — summary already applied (likely by OCP fast path).`);
+      structuredMeta = {
+        title: freshDoc?.title ?? "",
+        summary: freshDoc?.summary ?? "",
+        what_it_solves: "",
+        key_points: [],
+        aiTags: [],
+        reading_time_minutes: 1,
+      };
+    } else {
+      try {
+        const wordCount = doc.content ? doc.content.split(/\s+/).length : 0;
 
-      // Fetch existing tags from dedicated tags table for deduplication
-      const { listTagNames } = await import("@/lib/tags/store");
-      const existingTags = await listTagNames(doc.user_id);
+        // Fetch existing tags from dedicated tags table for deduplication
+        const { listTagNames } = await import("@/lib/tags/store");
+        const existingTags = await listTagNames(doc.user_id);
 
-      structuredMeta = await generateStructuredMetadata(doc.content ?? "", language, wordCount, existingTags, userId);
+        structuredMeta = await generateStructuredMetadata(doc.content ?? "", language, wordCount, existingTags, userId);
 
-      await updateDocument(documentId, {
-        title: structuredMeta.title || undefined,
-        summary: structuredMeta.summary || undefined,
-        metadata: {
-          summary: structuredMeta.summary,
-          what_it_solves: structuredMeta.what_it_solves,
-          key_points: structuredMeta.key_points,
-          aiTags: structuredMeta.aiTags,
-          reading_time_minutes: structuredMeta.reading_time_minutes,
-          language,
-        },
-      });
+        await updateDocument(documentId, {
+          title: structuredMeta.title || undefined,
+          summary: structuredMeta.summary || undefined,
+          metadata: {
+            summary: structuredMeta.summary,
+            what_it_solves: structuredMeta.what_it_solves,
+            key_points: structuredMeta.key_points,
+            aiTags: structuredMeta.aiTags,
+            reading_time_minutes: structuredMeta.reading_time_minutes,
+            language,
+          },
+        });
 
-      // Save tags to dedicated tags table (canonical deduplication)
-      if (structuredMeta.aiTags.length > 0) {
-        const { assignTags } = await import("@/lib/tags/store");
-        await assignTags(doc.user_id, documentId, structuredMeta.aiTags);
+        // Save tags to dedicated tags table (canonical deduplication)
+        if (structuredMeta.aiTags.length > 0) {
+          const { assignTags } = await import("@/lib/tags/store");
+          await assignTags(doc.user_id, documentId, structuredMeta.aiTags);
+        }
+      } catch (err) {
+        stepFailures.metadata = true;
+        console.error(`[job-queue] Structured metadata generation failed for job ${jobId}:`, err);
       }
-    } catch (err) {
-      stepFailures.metadata = true;
-      console.error(`[job-queue] Structured metadata generation failed for job ${jobId}:`, err);
     }
     await updateJobProgress(jobId, 50);
 

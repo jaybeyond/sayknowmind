@@ -48,3 +48,82 @@ export async function GET(
     );
   }
 }
+
+/**
+ * POST /api/conversations/[id]/messages — Append a message.
+ *
+ * Used by the lite-desktop OCP fast path in `chat-page.tsx`, which calls
+ * the local proxy directly and bypasses /api/chat (the route that would
+ * normally insert messages as a side effect). Accepts a single role +
+ * content pair so the client can post the user turn and the assistant
+ * turn separately as they're produced.
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const userId = await getUserIdFromRequest();
+    if (!userId) {
+      return NextResponse.json(
+        { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
+        { status: 401 },
+      );
+    }
+
+    const { id } = await params;
+
+    // Verify conversation belongs to user — prevents an authenticated user
+    // from injecting messages into someone else's conversation by ID guess.
+    const convCheck = await pool.query(
+      `SELECT id FROM conversations WHERE id = $1 AND user_id = $2`,
+      [id, userId],
+    );
+    if (convCheck.rowCount === 0) {
+      return NextResponse.json(
+        { code: ErrorCode.CATEGORY_NOT_FOUND, message: "Conversation not found", timestamp: new Date().toISOString() },
+        { status: 404 },
+      );
+    }
+
+    let body: { role?: string; content?: string };
+    try {
+      body = (await request.json()) as { role?: string; content?: string };
+    } catch {
+      return NextResponse.json(
+        { code: ErrorCode.SYSTEM_VALIDATION_ERROR, message: "Invalid JSON body", timestamp: new Date().toISOString() },
+        { status: 400 },
+      );
+    }
+
+    const role = body.role;
+    const content = typeof body.content === "string" ? body.content : "";
+    if (role !== "user" && role !== "assistant" && role !== "system") {
+      return NextResponse.json(
+        { code: ErrorCode.SYSTEM_VALIDATION_ERROR, message: "role must be 'user', 'assistant', or 'system'", timestamp: new Date().toISOString() },
+        { status: 400 },
+      );
+    }
+    if (!content || content.trim().length === 0) {
+      return NextResponse.json(
+        { code: ErrorCode.SYSTEM_VALIDATION_ERROR, message: "content is required", timestamp: new Date().toISOString() },
+        { status: 400 },
+      );
+    }
+
+    const result = await pool.query(
+      `INSERT INTO messages (conversation_id, role, content)
+       VALUES ($1, $2, $3)
+       RETURNING id, role, content, created_at`,
+      [id, role, content],
+    );
+
+    return NextResponse.json(result.rows[0], { status: 201 });
+  } catch (err) {
+    console.error("[conversations/messages] POST error:", err);
+    return NextResponse.json(
+      { code: ErrorCode.SYSTEM_INTERNAL_ERROR, message: "Internal server error", timestamp: new Date().toISOString() },
+      { status: 500 },
+    );
+  }
+}
