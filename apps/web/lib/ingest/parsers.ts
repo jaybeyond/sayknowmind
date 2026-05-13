@@ -91,7 +91,13 @@ async function parsePdf(buffer: Buffer): Promise<ParsedContent> {
   // dragged in pdfjs-dist's browser build, which crashes on the server
   // with "DOMMatrix is not defined". Types come from
   // apps/web/types/pdf-parse.d.ts since the package ships no .d.ts.
-  const { default: pdfParse } = await import("pdf-parse");
+  //
+  // Import the inner module directly to skip the package's index.js,
+  // which has long-standing debug code that tries to open
+  // './test/data/05-versions-space.pdf' at module load time and
+  // crashes the request with ENOENT in any environment that isn't
+  // the package's own dev checkout.
+  const { default: pdfParse } = await import("pdf-parse/lib/pdf-parse.js");
   const data = await pdfParse(buffer);
   const content = (data.text ?? "").trim();
   return {

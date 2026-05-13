@@ -139,6 +139,10 @@ apply_sql db/migrations/038_user_provider_configs.sql || exit 3
 # rows in those tables, so it's safe only when they hold no data we
 # care about (currently always true: chat was broken before this).
 apply_sql db/migrations/031_conversations_simple.sql  || exit 3
+# 042 adds the dedicated tags + document_tags tables. Without them
+# every job-queue summarization run dies with
+# `relation "tags" does not exist` the moment listTagNames() runs.
+apply_sql db/migrations/042_tags_table.sql            || exit 3
 # 045 strips the bogus trailing /v1 from existing OCP rows so the
 # cloud-ai cascade composes /v1/chat/completions cleanly instead of
 # /v1/v1/chat/completions. Idempotent — UPDATE only matches rows

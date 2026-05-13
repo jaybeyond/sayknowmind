@@ -82,6 +82,7 @@ migrate:production:
         db/init/10-integration-tokens.sql
         db/migrations/038_user_provider_configs.sql
         db/migrations/031_conversations_simple.sql
+        db/migrations/042_tags_table.sql
         db/migrations/045_fix_ocp_base_url.sql
         db/migrations/046_fix_provider_models.sql ; do
         echo "Applying: $f" ;

@@ -37,3 +37,16 @@ declare module "pdf-parse" {
 
   export default pdfParse;
 }
+
+// The package's index.js has long-standing debug code that opens a
+// non-existent fixture path at module load. parsers.ts imports the
+// inner module directly to skip that — declare it here so TS can
+// resolve the deep path without `any`.
+declare module "pdf-parse/lib/pdf-parse.js" {
+  import type { PdfData } from "pdf-parse";
+  function pdfParse(
+    dataBuffer: Buffer | Uint8Array,
+    options?: { max?: number; version?: string },
+  ): Promise<PdfData>;
+  export default pdfParse;
+}

@@ -42,6 +42,12 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Pre-create the file-storage directory the ingest pipeline writes to.
+# Without this, the first upload hits `EACCES: permission denied,
+# mkdir '/app/uploads'` because the nextjs user can't mkdir at /app.
+# A bind/volume mount on /app/uploads at runtime inherits this owner.
+RUN mkdir -p /app/uploads && chown -R nextjs:nodejs /app/uploads
+
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
