@@ -59,6 +59,7 @@ const t: Record<string, Record<Lang, string>> = {
   searchEmpty:        { en: "No results found.", ko: "검색 결과가 없습니다.", ja: "検索結果がありません。", zh: "未找到结果。" },
   linkFirst:          { en: "Please link your account first.\nYour ID: <code>{tgId}</code>\n\n/start for instructions.", ko: "계정을 먼저 연결하세요.\n내 ID: <code>{tgId}</code>\n\n/start 로 연결 방법을 확인하세요.", ja: "先にアカウントを連携してください。\nあなたのID: <code>{tgId}</code>\n\n/start で手順を確認。", zh: "请先关联账号。\n你的ID: <code>{tgId}</code>\n\n/start 查看说明。" },
   linkFirstShort:     { en: "Please link your account first.\nSettings → Integrations → Telegram\n\nYour ID: <code>{tgId}</code>", ko: "계정을 먼저 연결하세요.\n설정 → 연동 → Telegram\n\n내 ID: <code>{tgId}</code>", ja: "先にアカウントを連携してください。\n設定 → 連携 → Telegram\n\nあなたのID: <code>{tgId}</code>", zh: "请先关联账号。\n设置 → 集成 → Telegram\n\n你的ID: <code>{tgId}</code>" },
+  verificationCode:   { en: "🔑 Verification code: <b>{code}</b>\n\nEnter this code in SayKnowMind Settings → Integrations → Telegram.\n\n<i>Code expires in 10 minutes.</i>", ko: "🔑 인증 코드: <b>{code}</b>\n\nSayKnowMind 설정 → 연동 → Telegram에서 이 코드를 입력하세요.\n\n<i>코드는 10분 후 만료됩니다.</i>", ja: "🔑 認証コード: <b>{code}</b>\n\nSayKnowMind 設定 → 連携 → Telegramでこのコードを入力してください。\n\n<i>コードは10分後に期限切れになります。</i>", zh: "🔑 验证码: <b>{code}</b>\n\n在 SayKnowMind 设置 → 集成 → Telegram 中输入此验证码。\n\n<i>验证码 10 分钟后过期。</i>" },
   urlSaved:           { en: "✅ Saved: <b>{title}</b>", ko: "✅ 저장됨: <b>{title}</b>", ja: "✅ 保存: <b>{title}</b>", zh: "✅ 已保存: <b>{title}</b>" },
   urlFail:            { en: "❌ Failed to save URL. Check the URL and try again.", ko: "❌ URL 저장 실패. URL을 확인하고 다시 시도하세요.", ja: "❌ URL保存に失敗。URLを確認して再試行してください。", zh: "❌ URL保存失败。请检查URL后重试。" },
   photoSaved:         { en: "📷 Image saved: <b>{title}</b>", ko: "📷 이미지 저장됨: <b>{title}</b>", ja: "📷 画像保存: <b>{title}</b>", zh: "📷 图片已保存: <b>{title}</b>" },
@@ -844,10 +845,7 @@ export async function handleTelegramUpdate(
              ON CONFLICT DO NOTHING`,
             [`pending:${code}`, code, tgUserId, message.from.username ?? null],
           );
-          await sendMessage(
-            botToken, chatId,
-            `🔑 Verification code: <b>${code}</b>\n\nEnter this code in SayKnowMind Settings → Integrations → Telegram.\n\n<i>Code expires in 10 minutes.</i>`,
-          );
+          await sendMessage(botToken, chatId, msg("verificationCode", L, { code }));
         } catch (err) {
           console.error("[telegram] Code generation failed:", err);
           await sendMessage(botToken, chatId, msg("startWelcome", L, { tgId: tgUserId }));
@@ -986,9 +984,11 @@ export async function handleTelegramUpdate(
       return NextResponse.json({ ok: true });
     }
 
-    // Unknown command — not linked, suggest /start
+    // Unknown command — not linked, suggest /start. Reuse the same
+    // localized "link first" message everywhere so an unlinked user
+    // sees consistent guidance no matter which entry point they hit.
     if (!userId) {
-      await sendMessage(botToken, chatId, "👋 Send /start to create your account and get started!");
+      await sendMessage(botToken, chatId, msg("linkFirst", L, { tgId: tgUserId }));
       return NextResponse.json({ ok: true });
     }
   }
@@ -996,10 +996,7 @@ export async function handleTelegramUpdate(
   // ── Guard: require linked account for content operations ──
 
   if (!userId) {
-    await sendMessage(
-      botToken, chatId,
-      `계정이 연결되지 않았습니다.\n\n/start 를 보내면 인증 코드를 받을 수 있습니다.`,
-    );
+    await sendMessage(botToken, chatId, msg("linkFirst", L, { tgId: tgUserId }));
     return NextResponse.json({ ok: true });
   }
 
