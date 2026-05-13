@@ -9,7 +9,7 @@
 
 import { getOrderedProviders, type ProviderEntry } from "@/lib/provider-config";
 import { getUserProviders } from "@/lib/provider-db";
-import { enqueueAndWait, type RelayProvider } from "@/lib/llm-relay/queue";
+import { enqueueAndWait, hasActiveWebview, type RelayProvider } from "@/lib/llm-relay/queue";
 
 const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 const AI_TIMEOUT = 60_000;
@@ -33,6 +33,18 @@ export interface AiCallOptions {
   userId?: string;
   /** Timeout in ms (default 60s) */
   timeout?: number;
+  /**
+   * Whether to fall back to the shared AI server after user/cloud providers fail.
+   * Telegram webhooks disable this so an offline local-relay provider fails once
+   * quickly instead of keeping Telegram's delivery open long enough to retry.
+   */
+  fallbackToAiServer?: boolean;
+  /**
+   * Local relay providers (OCP/Codex) require the user's desktop/webview to be
+   * actively polling. When absent, fail before enqueueing instead of waiting for
+   * the full timeout. Defaults to true to avoid stale relay jobs.
+   */
+  failFastWhenRelayOffline?: boolean;
 }
 
 class CloudHttpError extends Error {
@@ -170,10 +182,19 @@ async function callAiServer(
  * Cloud-first AI call with AI server fallback.
  *
  * Tries each configured cloud provider in order (active first).
- * Always falls back to AI server if all cloud providers fail or none configured.
+ * Falls back to AI server if all cloud providers fail or none configured,
+ * unless fallbackToAiServer is disabled by the caller.
  */
 export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
-  const { system, message, images, userId, timeout = AI_TIMEOUT } = opts;
+  const {
+    system,
+    message,
+    images,
+    userId,
+    timeout = AI_TIMEOUT,
+    fallbackToAiServer = true,
+    failFastWhenRelayOffline = true,
+  } = opts;
 
   // Priority: explicit providers > DB (per-user) > JSON file/ENV fallback
   let providers = opts.providers;
@@ -192,6 +213,14 @@ export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
   // missing or when the user's webview isn't connected.
   for (const provider of providers) {
     try {
+      if (
+        failFastWhenRelayOffline
+        && isRelayProvider(provider.id)
+        && userId
+        && !hasActiveWebview(userId)
+      ) {
+        throw new Error(`${provider.id} relay unavailable: no active user webview`);
+      }
       return await callCloudProvider(provider, system, message, timeout, images, userId);
     } catch (err) {
       console.warn(`[cloud-ai] ${provider.id} failed:`, (err as Error).message);
@@ -199,6 +228,13 @@ export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
   }
 
   // All cloud providers failed (or none configured) → always fall back to AI server
+  if (!fallbackToAiServer) {
+    if (providers.length > 0) {
+      console.warn("[cloud-ai] All providers failed — AI server fallback disabled");
+    }
+    return "";
+  }
+
   if (providers.length > 0) {
     console.warn("[cloud-ai] All cloud providers failed — falling back to AI server");
   }

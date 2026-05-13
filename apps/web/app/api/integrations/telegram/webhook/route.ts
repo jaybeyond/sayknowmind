@@ -132,6 +132,68 @@ function buildDupKeyboard(dupId: string, lang: Lang): TelegramInlineKeyboardMark
   };
 }
 
+// ── Telegram Update Idempotency ───────────────────────────────
+
+const RECENT_UPDATE_TTL_MS = 10 * 60_000;
+const recentUpdateClaims = new Map<string, number>();
+let updateReceiptTableReady = false;
+
+function botIdFromToken(botToken: string): string {
+  return botToken.split(":")[0] || "unknown";
+}
+
+function cleanupRecentUpdateClaims(now: number): void {
+  for (const [key, claimedAt] of recentUpdateClaims) {
+    if (now - claimedAt > RECENT_UPDATE_TTL_MS) {
+      recentUpdateClaims.delete(key);
+    }
+  }
+}
+
+async function ensureTelegramUpdateReceiptTable(): Promise<void> {
+  if (updateReceiptTableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS telegram_processed_updates (
+      bot_id TEXT NOT NULL,
+      update_id BIGINT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (bot_id, update_id)
+    )
+  `);
+  updateReceiptTableReady = true;
+}
+
+async function claimTelegramUpdate(botToken: string, updateId: number): Promise<boolean> {
+  const botId = botIdFromToken(botToken);
+  const key = `${botId}:${updateId}`;
+  const now = Date.now();
+  cleanupRecentUpdateClaims(now);
+
+  if (recentUpdateClaims.has(key)) {
+    return false;
+  }
+
+  // Claim in-memory first so concurrent retries in this process cannot race.
+  recentUpdateClaims.set(key, now);
+
+  try {
+    await ensureTelegramUpdateReceiptTable();
+    const result = await pool.query(
+      `INSERT INTO telegram_processed_updates (bot_id, update_id)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [botId, updateId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  } catch (err) {
+    // If the DB is unavailable, still process once in this process. The
+    // in-memory claim above prevents the hot retry loop that duplicates
+    // Telegram replies while keeping the bot usable during transient DB issues.
+    console.warn("[telegram] Update idempotency DB check failed:", (err as Error).message);
+    return true;
+  }
+}
+
 // ── Bot Token Resolution ─────────────────────────────────────
 
 async function getBotToken(): Promise<string | null> {
@@ -313,15 +375,18 @@ async function getUserContext(userId: string) {
   };
 }
 
-// ── AI Call (Cloud-first → AI server fallback) ───────────────
+// ── AI Call (User provider only, no webhook retry cascade) ────
 
 /**
- * userId is required for the cloud cascade to consider per-user
+ * userId is required for the provider cascade to consider per-user
  * providers — without it `getUserProviders()` is skipped, the OCP/
  * Codex relay branch throws because there's no relay queue to dispatch
- * to, and only env-level providers (which production typically doesn't
- * configure) get tried. Telegram users would then always see the
- * `aiUnavailable` fallback even with OCP active in their settings.
+ * to.
+ *
+ * Do not fall back to the shared AI server here. Telegram webhooks are
+ * externally retried when delivery takes too long; if a user's local relay
+ * (OCP/Codex) is offline, fail this one update quickly and send one
+ * unavailable message instead of opening another slow cascade.
  */
 async function callAI(systemPrompt: string, userMessage: string, userId: string): Promise<string> {
   return await callAiCloudFirst({
@@ -329,6 +394,8 @@ async function callAI(systemPrompt: string, userMessage: string, userId: string)
     message: userMessage,
     timeout: 60_000,
     userId,
+    fallbackToAiServer: false,
+    failFastWhenRelayOffline: true,
   });
 }
 
@@ -609,6 +676,16 @@ export async function handleTelegramUpdate(
     update = await request.json();
   } catch {
     return NextResponse.json({ ok: false }, { status: 400 });
+  }
+
+  if (!Number.isFinite(update.update_id)) {
+    return NextResponse.json({ ok: false }, { status: 400 });
+  }
+
+  const claimed = await claimTelegramUpdate(fallbackToken, update.update_id);
+  if (!claimed) {
+    console.warn(`[telegram/webhook] Duplicate update ${update.update_id} ignored`);
+    return NextResponse.json({ ok: true, duplicate: true });
   }
 
   const msgType = classifyUpdate(update);
