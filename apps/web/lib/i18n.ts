@@ -1,6 +1,6 @@
 'use client';
 
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import en from "@/messages/en.json";
@@ -79,7 +79,10 @@ export function useTranslation() {
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
 
   const locale = mounted ? storeLocale : "en";
-  const t = (key: string): string => getNestedValue(messages[locale] as unknown as Record<string, unknown>, key);
+  const t = useCallback(
+    (key: string): string => getNestedValue(messages[locale] as unknown as Record<string, unknown>, key),
+    [locale],
+  );
   return { t, locale, setLocale };
 }
 
