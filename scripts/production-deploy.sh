@@ -139,6 +139,18 @@ apply_sql db/migrations/038_user_provider_configs.sql || exit 3
 # rows in those tables, so it's safe only when they hold no data we
 # care about (currently always true: chat was broken before this).
 apply_sql db/migrations/031_conversations_simple.sql  || exit 3
+# 028/029/030/037 build the channel_links table used by every
+# messaging integration (Telegram, Slack, Discord). Without these
+# verifyAndSave from the integrations tab dies with
+# `relation "channel_links" does not exist` and the UI shows
+# "Not configured" forever even after a successful token verify.
+# 028 has a soft data-migration step from a legacy telegram_links
+# table that's safely skipped on fresh deploys (CREATE TABLE runs
+# anyway because it precedes the FROM telegram_links query).
+apply_sql db/migrations/028_channel_links.sql                 || true
+apply_sql db/migrations/029_add_bot_token_to_channel_links.sql || exit 3
+apply_sql db/migrations/030_add_lang_to_channel_links.sql      || exit 3
+apply_sql db/migrations/037_channel_links_unique_channel_user.sql || exit 3
 # 042 adds the dedicated tags + document_tags tables. Without them
 # every job-queue summarization run dies with
 # `relation "tags" does not exist` the moment listTagNames() runs.
