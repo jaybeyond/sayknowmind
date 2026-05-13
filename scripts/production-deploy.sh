@@ -151,6 +151,12 @@ apply_sql db/migrations/028_channel_links.sql                 || true
 apply_sql db/migrations/029_add_bot_token_to_channel_links.sql || exit 3
 apply_sql db/migrations/030_add_lang_to_channel_links.sql      || exit 3
 apply_sql db/migrations/037_channel_links_unique_channel_user.sql || exit 3
+# 041 sets up the user_mcp_keys table so per-user MCP API keys can
+# be issued via /api/user/mcp-key and validated by the mcp-server
+# container's authMiddleware. The route also calls ensureTable() on
+# first use, but applying the migration here keeps schema_migrations
+# honest for fresh deploys.
+apply_sql db/migrations/041_user_mcp_keys.sql         || exit 3
 # 042 adds the dedicated tags + document_tags tables. Without them
 # every job-queue summarization run dies with
 # `relation "tags" does not exist` the moment listTagNames() runs.
@@ -165,6 +171,10 @@ apply_sql db/migrations/045_fix_ocp_base_url.sql      || exit 3
 # fails on "--model codex-default". Both are remapped to working
 # values. Idempotent.
 apply_sql db/migrations/046_fix_provider_models.sql   || exit 3
+# 047 records Telegram update receipts so webhook retries do not send the
+# same AI failure/unavailable message repeatedly when a user's local relay is
+# offline.
+apply_sql db/migrations/047_telegram_processed_updates.sql || exit 3
 
 # better-auth rateLimit (no migration file ships this)
 echo "creating rateLimit table (if missing)"

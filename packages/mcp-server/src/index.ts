@@ -12,29 +12,84 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
+import pg from "pg";
 import { createServer } from "./server.js";
 
 const PORT = parseInt(process.env.PORT ?? "8082", 10);
-const API_KEY = process.env.MCP_API_KEY;
+const ADMIN_API_KEY = process.env.MCP_API_KEY;
+const DATABASE_URL = process.env.DATABASE_URL;
 
 // ── Transport registry ──────────────────────────────────────
 type AnyTransport = StreamableHTTPServerTransport | SSEServerTransport;
 const transports: Record<string, AnyTransport> = {};
 
+// ── Per-user key lookup (lazy pg pool) ───────────────────────
+let pgPool: pg.Pool | undefined;
+function getPgPool(): pg.Pool | null {
+  if (!DATABASE_URL) return null;
+  if (!pgPool) {
+    pgPool = new pg.Pool({ connectionString: DATABASE_URL, max: 4 });
+    pgPool.on("error", (err) => console.error("[MCP] pg pool error:", err));
+  }
+  return pgPool;
+}
+
+/**
+ * Look up the user that owns a given API key. Returns the userId
+ * string on match, or null otherwise. Keys ship as `sk-mcp-<hex>`
+ * (see apps/web/app/api/user/mcp-key/route.ts).
+ */
+async function findUserByApiKey(token: string): Promise<string | null> {
+  const pool = getPgPool();
+  if (!pool) return null;
+  try {
+    const result = await pool.query(
+      `SELECT user_id FROM user_mcp_keys WHERE api_key = $1`,
+      [token],
+    );
+    return (result.rows[0]?.user_id as string) ?? null;
+  } catch (err) {
+    console.error("[MCP] user_mcp_keys lookup failed:", err);
+    return null;
+  }
+}
+
 // ── Auth middleware ──────────────────────────────────────────
-function authMiddleware(
+// Priority:
+//   1. No ADMIN_API_KEY *and* no DATABASE_URL  → open mode (dev only)
+//   2. Token matches ADMIN_API_KEY              → allow (no user attached)
+//   3. Token found in user_mcp_keys             → allow, attach userId
+//   4. Otherwise                                → 401
+async function authMiddleware(
   req: express.Request,
   res: express.Response,
   next: express.NextFunction,
-): void {
-  if (!API_KEY) return next(); // no key configured = open access
+): Promise<void> {
+  if (!ADMIN_API_KEY && !DATABASE_URL) return next();
+
   const token =
     req.headers.authorization?.replace("Bearer ", "") ??
     (req.query.api_key as string);
-  if (token !== API_KEY) {
+  if (!token) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+
+  if (ADMIN_API_KEY && token === ADMIN_API_KEY) {
+    // Admin/legacy shared key — does not correspond to a single user.
+    next();
+    return;
+  }
+
+  const userId = await findUserByApiKey(token);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  // Attach userId to req so MCP tools can scope EdgeQuake calls per
+  // user when that wiring is added (currently tools share the global
+  // tenant/workspace — see client.ts).
+  (req as unknown as { userId?: string }).userId = userId;
   next();
 }
 
@@ -131,7 +186,14 @@ function startHttpServer(): void {
     console.log(`[MCP] StreamableHTTP: POST/GET/DELETE /mcp`);
     console.log(`[MCP] SSE: GET /sse + POST /messages`);
     console.log(`[MCP] Health: GET /health`);
-    console.log(`[MCP] Auth: ${API_KEY ? "API key required" : "open (no MCP_API_KEY set)"}`);
+    const authModes: string[] = [];
+    if (DATABASE_URL) authModes.push("per-user keys (user_mcp_keys table)");
+    if (ADMIN_API_KEY) authModes.push("admin/shared MCP_API_KEY");
+    console.log(
+      `[MCP] Auth: ${
+        authModes.length > 0 ? authModes.join(" + ") : "open (no DATABASE_URL or MCP_API_KEY set)"
+      }`,
+    );
   });
 
   process.on("SIGINT", async () => {

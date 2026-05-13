@@ -222,13 +222,21 @@ services:
     environment:
       EDGEQUAKE_URL: http://edgequake:8080
       AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      # When set, the MCP server requires Authorization: Bearer <key>
-      # (or ?api_key=<key>) on every /mcp, /sse, /messages request.
-      # Empty defaults so dev compose-up without this var still boots
-      # in open mode for local testing.
+      # Per-user API keys live in the user_mcp_keys table (issued via
+      # /api/user/mcp-key from settings). The MCP server uses this
+      # connection to validate every incoming Authorization: Bearer
+      # token → which user is calling. Compose-internal hostname
+      # `postgres` because the mcp-server runs in the same network.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/sayknowmind
+      # Optional shared admin/debug key. When set, requests matching
+      # it bypass user lookup. Leave empty in production once UI-
+      # issued per-user keys are the only path.
       MCP_API_KEY: ${MCP_API_KEY:-}
     depends_on:
-      - edgequake
+      postgres:
+        condition: service_healthy
+      edgequake:
+        condition: service_started
     restart: unless-stopped
     networks:
       - sayknowmind
