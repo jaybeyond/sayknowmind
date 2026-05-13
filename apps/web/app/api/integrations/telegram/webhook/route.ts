@@ -315,11 +315,20 @@ async function getUserContext(userId: string) {
 
 // ── AI Call (Cloud-first → AI server fallback) ───────────────
 
-async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
+/**
+ * userId is required for the cloud cascade to consider per-user
+ * providers — without it `getUserProviders()` is skipped, the OCP/
+ * Codex relay branch throws because there's no relay queue to dispatch
+ * to, and only env-level providers (which production typically doesn't
+ * configure) get tried. Telegram users would then always see the
+ * `aiUnavailable` fallback even with OCP active in their settings.
+ */
+async function callAI(systemPrompt: string, userMessage: string, userId: string): Promise<string> {
   return await callAiCloudFirst({
     system: systemPrompt,
     message: userMessage,
     timeout: 60_000,
+    userId,
   });
 }
 
@@ -1289,7 +1298,7 @@ export async function handleTelegramUpdate(
       conversationHistory,
     });
 
-    let answer = await callAI(systemPrompt, text);
+    let answer = await callAI(systemPrompt, text, userId);
 
     // Always respond — fallback messages in user's language
     if (!answer && context) {
