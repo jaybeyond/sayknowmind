@@ -23,12 +23,18 @@ export interface ParsedContent {
 const SUPPORTED_MIME_TYPES: Record<string, string> = {
   "application/pdf": "pdf",
   "text/plain": "txt",
+  "text/csv": "csv",
+  "application/csv": "csv",
   "text/markdown": "md",
   "text/html": "html",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
   "image/png": "image",
   "image/jpeg": "image",
   "image/jpg": "image",
+  "image/heic": "image",
+  "image/heif": "image",
+  "image/heic-sequence": "image",
+  "image/heif-sequence": "image",
   "image/webp": "image",
   "image/gif": "image",
   "image/svg+xml": "image",
@@ -43,12 +49,15 @@ const EXTENSION_MAP: Record<string, string> = {
   ".txt": "txt",
   ".md": "md",
   ".markdown": "md",
+  ".csv": "csv",
   ".html": "html",
   ".htm": "html",
   ".docx": "docx",
   ".png": "image",
   ".jpg": "image",
   ".jpeg": "image",
+  ".heic": "image",
+  ".heif": "image",
   ".webp": "image",
   ".gif": "image",
   ".svg": "image",
@@ -212,6 +221,7 @@ export async function parseFile(
       return parseHtml(buffer.toString("utf-8"));
     case "txt":
     case "md":
+    case "csv":
       return parsePlainText(buffer.toString("utf-8"), fileType);
     case "image":
       return parseImage(buffer, fileName);
