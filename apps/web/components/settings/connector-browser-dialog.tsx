@@ -82,6 +82,17 @@ function formatBytes(n?: number): string {
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
+async function readErrorMessage(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const parsed = JSON.parse(text) as { error?: unknown };
+    if (typeof parsed.error === "string") return parsed.error;
+  } catch {
+    // fall through to raw text
+  }
+  return text;
+}
+
 export function ConnectorBrowserDialog({ providerId, account, displayName, onClose, onImported }: Props) {
   const { t } = useTranslation();
   const [items, setItems] = useState<ConnectorItem[]>([]);
@@ -121,7 +132,7 @@ export function ConnectorBrowserDialog({ providerId, account, displayName, onClo
           `/api/integrations/connectors/${providerId}/list?${params.toString()}`,
         );
         if (!res.ok) {
-          setResultBanner(`${t("integrations.ccListFailedPrefix")} ${await res.text()}`);
+          setResultBanner(`${t("integrations.ccListFailedPrefix")} ${await readErrorMessage(res)}`);
           return;
         }
         const data = (await res.json()) as ListPage;
@@ -132,7 +143,7 @@ export function ConnectorBrowserDialog({ providerId, account, displayName, onClo
         setLoading(false);
       }
     },
-    [providerId, account.accountId, filterTabs, activeFilter],
+    [providerId, account.accountId, filterTabs, activeFilter, t],
   );
 
   useEffect(() => {
@@ -173,7 +184,7 @@ export function ConnectorBrowserDialog({ providerId, account, displayName, onClo
         }),
       });
       if (!res.ok) {
-        setResultBanner(`${t("integrations.ccImportFailedPrefix")} ${await res.text()}`);
+        setResultBanner(`${t("integrations.ccImportFailedPrefix")} ${await readErrorMessage(res)}`);
         return;
       }
       const data = await res.json();

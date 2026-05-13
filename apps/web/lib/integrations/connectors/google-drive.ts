@@ -160,6 +160,66 @@ interface DriveListResponse {
   nextPageToken?: string;
 }
 
+function parseGoogleApiError(body: string): {
+  message?: string;
+  reason?: string;
+  service?: string;
+  activationUrl?: string;
+} {
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: {
+        message?: string;
+        errors?: Array<{ reason?: string }>;
+        details?: Array<{
+          reason?: string;
+          metadata?: {
+            service?: string;
+            activationUrl?: string;
+          };
+        }>;
+      };
+    };
+    const err = parsed.error;
+    const detailWithService = err?.details?.find((d) => d.metadata?.service || d.metadata?.activationUrl);
+    return {
+      message: err?.message,
+      reason: detailWithService?.reason ?? err?.errors?.[0]?.reason,
+      service: detailWithService?.metadata?.service,
+      activationUrl: detailWithService?.metadata?.activationUrl,
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function throwDriveApiError(operation: string, res: Response): Promise<never> {
+  const body = await res.text();
+  const parsed = parseGoogleApiError(body);
+
+  if (
+    res.status === 403 &&
+    (parsed.reason === "SERVICE_DISABLED" || parsed.reason === "accessNotConfigured") &&
+    parsed.service === "drive.googleapis.com"
+  ) {
+    throw new Error(
+      "Google Drive API is disabled for this OAuth project. " +
+      "Enable drive.googleapis.com in Google Cloud Console, wait a few minutes, then retry. " +
+      (parsed.activationUrl ? `Enable URL: ${parsed.activationUrl}` : ""),
+    );
+  }
+
+  if (res.status === 403 && parsed.reason === "insufficientPermissions") {
+    throw new Error(
+      "Google Drive permission was not granted for this account. Disconnect and reconnect Google Drive, then approve Drive read access.",
+    );
+  }
+
+  throw new Error(
+    `Drive ${operation} failed (${res.status}): ${parsed.message ?? body.slice(0, 500)}`,
+  );
+}
+
 function isFolder(f: DriveFile): boolean {
   return f.mimeType === "application/vnd.google-apps.folder";
 }
@@ -320,8 +380,7 @@ export const googleDriveConnector: Connector = {
       headers: { Authorization: `Bearer ${tok.accessToken}` },
     });
     if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Drive list failed (${res.status}): ${err}`);
+      await throwDriveApiError("list", res);
     }
     const data = (await res.json()) as DriveListResponse;
     return {
@@ -339,8 +398,7 @@ export const googleDriveConnector: Connector = {
       headers: { Authorization: `Bearer ${tok.accessToken}` },
     });
     if (!metaRes.ok) {
-      const err = await metaRes.text();
-      throw new Error(`Drive metadata failed (${metaRes.status}): ${err}`);
+      await throwDriveApiError("metadata", metaRes);
     }
     const meta = (await metaRes.json()) as DriveFile;
 
@@ -352,8 +410,7 @@ export const googleDriveConnector: Connector = {
         { headers: { Authorization: `Bearer ${tok.accessToken}` } },
       );
       if (!exportRes.ok) {
-        const err = await exportRes.text();
-        throw new Error(`Drive export failed (${exportRes.status}): ${err}`);
+        await throwDriveApiError("export", exportRes);
       }
       const filename = meta.name.endsWith(`.${exportInfo.ext}`) ? meta.name : `${meta.name}.${exportInfo.ext}`;
 
@@ -371,8 +428,7 @@ export const googleDriveConnector: Connector = {
       { headers: { Authorization: `Bearer ${tok.accessToken}` } },
     );
     if (!dlRes.ok) {
-      const err = await dlRes.text();
-      throw new Error(`Drive download failed (${dlRes.status}): ${err}`);
+      await throwDriveApiError("download", dlRes);
     }
     const arr = await dlRes.arrayBuffer();
     return {
