@@ -51,10 +51,6 @@ export async function GET(
       `ua=${(req.headers.get("user-agent") ?? "").slice(0, 80)}`,
   );
 
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const connector = getConnector(provider);
   if (!connector) {
     return NextResponse.json({ error: `Unknown provider: ${provider}` }, { status: 404 });
@@ -74,19 +70,34 @@ export async function GET(
     console.warn(`[oauth/callback] state verification failed (bad signature or expiry)`);
     return settingsRedirect(req, "error", "invalid_state");
   }
-  if (verified.userId !== session.user.id) {
-    console.warn(`[oauth/callback] user_mismatch state.userId=${verified.userId} session.userId=${session.user.id}`);
-    return settingsRedirect(req, "error", "user_mismatch");
-  }
   if (verified.provider !== connector.meta.id) {
     console.warn(`[oauth/callback] provider_mismatch state.provider=${verified.provider} route.provider=${connector.meta.id}`);
     return settingsRedirect(req, "error", "provider_mismatch");
   }
 
+  // Authentication priority:
+  //   1. browser session cookie (normal flow). MUST match state.userId.
+  //   2. state-only (desktop external-browser flow). The state is HMAC-
+  //      signed with BETTER_AUTH_SECRET and TTL'd to 10 min by
+  //      _oauth-state.ts, so trusting state.userId when no session is
+  //      present lets the desktop app's external-browser flow work
+  //      without forcing the user to log in twice.
+  let userId: string;
+  if (session?.user?.id) {
+    if (verified.userId !== session.user.id) {
+      console.warn(`[oauth/callback] user_mismatch state.userId=${verified.userId} session.userId=${session.user.id}`);
+      return settingsRedirect(req, "error", "user_mismatch");
+    }
+    userId = session.user.id;
+  } else {
+    console.log(`[oauth/callback] no session — authenticating via signed state, userId=${verified.userId}`);
+    userId = verified.userId;
+  }
+
   try {
-    console.log(`[oauth/callback] exchanging code for tokens via connector ${connector.meta.id}`);
-    await connector.handleOAuthCallback({ userId: session.user.id, code });
-    console.log(`[oauth/callback] tokens stored for user=${session.user.id} provider=${connector.meta.id}`);
+    console.log(`[oauth/callback] exchanging code for tokens via connector ${connector.meta.id} for userId=${userId}`);
+    await connector.handleOAuthCallback({ userId, code });
+    console.log(`[oauth/callback] tokens stored for user=${userId} provider=${connector.meta.id}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "callback_failed";
     console.error(`[oauth/callback] handleOAuthCallback threw: ${msg}`);

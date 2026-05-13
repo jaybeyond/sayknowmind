@@ -82,8 +82,72 @@ export function CloudConnectorsSection() {
     }
   }, [load]);
 
-  const handleConnect = (providerId: string) => {
-    window.location.href = `/api/integrations/connectors/${providerId}/oauth/start`;
+  /**
+   * Desktop OAuth flow — open Google's consent page in the user's
+   * system browser (where its post-allow JavaScript reliably reflows
+   * and the redirect chain actually completes) and poll our own
+   * /accounts endpoint until the new account materialises. Falls back
+   * to the regular full-page redirect when not running inside Tauri.
+   */
+  const tauriInvoke = ((): undefined | (<T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>) => {
+    if (typeof window === "undefined") return undefined;
+    return (window as unknown as { __TAURI_INTERNALS__?: { invoke?: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> } })
+      .__TAURI_INTERNALS__?.invoke;
+  })();
+
+  const handleConnect = async (providerId: string) => {
+    if (!tauriInvoke) {
+      // Plain-browser path — stays inside the tab via 302 chain.
+      window.location.href = `/api/integrations/connectors/${providerId}/oauth/start`;
+      return;
+    }
+
+    setBannerMessage({ type: "ok", text: t("integrations.ccConnecting") || "Opening browser…" });
+    try {
+      // Ask the server for the OAuth URL without following the redirect.
+      const startRes = await fetch(`/api/integrations/connectors/${providerId}/oauth/start?desktop=1`);
+      if (!startRes.ok) {
+        const body = await startRes.json().catch(() => ({}));
+        setBannerMessage({ type: "error", text: (body as { error?: string }).error ?? `oauth/start ${startRes.status}` });
+        return;
+      }
+      const { authUrl } = (await startRes.json()) as { authUrl: string };
+      if (!authUrl) {
+        setBannerMessage({ type: "error", text: "no auth URL" });
+        return;
+      }
+      // Hand the URL to the system browser via the Tauri command.
+      await tauriInvoke("open_external_url", { url: authUrl });
+
+      // Poll /accounts every 2.5s, looking for the new account. The
+      // server-side callback fires whenever the user finishes in their
+      // browser — even if they're not logged into sayknowmind there
+      // (state-only auth path).
+      const deadline = Date.now() + 5 * 60 * 1000; // 5 min
+      const beforeCount =
+        connectors.find((c) => c.id === providerId)?.accounts.length ?? 0;
+      const pollOnce = async (): Promise<boolean> => {
+        const r = await fetch(`/api/integrations/connectors/${providerId}/accounts`);
+        if (!r.ok) return false;
+        const data = (await r.json()) as { accounts: Array<{ accountId: string }> };
+        if (data.accounts.length > beforeCount) {
+          await load();
+          setBannerMessage({ type: "ok", text: t("integrations.ccConnected") || "Connected." });
+          return true;
+        }
+        return false;
+      };
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2500));
+        if (await pollOnce()) return;
+      }
+      setBannerMessage({ type: "error", text: t("integrations.ccTimeout") || "Timed out waiting for browser approval." });
+    } catch (err) {
+      setBannerMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "connect_failed",
+      });
+    }
   };
 
   const handleDisconnect = async (providerId: string, accountId: string) => {

@@ -515,10 +515,21 @@ fn run_codex_exec(app: &tauri::AppHandle, prompt: &str, model: Option<&str>) -> 
         .map_err(|e| format!("wait codex: {}", e))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Dump everything to the app's stderr so a terminal-launched
+        // build surfaces the real failure cause (auth missing, model
+        // name rejected, etc.). The error string returned to the
+        // webview keeps a wide window of stderr instead of the
+        // previous 500-char cap.
+        eprintln!(
+            "[codex] exec failed status={} args={:?}\n--- stderr ---\n{}\n--- stdout ---\n{}",
+            output.status, args, stderr, stdout,
+        );
         return Err(format!(
-            "codex exec failed ({}): {}",
+            "codex exec failed ({}): stderr=`{}` stdout=`{}`",
             output.status,
-            stderr.chars().take(500).collect::<String>()
+            stderr.chars().take(2000).collect::<String>(),
+            stdout.chars().take(500).collect::<String>(),
         ));
     }
 
@@ -1597,6 +1608,23 @@ fn open_external(url_str: &str) {
     { let _ = std::process::Command::new("xdg-open").arg(url_str).spawn(); }
 }
 
+/// Invocable from the webview — opens an external URL in the system
+/// browser. Used by the cloud-connector OAuth flow so Google's
+/// consent page renders in Safari/Chrome (where it actually works
+/// reliably) instead of WKWebView (where the post-Allow redirect
+/// fails to reflow).
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    // Soft validation — refuse non-http(s) schemes so a compromised
+    // webview can't ask us to open file:// or arbitrary shell URLs.
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err(format!("refusing to open non-http(s) URL: {}", url.chars().take(60).collect::<String>()));
+    }
+    eprintln!("[desktop] open_external_url → {}", url.chars().take(160).collect::<String>());
+    open_external(&url);
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -1633,6 +1661,7 @@ fn main() {
             chat_via_codex,
             complete_via_codex,
             list_ocp_models,
+            open_external_url,
         ]);
 
     builder = builder.setup(|app| {

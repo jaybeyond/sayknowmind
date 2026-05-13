@@ -48,6 +48,16 @@ export async function GET(
       provider: connector.meta.id,
     });
     const url = connector.buildAuthUrl({ userId: session.user.id, state });
+
+    // Desktop mode: the Tauri webview can't reliably render Google's
+    // consent JS (the post-allow redirect never reflows), so the client
+    // calls start with ?desktop=1 to fetch the URL and open it in the
+    // user's system browser instead. We hand the URL back as JSON.
+    if (req.nextUrl.searchParams.get("desktop") === "1") {
+      console.log(`[oauth/start] desktop mode — returning authUrl JSON`);
+      return NextResponse.json({ authUrl: url, state });
+    }
+
     console.log(`[oauth/start] redirecting to ${url.slice(0, 140)}...`);
     return NextResponse.redirect(url);
   } catch (err) {
