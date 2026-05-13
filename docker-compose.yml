@@ -142,6 +142,13 @@ services:
       AI_API_KEY: ${AI_API_KEY:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      # Google OAuth — used by /api/integrations/connectors/google-drive/oauth/*
+      # and shared with the Gmail connector when it's re-enabled. Empty
+      # defaults so the route returns a friendly "credentials missing"
+      # error instead of crashing in dev.
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
       IPFS_KUBO_API: http://ipfs:5001
       IPFS_GATEWAY: http://ipfs:8080/ipfs
     depends_on:
