@@ -23,14 +23,20 @@ export async function GET(
   req: NextRequest,
   context: { params: Promise<{ provider: string }> },
 ) {
+  const { provider } = await context.params;
   const session = await getSession();
+  console.log(
+    `[oauth/start] provider=${provider} ` +
+      `session=${session?.user?.id ? `userid=${session.user.id}` : "MISSING"} ` +
+      `ua=${(req.headers.get("user-agent") ?? "").slice(0, 80)}`,
+  );
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { provider } = await context.params;
   const connector = getConnector(provider);
   if (!connector) {
+    console.warn(`[oauth/start] unknown provider: ${provider}`);
     return NextResponse.json({ error: `Unknown provider: ${provider}` }, { status: 404 });
   }
 
@@ -42,9 +48,11 @@ export async function GET(
       provider: connector.meta.id,
     });
     const url = connector.buildAuthUrl({ userId: session.user.id, state });
+    console.log(`[oauth/start] redirecting to ${url.slice(0, 140)}...`);
     return NextResponse.redirect(url);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "oauth_start_failed";
+    console.error(`[oauth/start] buildAuthUrl failed: ${msg}`);
     return settingsError(req, msg);
   }
 }

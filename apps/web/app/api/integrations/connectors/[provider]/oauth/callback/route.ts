@@ -28,44 +28,68 @@ export async function GET(
   req: NextRequest,
   context: { params: Promise<{ provider: string }> },
 ) {
+  const { provider } = await context.params;
+  const code = req.nextUrl.searchParams.get("code");
+  const state = req.nextUrl.searchParams.get("state");
+  const oauthError = req.nextUrl.searchParams.get("error");
+  const cookieHeader = req.headers.get("cookie") ?? "";
+  // Don't log cookie values, just the set of names so we can tell if
+  // the better-auth session cookie even reached us.
+  const cookieNames = cookieHeader
+    .split(/;\s*/)
+    .map((c) => c.split("=")[0])
+    .filter(Boolean)
+    .join(",");
+
   const session = await getSession();
+  console.log(
+    `[oauth/callback] provider=${provider} ` +
+      `hasCode=${Boolean(code)} hasState=${Boolean(state)} ` +
+      `oauthError=${oauthError ?? "none"} ` +
+      `session=${session?.user?.id ? `userid=${session.user.id}` : "MISSING"} ` +
+      `cookies=[${cookieNames}] ` +
+      `ua=${(req.headers.get("user-agent") ?? "").slice(0, 80)}`,
+  );
+
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { provider } = await context.params;
   const connector = getConnector(provider);
   if (!connector) {
     return NextResponse.json({ error: `Unknown provider: ${provider}` }, { status: 404 });
   }
 
-  const code = req.nextUrl.searchParams.get("code");
-  const state = req.nextUrl.searchParams.get("state");
-  const oauthError = req.nextUrl.searchParams.get("error");
-
   if (oauthError) {
+    console.warn(`[oauth/callback] google reported oauthError=${oauthError}`);
     return settingsRedirect(req, "error", oauthError);
   }
   if (!code || !state) {
+    console.warn(`[oauth/callback] missing_code_or_state hasCode=${Boolean(code)} hasState=${Boolean(state)}`);
     return settingsRedirect(req, "error", "missing_code_or_state");
   }
 
   const verified = verifyState(state);
   if (!verified) {
+    console.warn(`[oauth/callback] state verification failed (bad signature or expiry)`);
     return settingsRedirect(req, "error", "invalid_state");
   }
   if (verified.userId !== session.user.id) {
-    // Someone is trying to bind tokens to the wrong user. Refuse hard.
+    console.warn(`[oauth/callback] user_mismatch state.userId=${verified.userId} session.userId=${session.user.id}`);
     return settingsRedirect(req, "error", "user_mismatch");
   }
   if (verified.provider !== connector.meta.id) {
+    console.warn(`[oauth/callback] provider_mismatch state.provider=${verified.provider} route.provider=${connector.meta.id}`);
     return settingsRedirect(req, "error", "provider_mismatch");
   }
 
   try {
+    console.log(`[oauth/callback] exchanging code for tokens via connector ${connector.meta.id}`);
     await connector.handleOAuthCallback({ userId: session.user.id, code });
+    console.log(`[oauth/callback] tokens stored for user=${session.user.id} provider=${connector.meta.id}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "callback_failed";
+    console.error(`[oauth/callback] handleOAuthCallback threw: ${msg}`);
     return settingsRedirect(req, "error", msg);
   }
 
