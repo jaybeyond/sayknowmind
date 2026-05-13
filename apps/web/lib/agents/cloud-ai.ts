@@ -9,9 +9,18 @@
 
 import { getOrderedProviders, type ProviderEntry } from "@/lib/provider-config";
 import { getUserProviders } from "@/lib/provider-db";
+import { enqueueAndWait, type RelayProvider } from "@/lib/llm-relay/queue";
 
 const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 const AI_TIMEOUT = 60_000;
+
+/** Provider IDs that live on the user's PC and must be routed through
+ *  the relay rather than fetched directly from cloud. Keep in sync with
+ *  ocp-status and codex-status integration routes. */
+const RELAY_PROVIDER_IDS: ReadonlyArray<string> = ["ocp", "codex"];
+function isRelayProvider(id: string): id is RelayProvider {
+  return RELAY_PROVIDER_IDS.includes(id);
+}
 
 export interface AiCallOptions {
   system: string;
@@ -54,6 +63,14 @@ function buildUserContent(
 
 /**
  * Call a cloud provider using OpenAI-compatible /v1/chat/completions (non-streaming).
+ *
+ * For OCP/Codex (RELAY_PROVIDER_IDS) the call is routed through the LLM
+ * relay queue: the user's running webview picks up the job, executes it
+ * via Tauri (complete_via_ocp / complete_via_codex), and posts the
+ * result back. To this function it just looks like an awaitable string.
+ * Images are not supported on the relay path — Codex CLI's image input
+ * is file-based and we don't ship a transfer mechanism here. Vision
+ * callers should skip these providers and fall through to the next.
  */
 async function callCloudProvider(
   provider: ProviderEntry,
@@ -61,7 +78,24 @@ async function callCloudProvider(
   message: string,
   timeout: number,
   images?: string[],
+  userId?: string,
 ): Promise<string> {
+  if (isRelayProvider(provider.id)) {
+    if (!userId) {
+      throw new Error(`${provider.id} requires userId for relay routing`);
+    }
+    if (images?.length) {
+      throw new Error(`${provider.id} relay does not support vision (images) yet`);
+    }
+    const result = await enqueueAndWait(
+      userId,
+      { system, user: message, model: provider.model || null, provider: provider.id },
+      timeout,
+    );
+    if (!result.content) throw new Error(`${provider.id} returned empty content via relay`);
+    return result.content;
+  }
+
   const url = `${provider.baseUrl.replace(/\/$/, "")}/v1/chat/completions`;
 
   const res = await fetch(url, {
@@ -153,10 +187,12 @@ export async function callAiCloudFirst(opts: AiCallOptions): Promise<string> {
   }
   if (!providers) providers = getOrderedProviders();
 
-  // Try cloud providers in order
+  // Try cloud providers in order. userId is required for the relay
+  // branch (ocp/codex) — falls through to the next provider when
+  // missing or when the user's webview isn't connected.
   for (const provider of providers) {
     try {
-      return await callCloudProvider(provider, system, message, timeout, images);
+      return await callCloudProvider(provider, system, message, timeout, images, userId);
     } catch (err) {
       console.warn(`[cloud-ai] ${provider.id} failed:`, (err as Error).message);
     }

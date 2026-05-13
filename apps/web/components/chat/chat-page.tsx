@@ -22,52 +22,6 @@ type ConversationMeta = {
   updated_at: string;
 };
 
-/**
- * Persist a single local-fast-path turn (user message + assistant reply)
- * to the cloud conversations/messages tables. The cloud /api/chat route
- * normally does this as a side effect, but the OCP/Codex paths bypass
- * it. If no conversation exists yet, mint one first using the user
- * message as the title. Returns the conversation ID actually used
- * (existing or newly-created), or null on failure.
- */
-async function persistLocalTurn(
-  conversationId: string | null,
-  userContent: string,
-  assistantContent: string,
-): Promise<string | null> {
-  try {
-    let convId = conversationId;
-    if (!convId) {
-      const res = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: userContent.slice(0, 100) }),
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      convId = data?.id ?? null;
-      if (!convId) return null;
-    }
-
-    // Post user turn and assistant turn sequentially so chronological order
-    // is preserved by the messages table's created_at timestamps.
-    await fetch(`/api/conversations/${convId}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: "user", content: userContent }),
-    });
-    await fetch(`/api/conversations/${convId}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: "assistant", content: assistantContent }),
-    });
-    return convId;
-  } catch (err) {
-    console.warn("[chat] persistLocalTurn failed:", err);
-    return null;
-  }
-}
-
 function formatDate(dateStr: string, t: (key: string) => string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -244,102 +198,12 @@ export function ChatPage() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // ────────────────────────────────────────────────────────────────────
-    // Lite-desktop fast path: if the user's local OCP proxy is ready, call
-    // it directly via Tauri so the cloud cascade — which can't reach the
-    // user's localhost:3456 — is skipped entirely. This is the whole point
-    // of the OCP integration on lite builds. RAG / phase events / sources
-    // are sacrificed for now; we just stream a single completion.
-    const tauri = (window as unknown as {
-      __TAURI_INTERNALS__?: {
-        invoke?: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
-      };
-    }).__TAURI_INTERNALS__;
-    if (tauri?.invoke) {
-      // Build a system+history payload from the visible conversation —
-      // reused by both the OCP and Codex local fast paths below.
-      const history = [...messages, userMsg]
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))
-        .filter((m) => m.content && m.content.trim().length > 0);
-
-      const finalizeTurn = (content: string) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsg.id
-              ? { ...m, content, isStreaming: false, phase: "done" }
-              : m,
-          ),
-        );
-        // Persist user turn + assistant reply to the cloud — the local
-        // paths bypass /api/chat which would otherwise INSERT these
-        // rows as a side effect.
-        void persistLocalTurn(conversationId, message, content).then((newConvId) => {
-          if (newConvId && newConvId !== conversationId) {
-            setConversationId(newConvId);
-          }
-          void fetchConversations();
-        });
-        setIsStreaming(false);
-        abortRef.current = null;
-      };
-
-      const surfaceLocalError = (label: string, err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsg.id
-              ? { ...m, content: `[${label} error] ${msg}`, isStreaming: false, phase: "done" }
-              : m,
-          ),
-        );
-        setIsStreaming(false);
-        abortRef.current = null;
-      };
-
-      // 1) OCP — Claude Pro/Max subscription via the localhost:3456 proxy.
-      try {
-        const ocp = await tauri.invoke<{ ready?: boolean }>("ocp_status");
-        if (ocp?.ready) {
-          try {
-            const reply = await tauri.invoke<{ content: string; model: string }>(
-              "chat_via_ocp",
-              { messages: history, model: null },
-            );
-            finalizeTurn(reply.content);
-            return;
-          } catch (err) {
-            // OCP said ready but actually died (e.g. proxy restart).
-            // Surface the reason and stop — falling silently to the cloud
-            // cascade would defeat the user's $0 expectation.
-            surfaceLocalError("OCP", err);
-            return;
-          }
-        }
-      } catch {
-        /* ocp_status itself failed — treat as not ready, try Codex next */
-      }
-
-      // 2) Codex — ChatGPT subscription via the bundled `codex exec` CLI.
-      try {
-        const codex = await tauri.invoke<{ ready?: boolean }>("codex_status");
-        if (codex?.ready) {
-          try {
-            const reply = await tauri.invoke<{ content: string; model: string }>(
-              "chat_via_codex",
-              { messages: history, model: null },
-            );
-            finalizeTurn(reply.content);
-            return;
-          } catch (err) {
-            surfaceLocalError("Codex", err);
-            return;
-          }
-        }
-      } catch {
-        /* codex_status itself failed — fall through to cloud cascade */
-      }
-    }
+    // Every chat goes through /api/chat so RAG, agent pipeline,
+    // citations, conversation/messages persistence, and the cascade
+    // through the user's configured providers all behave identically.
+    // When OCP or Codex is active, the cloud routes that LLM call
+    // through the relay (lib/llm-relay) to the user's webview, which
+    // proxies to Tauri. The /api/chat call shape doesn't change.
 
     try {
       const response = await fetch("/api/chat", {

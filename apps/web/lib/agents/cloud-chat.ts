@@ -4,9 +4,20 @@
  * NVIDIA NIM, Cloudflare Workers AI, Venice, Z.AI, Google Gemini.
  *
  * Reuses the same SSE parsing + <think> filter pattern from ollama.ts.
+ *
+ * For OCP/Codex (provider IDs marked relay-only), this routes through
+ * the LLM relay queue instead — the user's running webview executes
+ * locally and posts back the final answer. We then emit it via
+ * onToken in a single chunk so callers downstream see the same
+ * "completed answer" shape.
  */
 
+import { enqueueAndWait, type RelayProvider } from "@/lib/llm-relay/queue";
+
 export interface CloudProviderConfig {
+  /** Provider ID — required so the streaming path can decide whether
+   *  to route through the relay (ocp/codex) or fetch directly. */
+  id: string;
   apiKey: string;
   baseUrl: string;
   model: string;
@@ -14,13 +25,45 @@ export interface CloudProviderConfig {
 
 const STREAM_TIMEOUT = 120_000;
 
+const RELAY_PROVIDER_IDS: ReadonlyArray<string> = ["ocp", "codex"];
+function isRelayProvider(id: string): id is RelayProvider {
+  return RELAY_PROVIDER_IDS.includes(id);
+}
+
 export async function cloudStreamChat(
   config: CloudProviderConfig,
   systemPrompt: string,
   messages: { role: string; content: string }[],
   onToken: (token: string) => void,
   onReasoning?: (line: string) => void,
+  userId?: string,
 ): Promise<string> {
+  // Relay branch — webview executes via Tauri and posts the full reply.
+  // No token-by-token streaming on this path; emit once at the end.
+  if (isRelayProvider(config.id)) {
+    if (!userId) {
+      throw new Error(`${config.id} streaming requires userId for relay routing`);
+    }
+    // Collapse history into a single user-string the way chat_via_ocp
+    // expects (transcript form). complete_via_* accepts system + user
+    // separately though, so we fold history into the user message.
+    const transcript = messages
+      .map((m) => {
+        const role = m.role === "user" ? "User" : m.role === "assistant" ? "Assistant" : "System";
+        return `${role}: ${m.content}`;
+      })
+      .join("\n\n");
+    const userBody = transcript + "\n\nReply as the assistant to the latest user message.";
+    const result = await enqueueAndWait(
+      userId,
+      { system: systemPrompt, user: userBody, model: config.model || null, provider: config.id },
+      STREAM_TIMEOUT,
+    );
+    if (!result.content) throw new Error(`${config.id} returned empty content via relay`);
+    onToken(result.content);
+    return result.content;
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), STREAM_TIMEOUT);
 

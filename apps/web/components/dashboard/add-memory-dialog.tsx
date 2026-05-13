@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Link, FileUp, FileText, BookmarkIcon } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
-import { summarizeDocLocally } from "@/lib/ocp-bridge";
 
 type Tab = "url" | "file" | "text" | "bookmarks";
 
@@ -80,20 +79,6 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
     onOpenChange(false);
   };
 
-  /**
-   * Lite-desktop fast path: when OCP or Codex is reachable on the user's
-   * machine, race the cloud job-queue and summarize via the local Claude
-   * or ChatGPT subscription. The job-queue sees `documents.summary`
-   * already filled and skips its own LLM call (see job-queue.ts step 1
-   * guard). Fire and forget — failures fall back to whatever the cloud
-   * job produces.
-   */
-  const triggerLocalSummary = (documentId: string) => {
-    void summarizeDocLocally(documentId, locale).then((ok) => {
-      if (ok) void fetchMemories();
-    });
-  };
-
   const handleError = (res: Response, data: Record<string, unknown>) => {
     setError(
       typeof data.message === "string"
@@ -143,8 +128,6 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
         handleError(res, data);
         return;
       }
-      const data = await res.json().catch(() => ({} as Record<string, unknown>));
-      if (typeof data.documentId === "string") triggerLocalSummary(data.documentId);
       await handleSuccess();
     } catch {
       setError(t("ingest.networkError"));
@@ -208,8 +191,6 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
         handleError(res, data);
         return;
       }
-      const data = await res.json().catch(() => ({} as Record<string, unknown>));
-      if (typeof data.documentId === "string") triggerLocalSummary(data.documentId);
       await handleSuccess();
     } catch {
       setError(t("ingest.networkError"));
@@ -239,8 +220,6 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
         handleError(res, data);
         return;
       }
-      const data = await res.json().catch(() => ({} as Record<string, unknown>));
-      if (typeof data.documentId === "string") triggerLocalSummary(data.documentId);
       await handleSuccess();
     } catch {
       setError(t("ingest.networkError"));

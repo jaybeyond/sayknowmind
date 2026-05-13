@@ -120,6 +120,7 @@ export async function routeChat(
   onToken: (token: string) => void,
   onReasoning?: (line: string) => void,
   onLog?: (msg: string) => void,
+  userId?: string,
 ): Promise<string> {
   // Filter to only valid providers (have key + model)
   const validProviders = providers.filter((p) => p.apiKey && p.model && p.baseUrl);
@@ -129,6 +130,7 @@ export async function routeChat(
   // Try each cloud provider in order (active first, then fallbacks)
   for (const provider of validProviders) {
     const config: CloudProviderConfig = {
+      id: provider.id,
       apiKey: provider.apiKey,
       baseUrl: provider.baseUrl,
       model: provider.model,
@@ -136,7 +138,7 @@ export async function routeChat(
 
     try {
       onLog?.(`[router] Trying cloud: ${provider.id} (${provider.model})`);
-      const result = await cloudStreamChat(config, systemPrompt, messages, onToken, onReasoning);
+      const result = await cloudStreamChat(config, systemPrompt, messages, onToken, onReasoning, userId);
       return result;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

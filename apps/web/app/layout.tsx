@@ -6,6 +6,7 @@ import { OfflineBanner } from "@/components/offline-banner";
 import { AgentationWrapper } from "@/components/agentation-wrapper";
 import { TelegramPoller } from "@/components/telegram-poller";
 import { ExternalLinkInterceptor } from "@/components/external-link-interceptor";
+import { LlmRelayRunner } from "@/components/llm-relay-runner";
 import "./globals.css";
 
 const inter = Inter({
@@ -56,6 +57,7 @@ export default function RootLayout({
           {children}
           <Toaster richColors position="bottom-right" />
           <TelegramPoller />
+          <LlmRelayRunner />
           <AgentationWrapper />
         </ThemeProvider>
       </body>

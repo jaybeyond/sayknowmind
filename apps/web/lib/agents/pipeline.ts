@@ -438,6 +438,8 @@ async function generateAnswer(
     (msg) => {
       writer.log(msg);
     },
+    // userId — required for OCP/Codex relay routing
+    userId,
   );
 
   return answerText || fullAnswer;
