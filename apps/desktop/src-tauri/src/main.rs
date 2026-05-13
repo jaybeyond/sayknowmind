@@ -1522,11 +1522,35 @@ fn setup_global_shortcut<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
 
 fn is_allowed_navigation(url: &tauri::Url) -> bool {
     let host = url.host_str().unwrap_or("");
-    host == "localhost"
+    if host == "localhost"
         || host == "127.0.0.1"
         || host == REMOTE_HOST
         || url.scheme() == "tauri"
         || url.scheme() == "ipc"
+    {
+        return true;
+    }
+    // OAuth flows must stay inside the webview — otherwise the redirect
+    // back to sayknowmind.ypai.click lands in the user's system browser
+    // (which has no session cookie) and the callback 401s. Whitelist the
+    // identity providers we initiate OAuth against. Add new providers
+    // (Microsoft, Notion, etc.) here as connectors are wired up.
+    is_oauth_navigation(host)
+}
+
+fn is_oauth_navigation(host: &str) -> bool {
+    // Google's OAuth + login flow hops between several hosts (consent
+    // screen, identity service, optional risk checks); allow the
+    // common parents rather than chasing every subdomain.
+    matches!(
+        host,
+        "accounts.google.com"
+            | "accounts.youtube.com"  // YouTube shares Google login
+            | "oauth2.googleapis.com"
+            | "ssl.gstatic.com"       // Google's static assets during consent
+            | "www.google.com"        // reCAPTCHA / extra prompts during login
+    ) || host.ends_with(".accounts.google.com")
+        || host.ends_with(".googleusercontent.com") // profile picture host
 }
 
 fn open_external(url_str: &str) {
