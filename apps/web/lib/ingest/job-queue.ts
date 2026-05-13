@@ -2,6 +2,7 @@ import { pool } from "@/lib/db";
 import type { IngestStatus, IngestStatusResponse } from "@/lib/types";
 import { getDocument, updateDocument, insertEntities, assignDocumentCategory } from "./document-store";
 import { generateSummary, extractEntities, suggestCategories, generateStructuredMetadata, describeImage, describeVideoFrame, type StructuredMetadata } from "./ai-processor";
+import { suggestFallbackCategory } from "./category-fallback";
 import { indexDocument, queryEdgeQuake } from "@/lib/edgequake/client";
 import { createNotification } from "@/lib/notifications";
 import { detectLanguage } from "./language-detect";
@@ -321,14 +322,27 @@ async function processJob(job: JobRow): Promise<void> {
         name: r.name,
       }));
 
-      const suggestions = await suggestCategories(doc.content, userId, existingCategories, language);
+      let suggestions = await suggestCategories(doc.content, userId, existingCategories, language);
+      if (suggestions.length === 0) {
+        const fallback = suggestFallbackCategory({
+          title: doc.title,
+          content: doc.content,
+          existingCategories,
+          language,
+        });
+        if (fallback) {
+          suggestions = [fallback];
+        }
+      }
 
       // Auto-assign categories based on AI suggestions
       let newCategoryCreated = false;
       for (const suggestion of suggestions) {
-        // Existing categories: 0.5 threshold, new categories: 0.8 threshold
+        // Existing categories can be assigned generously; new broad categories
+        // should still require a clear signal, but not be so strict that empty
+        // workspaces never bootstrap their first collection.
         const isNew = suggestion.categoryId === "new";
-        if (suggestion.confidence < (isNew ? 0.8 : 0.5)) continue;
+        if (suggestion.confidence < (isNew ? 0.65 : 0.4)) continue;
 
         let categoryId = suggestion.categoryId;
 

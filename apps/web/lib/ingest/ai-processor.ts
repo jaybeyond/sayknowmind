@@ -226,16 +226,16 @@ export async function suggestCategories(
     : "(No existing categories)";
 
   const result = await callAi({
-    system: `You are a strict categorization assistant. Given the content and the user's existing categories, suggest exactly 1 category this content should be assigned to.
+    system: `You are a practical categorization assistant. Given the content and the user's existing categories, suggest exactly 1 broad category this content should be assigned to.
 
-STRICT RULES:
-1. You MUST use an existing category if there is even a 30% relevance match. Be very generous with matching.
-2. NEVER create a new category if there are fewer than 5 existing categories — force-fit into the best existing one.
-3. Only suggest "new" if: the user has 5+ categories AND the content is completely unrelated to ALL existing ones.
-4. New category names must be broad, reusable topic areas (e.g. "AI", "개발", "디자인") — never specific article titles.
-5. Do NOT create categories that are synonyms or subsets of existing ones (e.g. if "AI" exists, don't create "인공지능" or "머신러닝").
+RULES:
+1. Prefer an existing category when it is reasonably relevant (about a 40% match or better).
+2. If there are no existing categories, create one new broad, reusable category.
+3. If existing categories are few but none fit, create one new broad category instead of force-fitting.
+4. New category names must be broad topic areas (e.g. "AI", "개발", "디자인", "리서치") — never article titles, file names, or long phrases.
+5. Do NOT create categories that are synonyms or narrow subsets of existing ones (e.g. if "AI" exists, don't create "인공지능" or "머신러닝").
 6. Suggest at most 1 category total. Do NOT suggest 2 or more.
-7. Category names must be in ${langMap[language]}.
+7. Category names must be in ${langMap[language]} unless a short universal label like "AI" is the best name.
 
 Existing categories:
 ${categoryList}
