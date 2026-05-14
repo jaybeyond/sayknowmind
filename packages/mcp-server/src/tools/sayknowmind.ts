@@ -145,6 +145,115 @@ export function registerSayknowmindTools(server: McpServer): void {
   );
 
   // ---------------------------------------------------------------------------
+  // sayknowmind.documents_list — List the caller's documents (own + shared)
+  //
+  // Thin proxy over GET /api/documents. The web route already applies
+  // visibilityClause("d", 1) so the caller only ever sees their own rows
+  // plus anything marked privacy_level='shared' — we just forward the
+  // Bearer token and the pagination/filter params.
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_documents_list",
+    "List documents the calling user can see (their own + shared) in the SayknowMind knowledge base. Supports pagination, full-text search, and category/source/favorite filters.",
+    {
+      page: z.number().int().min(1).optional().describe("1-indexed page (default: 1)"),
+      limit: z.number().int().min(1).max(100).optional().describe("Items per page, 1..100 (default: 50)"),
+      q: z.string().optional().describe("Substring match on title, summary, and URL"),
+      category_id: z.string().optional().describe("Filter by category UUID"),
+      source_type: z.string().optional().describe("Filter by source_type (e.g. 'url', 'file', 'text')"),
+      is_favorite: z.boolean().optional().describe("Only favorites when true"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "Invalid auth token" }) }],
+            isError: true,
+          };
+        }
+
+        const query = new URLSearchParams();
+        if (params.page !== undefined) query.set("page", String(params.page));
+        if (params.limit !== undefined) query.set("limit", String(params.limit));
+        if (params.q) query.set("q", params.q);
+        if (params.category_id) query.set("categoryId", params.category_id);
+        if (params.source_type) query.set("sourceType", params.source_type);
+        if (params.is_favorite !== undefined) query.set("isFavorite", String(params.is_favorite));
+
+        const qs = query.toString();
+        const url = `${WEB_APP_URL}/api/documents${qs ? `?${qs}` : ""}`;
+        const response = await fetch(url, { method: "GET", headers: apiHeaders() });
+
+        if (!response.ok) {
+          throw new Error(`Documents API returned ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.document_get — Fetch a single document by id
+  //
+  // Thin proxy over GET /api/documents/[id]. That route enforces
+  // visibilityClause("d", 2) on read, so a per-user MCP key can only
+  // retrieve documents the caller owns or that are shared.
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_document_get",
+    "Fetch a single document by id from the SayknowMind knowledge base. Returns 404 if the document is not visible to the calling user (own + shared only).",
+    {
+      document_id: z.string().describe("Document UUID"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "Invalid auth token" }) }],
+            isError: true,
+          };
+        }
+
+        const response = await fetch(
+          `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`,
+          { method: "GET", headers: apiHeaders() },
+        );
+
+        if (response.status === 404) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ error: "not_found", document_id: params.document_id }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        if (!response.ok) {
+          throw new Error(`Document API returned ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // sayknowmind.categories — List knowledge categories
   // ---------------------------------------------------------------------------
   server.tool(

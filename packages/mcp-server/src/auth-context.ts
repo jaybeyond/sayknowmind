@@ -39,3 +39,32 @@ export function rejectUserScopedEdgeQuakeTool() {
     isError: true as const,
   };
 }
+
+/**
+ * Same idea as rejectUserScopedEdgeQuakeTool() but shaped for MCP
+ * resource read callbacks, which return `{ contents: [...] }` instead
+ * of `{ content: [...] }`.
+ */
+export function rejectUserScopedEdgeQuakeResource(uri: URL) {
+  const context = getRequestContext();
+  if (!context?.userId) return null;
+
+  return {
+    contents: [
+      {
+        uri: uri.href,
+        mimeType: "application/json",
+        text: JSON.stringify(
+          {
+            error: "user_isolation_unimplemented",
+            status: 403,
+            message:
+              "Workspace resources are disabled for per-user API keys until EdgeQuake supports user-scoped workspaces. Use sayknowmind_documents_list / sayknowmind_search instead.",
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}

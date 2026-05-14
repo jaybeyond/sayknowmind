@@ -3,6 +3,7 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { rejectUserScopedEdgeQuakeTool } from "../auth-context.js";
 import { getClient, getConfig } from "../client.js";
 import { formatError } from "../errors.js";
 
@@ -14,6 +15,9 @@ export function registerWorkspaceTools(server: McpServer): void {
     {},
     async () => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const config = getConfig();
         const tenantId = config.defaultTenant;
@@ -100,6 +104,9 @@ export function registerWorkspaceTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const config = getConfig();
 
@@ -161,6 +168,9 @@ export function registerWorkspaceTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const detail = await client.workspaces.get(params.workspace_id);
         return {
@@ -186,6 +196,9 @@ export function registerWorkspaceTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         await client.workspaces.delete(params.workspace_id);
         return {
@@ -214,6 +227,9 @@ export function registerWorkspaceTools(server: McpServer): void {
     },
     async (params) => {
       try {
+        const isolationError = rejectUserScopedEdgeQuakeTool();
+        if (isolationError) return isolationError;
+
         const client = await getClient();
         const stats = await client.workspaces.stats(params.workspace_id);
         return {

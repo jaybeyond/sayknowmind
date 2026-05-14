@@ -55,6 +55,8 @@ describe("MCP server unit tests", () => {
       "health",
       "query",
       "sayknowmind_categories",
+      "sayknowmind_document_get",
+      "sayknowmind_documents_list",
       "sayknowmind_ingest",
       "sayknowmind_search",
       "workspace_create",
@@ -210,5 +212,104 @@ describe("MCP server unit tests", () => {
       const parsed = JSON.parse(content[0].text);
       expect(Array.isArray(parsed)).toBe(true);
     }
+  });
+
+  it("should expose sayknowmind_documents_list with the documented schema", async () => {
+    const tools = await client.listTools();
+    const tool = tools.tools.find((t) => t.name === "sayknowmind_documents_list");
+    expect(tool).toBeDefined();
+    const props = tool!.inputSchema.properties as Record<string, unknown>;
+    // The shape mirrors the GET /api/documents query string the web
+    // route accepts — these are the levers a caller actually needs.
+    expect(props).toHaveProperty("page");
+    expect(props).toHaveProperty("limit");
+    expect(props).toHaveProperty("q");
+    expect(props).toHaveProperty("category_id");
+    expect(props).toHaveProperty("source_type");
+    expect(props).toHaveProperty("is_favorite");
+  });
+
+  it("should expose sayknowmind_document_get with a document_id param", async () => {
+    const tools = await client.listTools();
+    const tool = tools.tools.find((t) => t.name === "sayknowmind_document_get");
+    expect(tool).toBeDefined();
+    const props = tool!.inputSchema.properties as Record<string, unknown>;
+    expect(props).toHaveProperty("document_id");
+    const required = tool!.inputSchema.required as string[] | undefined;
+    expect(required).toContain("document_id");
+  });
+});
+
+describe("Per-user isolation gate on workspace tools and resources", () => {
+  // Verifies the security claim from the multitenant data isolation spec:
+  // when an MCP request is authenticated as a real end-user (sk-mcp-…
+  // key resolved to a user_id), the raw EdgeQuake workspace tools and
+  // resources must refuse — they share a global tenant/workspace and
+  // would leak data across users. Admin/stdio callers keep access.
+  it("blocks every workspace_* tool for per-user contexts", async () => {
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+    const { InMemoryTransport } = await import(
+      "@modelcontextprotocol/sdk/inMemory.js"
+    );
+    const { createServer } = await import("../src/server.js");
+    const { requestContext } = await import("../src/auth-context.js");
+
+    const server = createServer();
+    const client = new Client({ name: "user-scoped", version: "0.1.0" });
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverT), client.connect(clientT)]);
+
+    try {
+      const toolsToCheck: Array<{ name: string; args: Record<string, unknown> }> = [
+        { name: "workspace_list", args: {} },
+        { name: "workspace_create", args: { name: "should-not-create" } },
+        { name: "workspace_get", args: { workspace_id: "x" } },
+        { name: "workspace_delete", args: { workspace_id: "x" } },
+        { name: "workspace_stats", args: { workspace_id: "x" } },
+      ];
+
+      for (const { name, args } of toolsToCheck) {
+        const result = await requestContext.run(
+          { userId: "user-abc", rawToken: "sk-mcp-test", isAdmin: false },
+          () => client.callTool({ name, arguments: args }),
+        );
+        expect(result.isError, `${name} should be gated`).toBe(true);
+        const text = (result.content as Array<{ text: string }>)[0]?.text ?? "";
+        expect(text).toContain("user_isolation_unimplemented");
+      }
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("rejects raw workspace resources for per-user contexts and lets admins through", async () => {
+    // Resource read handlers are registered with literal-template URIs
+    // (e.g. "edgequake://workspace/{workspace_id}/stats") which the
+    // current MCP SDK doesn't expand for client.readResource. So instead
+    // of routing through the SDK, exercise the gate directly — that is
+    // the actual security boundary the spec cares about.
+    const { rejectUserScopedEdgeQuakeResource, requestContext } = await import(
+      "../src/auth-context.js"
+    );
+
+    const uri = new URL("edgequake://workspace/ws-1/stats");
+
+    // Admin/stdio caller — no per-user context, gate stays open.
+    expect(rejectUserScopedEdgeQuakeResource(uri)).toBeNull();
+
+    // Per-user MCP key — gate returns the isolation refusal envelope.
+    const blocked = requestContext.run(
+      { userId: "user-abc", rawToken: "sk-mcp-test", isAdmin: false },
+      () => rejectUserScopedEdgeQuakeResource(uri),
+    );
+    expect(blocked).not.toBeNull();
+    const text = blocked?.contents[0]?.text ?? "";
+    const body = JSON.parse(text);
+    expect(body).toMatchObject({
+      error: "user_isolation_unimplemented",
+      status: 403,
+    });
+    expect(blocked?.contents[0]?.uri).toBe(uri.href);
   });
 });

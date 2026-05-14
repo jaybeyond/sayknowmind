@@ -2,6 +2,7 @@
  * MCP resources — expose EdgeQuake data for context injection.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { rejectUserScopedEdgeQuakeResource } from "../auth-context.js";
 import { getClient } from "../client.js";
 
 export function registerResources(server: McpServer): void {
@@ -10,6 +11,9 @@ export function registerResources(server: McpServer): void {
     "workspace-stats",
     "edgequake://workspace/{workspace_id}/stats",
     async (uri) => {
+      const blocked = rejectUserScopedEdgeQuakeResource(uri);
+      if (blocked) return blocked;
+
       const match = uri.href.match(/edgequake:\/\/workspace\/([^/]+)\/stats/);
       if (!match) {
         return {
@@ -61,6 +65,9 @@ export function registerResources(server: McpServer): void {
     "workspace-entities",
     "edgequake://workspace/{workspace_id}/entities",
     async (uri) => {
+      const blocked = rejectUserScopedEdgeQuakeResource(uri);
+      if (blocked) return blocked;
+
       const match = uri.href.match(
         /edgequake:\/\/workspace\/([^/]+)\/entities/,
       );

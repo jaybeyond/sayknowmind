@@ -229,6 +229,11 @@ services:
       # token → which user is calling. Compose-internal hostname
       # `postgres` because the mcp-server runs in the same network.
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/sayknowmind
+      # The sayknowmind_* tools (search / ingest / categories /
+      # documents_list / document_get) proxy to the web app's
+      # user-scoped /api routes, so the MCP container needs to reach
+      # the web container on the compose network.
+      SAYKNOWMIND_URL: http://web:3000
       # Optional shared admin/debug key. When set, requests matching
       # it bypass user lookup. Leave empty in production once UI-
       # issued per-user keys are the only path.
