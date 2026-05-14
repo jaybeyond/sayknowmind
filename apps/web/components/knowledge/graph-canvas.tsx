@@ -47,6 +47,7 @@ interface GraphCanvasProps {
   onBackgroundClick?: () => void;
   selectedNodeId?: string | null;
   focusNodeId?: string | null;
+  autoFitToken?: number;
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -89,6 +90,7 @@ export function GraphCanvas({
   onBackgroundClick,
   selectedNodeId,
   focusNodeId,
+  autoFitToken = 0,
 }: GraphCanvasProps) {
   const { t } = useTranslation();
   const isDark = useIsDark();
@@ -98,6 +100,7 @@ export function GraphCanvas({
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [sizeMultiplier, setSizeMultiplier] = useState(1);
+  const [savedPositions, setSavedPositions] = useState<Map<string, Pick<FGNode, "x" | "y">>>(new Map());
 
   // Theme-aware colors
   const labelColor = isDark ? "#ffffffcc" : "#1a1a2ecc";
@@ -140,12 +143,15 @@ export function GraphCanvas({
     const fgNodeMap = new Map<string, FGNode>();
     const fgNodes: FGNode[] = nodes.map((n) => {
       nodeIds.add(n.id);
+      const previousPosition = savedPositions.get(n.id);
       const fgNode: FGNode = {
         id: n.id,
         label: n.label,
         type: n.type,
         color: NODE_COLORS[n.type] ?? DEFAULT_COLOR,
         baseSize: BASE_SIZES[n.type] ?? 5,
+        x: previousPosition?.x,
+        y: previousPosition?.y,
         _original: n,
       };
       fgNodeMap.set(n.id, fgNode);
@@ -172,20 +178,21 @@ export function GraphCanvas({
     }
 
     return { nodes: fgNodes, links: fgLinks, nodeMap: fgNodeMap };
-  }, [nodes, edges]);
+  }, [nodes, edges, savedPositions]);
 
   // Sync nodeMapRef outside of render to satisfy React 19 rules-of-hooks
   useEffect(() => {
     nodeMapRef.current = data.nodeMap;
   }, [data.nodeMap]);
 
-  // Zoom to fit after initial render
+  // Zoom to fit only on explicit non-silent refreshes (initial load, search, filter).
+  // Silent SSE refreshes preserve the user's current viewport.
   useEffect(() => {
     const timer = setTimeout(() => {
       fgRef.current?.zoomToFit(400, 60);
     }, 800);
     return () => clearTimeout(timer);
-  }, [nodes]);
+  }, [autoFitToken]);
 
   // Center on focused node (drill-down from panel)
   useEffect(() => {
@@ -197,6 +204,30 @@ export function GraphCanvas({
       fg.zoom(2.5, 600);
     }
   }, [focusNodeId]);
+
+
+  const capturePositions = useCallback(() => {
+    const next = new Map<string, Pick<FGNode, "x" | "y">>();
+    for (const [id, node] of nodeMapRef.current.entries()) {
+      if (node.x != null && node.y != null) {
+        next.set(id, { x: node.x, y: node.y });
+      }
+    }
+    setSavedPositions((previous) => {
+      if (previous.size === next.size) {
+        let unchanged = true;
+        for (const [id, position] of next.entries()) {
+          const oldPosition = previous.get(id);
+          if (!oldPosition || oldPosition.x !== position.x || oldPosition.y !== position.y) {
+            unchanged = false;
+            break;
+          }
+        }
+        if (unchanged) return previous;
+      }
+      return next;
+    });
+  }, []);
 
   const handleZoomIn = () => fgRef.current?.zoom(1.5, 300);
   const handleZoomOut = () => fgRef.current?.zoom(0.67, 300);
@@ -308,7 +339,7 @@ export function GraphCanvas({
         nodeLabel=""
         nodeCanvasObjectMode={() => "replace"}
         nodeCanvasObject={(node: FGNode, ctx, globalScale) => {
-          // Sync live d3-force positions into nodeMapRef for manual hit detection
+          // Sync live d3-force positions into nodeMapRef for manual hit detection.
           nodeMapRef.current.set(node.id, node);
           const isSelected = node.id === selectedNodeId;
           const size = node.baseSize * sizeMultiplier * (isSelected ? 1.5 : 1);
@@ -352,6 +383,7 @@ export function GraphCanvas({
         d3AlphaDecay={0.02}
         d3VelocityDecay={0.3}
         enableNodeDrag={true}
+        onEngineStop={capturePositions}
       />
 
       {/* Controls */}
@@ -403,7 +435,7 @@ export function GraphCanvas({
               style={{ backgroundColor: color }}
             />
             <span className="text-[11px] text-muted-foreground capitalize">
-              {type}
+              {t(`knowledge.nodeType.${type}`)}
             </span>
           </div>
         ))}

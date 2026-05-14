@@ -454,7 +454,14 @@
     "entities": "엔티티",
     "openSource": "원본 열기",
     "liveConnected": "실시간",
-    "liveDisconnected": "오프라인"
+    "liveDisconnected": "오프라인",
+    "liveConnecting": "연결 중",
+    "nodeType": {
+      "document": "문서",
+      "entity": "엔티티",
+      "category": "카테고리",
+      "tag": "태그"
+    }
   },
   "offline": {
     "banner": "오프라인 — 로컬 데이터만 표시됩니다. 연결 복구 시 자동 동기화됩니다."

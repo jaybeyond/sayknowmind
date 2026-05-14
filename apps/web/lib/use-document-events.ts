@@ -43,6 +43,8 @@ export function useDocumentEvents() {
 
           for (const line of lines) {
             if (line.startsWith("event: document:created") ||
+                line.startsWith("event: document:updated") ||
+                line.startsWith("event: document:deleted") ||
                 line.startsWith("event: ingest:completed") ||
                 line.startsWith("event: ingest:failed")) {
               fetchMemories();

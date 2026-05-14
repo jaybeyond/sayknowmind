@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/ui/skeleton";
 import { NodeDetailPanel } from "./node-detail-panel";
 import { useTranslation } from "@/lib/i18n";
 
@@ -18,7 +19,6 @@ const GraphCanvas = dynamic(() => import("./graph-canvas").then((m) => m.GraphCa
   ssr: false,
   loading: () => <GraphCanvasLoading />,
 });
-import { Skeleton } from "@/components/ui/skeleton";
 
 interface GraphNode {
   id: string;
@@ -43,6 +43,21 @@ interface NodeDetail {
   connectedEntities?: Array<{ id: string; name: string; type: string; confidence?: number }>;
 }
 
+const graphEvents = new Set([
+  "document:created",
+  "document:updated",
+  "document:deleted",
+  "ingest:completed",
+]);
+
+function getSseEventName(block: string): string | null {
+  const eventLine = block
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("event:"));
+  return eventLine ? eventLine.slice("event:".length).trim() : null;
+}
+
 export function KnowledgeDashboard() {
   const { t } = useTranslation();
   const [nodes, setNodes] = useState<GraphNode[]>([]);
@@ -53,20 +68,26 @@ export function KnowledgeDashboard() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
   const [liveStatus, setLiveStatus] = useState<"connecting" | "connected" | "offline">("connecting");
+  const [autoFitToken, setAutoFitToken] = useState(0);
 
   const fetchGraph = useCallback(async (options: { silent?: boolean } = {}) => {
     if (!options.silent) setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      const trimmedSearch = search.trim();
+      if (trimmedSearch) params.set("search", trimmedSearch);
       if (filter !== "all") params.set("type", filter);
 
-      const res = await fetch(`/api/knowledge/graph?${params}`);
+      const query = params.toString();
+      const res = await fetch(`/api/knowledge/graph${query ? `?${query}` : ""}`);
       if (!res.ok) throw new Error("Failed to fetch graph");
 
       const data = await res.json();
       setNodes(data.nodes ?? []);
       setEdges(data.edges ?? []);
+      if (!options.silent) {
+        setAutoFitToken((value) => value + 1);
+      }
     } catch (err) {
       console.error("Failed to load graph:", err);
       if (!options.silent) {
@@ -83,8 +104,11 @@ export function KnowledgeDashboard() {
   }, [fetchGraph]);
 
   useEffect(() => {
-    const source = new EventSource("/api/events/stream");
+    let stopped = false;
+    let retryCount = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let controller: AbortController | null = null;
 
     const scheduleRefresh = () => {
       setLiveStatus("connected");
@@ -94,21 +118,56 @@ export function KnowledgeDashboard() {
       }, 200);
     };
 
-    const graphEvents = [
-      "document:created",
-      "document:updated",
-      "document:deleted",
-      "ingest:completed",
-    ];
+    const connect = async () => {
+      if (stopped) return;
+      controller = new AbortController();
+      setLiveStatus((current) => current === "connected" ? current : "connecting");
 
-    source.onopen = () => setLiveStatus("connected");
-    source.onerror = () => setLiveStatus("offline");
-    graphEvents.forEach((eventName) => source.addEventListener(eventName, scheduleRefresh));
+      try {
+        const res = await fetch("/api/events/stream", {
+          signal: controller.signal,
+          headers: { Accept: "text/event-stream" },
+        });
+        if (!res.ok || !res.body) throw new Error("SSE connect failed");
+
+        setLiveStatus("connected");
+        retryCount = 0;
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (!stopped) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+          const blocks = buffer.split("\n\n");
+          buffer = blocks.pop() ?? "";
+
+          for (const block of blocks) {
+            const eventName = getSseEventName(block);
+            if (eventName && graphEvents.has(eventName)) scheduleRefresh();
+          }
+        }
+      } catch {
+        if (!stopped) setLiveStatus("offline");
+      }
+
+      if (!stopped) {
+        const delay = Math.min(2000 * Math.pow(2, retryCount), 30_000);
+        retryCount++;
+        reconnectTimer = setTimeout(connect, delay);
+      }
+    };
+
+    void connect();
 
     return () => {
+      stopped = true;
+      controller?.abort();
       if (refreshTimer) clearTimeout(refreshTimer);
-      graphEvents.forEach((eventName) => source.removeEventListener(eventName, scheduleRefresh));
-      source.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
     };
   }, [fetchGraph]);
 
@@ -148,8 +207,14 @@ export function KnowledgeDashboard() {
 
   const handleDrillDown = (nodeId: string) => {
     setFocusNodeId(nodeId);
-    fetchNodeDetail(nodeId);
+    void fetchNodeDetail(nodeId);
   };
+
+  const liveLabel = liveStatus === "connected"
+    ? t("knowledge.liveConnected")
+    : liveStatus === "connecting"
+      ? t("knowledge.liveConnecting")
+      : t("knowledge.liveDisconnected");
 
   return (
     <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden">
@@ -196,7 +261,7 @@ export function KnowledgeDashboard() {
           <span
             className={`size-2 rounded-full ${liveStatus === "connected" ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/40"}`}
           />
-          <span>{liveStatus === "connected" ? t("knowledge.liveConnected") : t("knowledge.liveDisconnected")}</span>
+          <span>{liveLabel}</span>
         </div>
 
         <div className="text-xs text-muted-foreground">
@@ -226,6 +291,7 @@ export function KnowledgeDashboard() {
             onBackgroundClick={() => setSelectedNode(null)}
             selectedNodeId={selectedNode?.id}
             focusNodeId={focusNodeId}
+            autoFitToken={autoFitToken}
           />
         )}
 

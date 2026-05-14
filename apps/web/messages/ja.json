@@ -454,7 +454,14 @@
     "entities": "エンティティ",
     "openSource": "ソースを開く",
     "liveConnected": "ライブ",
-    "liveDisconnected": "オフライン"
+    "liveDisconnected": "オフライン",
+    "liveConnecting": "接続中",
+    "nodeType": {
+      "document": "ドキュメント",
+      "entity": "エンティティ",
+      "category": "カテゴリ",
+      "tag": "タグ"
+    }
   },
   "offline": {
     "banner": "オフライン — ローカルデータのみ表示。接続が回復すると自動的に同期されます。"

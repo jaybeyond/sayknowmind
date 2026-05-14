@@ -2,7 +2,7 @@ import { pool } from "@/lib/db";
 import type { IngestStatus, IngestStatusResponse } from "@/lib/types";
 import { getDocument, updateDocument, insertEntities, assignDocumentCategory } from "./document-store";
 import { generateSummary, extractEntities, suggestCategories, generateStructuredMetadata, describeImage, describeVideoFrame, type StructuredMetadata } from "./ai-processor";
-import { suggestFallbackCategory } from "./category-fallback";
+import { findSimilarCategoryByName, suggestFallbackCategory } from "./category-fallback";
 import { indexDocument, queryEdgeQuake } from "@/lib/edgequake/client";
 import { createNotification } from "@/lib/notifications";
 import { detectLanguage } from "./language-detect";
@@ -348,16 +348,9 @@ async function processJob(job: JobRow): Promise<void> {
 
         // Create new category if AI suggests one that doesn't exist (max 1 per document)
         if (isNew && suggestion.categoryName && !newCategoryCreated) {
-          // Check if a similar category already exists (case-insensitive + fuzzy contains)
-          const suggestLower = suggestion.categoryName.toLowerCase();
-          const similar = existingCategories.find(
-            (c: { id: string; name: string }) => {
-              const existLower = c.name.toLowerCase();
-              return existLower === suggestLower
-                || existLower.includes(suggestLower)
-                || suggestLower.includes(existLower);
-            },
-          );
+          // Check if a similar category already exists without treating short
+          // labels like "AI" as substrings of unrelated words like "Mail".
+          const similar = findSimilarCategoryByName(existingCategories, suggestion.categoryName);
           if (similar) {
             categoryId = similar.id;
           } else {

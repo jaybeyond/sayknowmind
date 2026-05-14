@@ -454,7 +454,14 @@
     "entities": "Entities",
     "openSource": "Open source",
     "liveConnected": "Live",
-    "liveDisconnected": "Offline"
+    "liveDisconnected": "Offline",
+    "liveConnecting": "Connecting",
+    "nodeType": {
+      "document": "Document",
+      "entity": "Entity",
+      "category": "Category",
+      "tag": "Tag"
+    }
   },
   "offline": {
     "banner": "Offline — showing local data only. Will sync automatically when reconnected."

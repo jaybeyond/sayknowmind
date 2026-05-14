@@ -454,7 +454,14 @@
     "entities": "实体",
     "openSource": "打开来源",
     "liveConnected": "实时",
-    "liveDisconnected": "离线"
+    "liveDisconnected": "离线",
+    "liveConnecting": "连接中",
+    "nodeType": {
+      "document": "文档",
+      "entity": "实体",
+      "category": "分类",
+      "tag": "标签"
+    }
   },
   "offline": {
     "banner": "离线 — 仅显示本地数据。恢复连接后将自动同步。"

@@ -76,8 +76,9 @@ export async function GET(
       return NextResponse.json({
         id: entity.id,
         label: entity.name,
-        type: entity.type,
+        type: "entity",
         properties: {
+          entityType: entity.type,
           confidence: entity.confidence,
           ...entity.properties,
         },

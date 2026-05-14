@@ -120,19 +120,55 @@ function normalize(value: string): string {
   return value.toLocaleLowerCase().replace(/[\s_\-–—/|()[\]{}:;,.]+/g, "");
 }
 
+function isShortLatinToken(value: string): boolean {
+  return /^[a-z0-9]{1,3}$/.test(value);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function areSimilarCategoryNames(left: string, right: string): boolean {
+  const a = normalize(left);
+  const b = normalize(right);
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  // Short Latin labels like AI/UI/UX/IT are meaningful standalone tokens.
+  // Substring matching would make "mail" look like "AI" and "position" like
+  // "IT", so require exact equality for these compact labels.
+  if (isShortLatinToken(a) || isShortLatinToken(b)) return false;
+
+  return a.includes(b) || b.includes(a);
+}
+
+function textContainsCategoryName(text: string, categoryName: string): boolean {
+  const name = normalize(categoryName);
+  if (name.length < 2) return false;
+
+  if (isShortLatinToken(name)) {
+    const tokenBoundary = new RegExp(`(^|[^a-z0-9])${escapeRegExp(name)}([^a-z0-9]|$)`, "i");
+    return tokenBoundary.test(text);
+  }
+
+  return normalize(text).includes(name);
+}
+
+export function findSimilarCategoryByName<T extends ExistingCategory>(
+  existing: T[],
+  categoryName: string,
+): T | null {
+  return existing.find((category) => areSimilarCategoryNames(category.name, categoryName)) ?? null;
+}
+
 function matchesExistingCategory(
   existing: ExistingCategory[],
   rule: TopicRule,
 ): ExistingCategory | null {
-  const candidates = [rule.label.ko, rule.label.en, rule.label.ja, rule.label.zh, ...rule.aliases]
-    .map(normalize)
-    .filter(Boolean);
+  const candidates = [rule.label.ko, rule.label.en, rule.label.ja, rule.label.zh, ...rule.aliases];
 
   return existing.find((category) => {
-    const categoryName = normalize(category.name);
-    return candidates.some((candidate) =>
-      categoryName === candidate || categoryName.includes(candidate) || candidate.includes(categoryName),
-    );
+    return candidates.some((candidate) => areSimilarCategoryNames(category.name, candidate));
   }) ?? null;
 }
 
@@ -144,10 +180,8 @@ function findDirectExistingMatch(
   text: string,
   existing: ExistingCategory[],
 ): ExistingCategory | null {
-  const normalizedText = normalize(text);
   return existing.find((category) => {
-    const name = normalize(category.name);
-    return name.length >= 2 && normalizedText.includes(name);
+    return textContainsCategoryName(text, category.name);
   }) ?? null;
 }
 
