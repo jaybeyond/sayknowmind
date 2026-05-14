@@ -446,12 +446,15 @@
     "filterDocuments": "文档",
     "filterEntities": "实体",
     "filterCategories": "分类",
+    "filterTags": "标签",
     "loadingGraph": "加载图谱中...",
     "statsSlash": "{{nodes}} 个节点 / {{edges}} 条边",
     "properties": "属性",
     "connectedDocuments": "关联文档（{{count}} 个）",
     "entities": "实体",
-    "openSource": "打开来源"
+    "openSource": "打开来源",
+    "liveConnected": "实时",
+    "liveDisconnected": "离线"
   },
   "offline": {
     "banner": "离线 — 仅显示本地数据。恢复连接后将自动同步。"

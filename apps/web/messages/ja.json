@@ -446,12 +446,15 @@
     "filterDocuments": "ドキュメント",
     "filterEntities": "エンティティ",
     "filterCategories": "カテゴリ",
+    "filterTags": "タグ",
     "loadingGraph": "グラフを読み込み中...",
     "statsSlash": "{{nodes}} ノード / {{edges}} エッジ",
     "properties": "プロパティ",
     "connectedDocuments": "関連ドキュメント（{{count}} 件）",
     "entities": "エンティティ",
-    "openSource": "ソースを開く"
+    "openSource": "ソースを開く",
+    "liveConnected": "ライブ",
+    "liveDisconnected": "オフライン"
   },
   "offline": {
     "banner": "オフライン — ローカルデータのみ表示。接続が回復すると自動的に同期されます。"

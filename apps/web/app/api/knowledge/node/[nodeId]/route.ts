@@ -124,6 +124,46 @@ export async function GET(
       });
     }
 
+    // Try as tag
+    try {
+      const tagResult = await pool.query(
+        `SELECT t.id, t.name, t.canonical_name, t.created_at
+         FROM tags t
+         WHERE t.id = $1 AND t.user_id = $2`,
+        [nodeId, userId],
+      );
+
+      if (tagResult.rows.length > 0) {
+        const tag = tagResult.rows[0];
+        const tagDocs = await pool.query(
+          `SELECT DISTINCT d.id, d.title, d.url
+           FROM documents d
+           JOIN document_tags dt ON dt.document_id = d.id
+           WHERE dt.tag_id = $1 AND ${visibilityClause("d", 2)}
+           ORDER BY d.title`,
+          [nodeId, userId],
+        );
+
+        return NextResponse.json({
+          id: tag.id,
+          label: tag.name,
+          type: "tag",
+          properties: {
+            canonicalName: tag.canonical_name,
+            documentCount: tagDocs.rows.length,
+            createdAt: tag.created_at,
+          },
+          connectedDocuments: tagDocs.rows.map((d: { id: string; title: string; url: string | null }) => ({
+            id: d.id,
+            title: d.title,
+            url: d.url ?? undefined,
+          })),
+        });
+      }
+    } catch (err) {
+      console.warn("[knowledge/node] Tags unavailable:", err);
+    }
+
     return NextResponse.json(
       { code: ErrorCode.SYSTEM_INTERNAL_ERROR, message: "Node not found", timestamp: new Date().toISOString() },
       { status: 404 },

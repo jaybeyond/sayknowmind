@@ -446,12 +446,15 @@
     "filterDocuments": "문서",
     "filterEntities": "엔티티",
     "filterCategories": "카테고리",
+    "filterTags": "태그",
     "loadingGraph": "그래프 로딩 중...",
     "statsSlash": "{{nodes}}개 노드 / {{edges}}개 엣지",
     "properties": "속성",
     "connectedDocuments": "연결된 문서 ({{count}}개)",
     "entities": "엔티티",
-    "openSource": "원본 열기"
+    "openSource": "원본 열기",
+    "liveConnected": "실시간",
+    "liveDisconnected": "오프라인"
   },
   "offline": {
     "banner": "오프라인 — 로컬 데이터만 표시됩니다. 연결 복구 시 자동 동기화됩니다."

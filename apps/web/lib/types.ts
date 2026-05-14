@@ -13,9 +13,9 @@ export type SourceType = 'web' | 'file' | 'text' | 'browser_extension';
 
 export type EntityType = 'person' | 'organization' | 'location' | 'concept' | 'keyword' | 'date' | 'other';
 
-export type NodeType = 'document' | 'entity' | 'category' | 'concept';
+export type NodeType = 'document' | 'entity' | 'category' | 'concept' | 'tag';
 
-export type EdgeType = 'mentions' | 'related_to' | 'cites' | 'belongs_to' | 'similar_to';
+export type EdgeType = 'mentions' | 'related_to' | 'cites' | 'belongs_to' | 'similar_to' | 'tagged_with';
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 

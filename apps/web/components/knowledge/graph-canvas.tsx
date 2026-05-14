@@ -53,12 +53,14 @@ const NODE_COLORS: Record<string, string> = {
   document: "#00E5FF",
   entity: "#FF2E63",
   category: "#A855F7",
+  tag: "#22C55E",
 };
 
 const BASE_SIZES: Record<string, number> = {
   document: 6,
   entity: 4,
   category: 8,
+  tag: 5,
 };
 
 const DEFAULT_COLOR = "#888888";

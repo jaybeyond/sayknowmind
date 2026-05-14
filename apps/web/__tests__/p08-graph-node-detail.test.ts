@@ -30,8 +30,8 @@ function getNodeDetails(
   return { node, connectedDocs };
 }
 
-const nodeTypeArb = fc.constantFrom<NodeType>("document", "entity", "category", "concept");
-const edgeTypeArb = fc.constantFrom<EdgeType>("mentions", "related_to", "cites", "belongs_to", "similar_to");
+const nodeTypeArb = fc.constantFrom<NodeType>("document", "entity", "category", "concept", "tag");
+const edgeTypeArb = fc.constantFrom<EdgeType>("mentions", "related_to", "cites", "belongs_to", "similar_to", "tagged_with");
 
 const graphNodeArb = fc.record({
   id: fc.uuid(),
@@ -146,5 +146,46 @@ describe("Property 8: Graph node detail display", () => {
     expect(connectedDocs).toContain("doc-2");
     expect(connectedDocs).not.toContain("cat-1"); // not a document
     expect(connectedDocs.length).toBe(2);
+  });
+
+  it("tag nodes expose their connected documents through tagged_with edges", () => {
+    const tagNode: GraphNode = {
+      id: "tag-1",
+      nodeType: "tag",
+      properties: { label: "react-server-components" },
+      createdAt: new Date(),
+    };
+    const docNode: GraphNode = {
+      id: "doc-1",
+      documentId: "d1",
+      nodeType: "document",
+      properties: { label: "Document 1" },
+      createdAt: new Date(),
+    };
+    const unrelatedDoc: GraphNode = {
+      id: "doc-2",
+      documentId: "d2",
+      nodeType: "document",
+      properties: { label: "Document 2" },
+      createdAt: new Date(),
+    };
+
+    const edges: GraphEdge[] = [
+      {
+        id: "edge-tag-1",
+        sourceNodeId: "doc-1",
+        targetNodeId: "tag-1",
+        edgeType: "tagged_with",
+        weight: 1,
+        properties: {},
+        createdAt: new Date(),
+      },
+    ];
+
+    const { node, connectedDocs } = getNodeDetails("tag-1", [tagNode, docNode, unrelatedDoc], edges);
+
+    expect(node).toBeDefined();
+    expect(node!.properties.label).toBe("react-server-components");
+    expect(connectedDocs).toEqual(["doc-1"]);
   });
 });

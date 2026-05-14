@@ -446,12 +446,15 @@
     "filterDocuments": "Documents",
     "filterEntities": "Entities",
     "filterCategories": "Categories",
+    "filterTags": "Tags",
     "loadingGraph": "Loading graph...",
     "statsSlash": "{{nodes}} nodes / {{edges}} edges",
     "properties": "Properties",
     "connectedDocuments": "Connected Documents ({{count}})",
     "entities": "Entities",
-    "openSource": "Open source"
+    "openSource": "Open source",
+    "liveConnected": "Live",
+    "liveDisconnected": "Offline"
   },
   "offline": {
     "banner": "Offline — showing local data only. Will sync automatically when reconnected."

@@ -14,6 +14,7 @@ export async function GET() {
   }
 
   const encoder = new TextEncoder();
+  let cleanup: (() => void) | undefined;
   const stream = new ReadableStream({
     start(controller) {
       // Send keepalive comment immediately so the connection is established
@@ -28,7 +29,7 @@ export async function GET() {
           );
         } catch {
           // Client disconnected
-          cleanup();
+          cleanup?.();
         }
       };
 
@@ -37,22 +38,20 @@ export async function GET() {
         try {
           controller.enqueue(encoder.encode(": keepalive\n\n"));
         } catch {
-          cleanup();
+          cleanup?.();
         }
       }, 30_000);
 
-      function cleanup() {
+      cleanup = () => {
         eventBus.off("document-event", onEvent);
         clearInterval(keepalive);
-      }
+        cleanup = undefined;
+      };
 
       eventBus.on("document-event", onEvent);
-
-      // Cleanup when the client disconnects (stream is cancelled)
-      // The stream controller's cancel signal triggers this
     },
     cancel() {
-      // ReadableStream cancel — listener cleanup is handled by the closure above
+      cleanup?.();
     },
   });
 

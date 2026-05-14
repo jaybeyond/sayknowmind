@@ -52,9 +52,10 @@ export function KnowledgeDashboard() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  const [liveStatus, setLiveStatus] = useState<"connecting" | "connected" | "offline">("connecting");
 
-  const fetchGraph = useCallback(async () => {
-    setLoading(true);
+  const fetchGraph = useCallback(async (options: { silent?: boolean } = {}) => {
+    if (!options.silent) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
@@ -68,15 +69,47 @@ export function KnowledgeDashboard() {
       setEdges(data.edges ?? []);
     } catch (err) {
       console.error("Failed to load graph:", err);
-      setNodes([]);
-      setEdges([]);
+      if (!options.silent) {
+        setNodes([]);
+        setEdges([]);
+      }
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
   }, [search, filter]);
 
   useEffect(() => {
     fetchGraph();
+  }, [fetchGraph]);
+
+  useEffect(() => {
+    const source = new EventSource("/api/events/stream");
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRefresh = () => {
+      setLiveStatus("connected");
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        void fetchGraph({ silent: true });
+      }, 200);
+    };
+
+    const graphEvents = [
+      "document:created",
+      "document:updated",
+      "document:deleted",
+      "ingest:completed",
+    ];
+
+    source.onopen = () => setLiveStatus("connected");
+    source.onerror = () => setLiveStatus("offline");
+    graphEvents.forEach((eventName) => source.addEventListener(eventName, scheduleRefresh));
+
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      graphEvents.forEach((eventName) => source.removeEventListener(eventName, scheduleRefresh));
+      source.close();
+    };
   }, [fetchGraph]);
 
   const fetchNodeDetail = async (nodeId: string) => {
@@ -156,7 +189,15 @@ export function KnowledgeDashboard() {
           <option value="document">{t("knowledge.filterDocuments")}</option>
           <option value="entity">{t("knowledge.filterEntities")}</option>
           <option value="category">{t("knowledge.filterCategories")}</option>
+          <option value="tag">{t("knowledge.filterTags")}</option>
         </select>
+
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span
+            className={`size-2 rounded-full ${liveStatus === "connected" ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground/40"}`}
+          />
+          <span>{liveStatus === "connected" ? t("knowledge.liveConnected") : t("knowledge.liveDisconnected")}</span>
+        </div>
 
         <div className="text-xs text-muted-foreground">
           {t("knowledge.statsSlash")

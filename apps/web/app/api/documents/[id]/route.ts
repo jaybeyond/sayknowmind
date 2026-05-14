@@ -3,8 +3,34 @@ import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { visibilityClause } from "@/lib/visibility";
+import { emitDocumentEvent } from "@/lib/events";
+import { assignTags, clearDocumentTags } from "@/lib/tags/store";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+function hasTagPatch(metadata: Record<string, unknown> | undefined): boolean {
+  if (!metadata) return false;
+  return ["aiTags", "userTags", "tags"].some((key) =>
+    Object.prototype.hasOwnProperty.call(metadata, key),
+  );
+}
+
+function extractTags(metadata: Record<string, unknown> | null | undefined): string[] {
+  if (!metadata) return [];
+  const tagValues = ["aiTags", "userTags", "tags"].flatMap((key) => {
+    const value = metadata[key];
+    return Array.isArray(value) ? value : [];
+  });
+  return [...new Set(tagValues.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0))];
+}
+
+async function syncDocumentTagsFromMetadata(userId: string, documentId: string, metadata: Record<string, unknown> | null | undefined) {
+  await clearDocumentTags(documentId);
+  const tags = extractTags(metadata);
+  if (tags.length > 0) {
+    await assignTags(userId, documentId, tags);
+  }
+}
 
 /** GET /api/documents/:id */
 export async function GET(_request: NextRequest, context: RouteContext) {
@@ -71,6 +97,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       privacyLevel?: string;
       categoryId?: string | null;
     };
+    const metadataTouchesTags = hasTagPatch(metadata);
 
     // Build SET clauses dynamically
     const setClauses: string[] = ["updated_at = NOW()"];
@@ -153,6 +180,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     // If only categoryId was changed, no need to update documents table
     if (setClauses.length === 1) {
+      emitDocumentEvent({ type: "document:updated", documentId: id, userId });
       return NextResponse.json({ id, categoryUpdated: true });
     }
 
@@ -171,6 +199,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         { status: 404 },
       );
     }
+
+    if (metadataTouchesTags) {
+      try {
+        await syncDocumentTagsFromMetadata(userId, id, result.rows[0].metadata ?? {});
+      } catch (err) {
+        // Keep metadata updates usable if the tags migration has not been
+        // applied yet; graph tags will appear after the normalized tables exist.
+        console.warn("[documents] Failed to sync normalized document tags:", err);
+      }
+    }
+
+    emitDocumentEvent({ type: "document:updated", documentId: id, userId, title: result.rows[0].title ?? undefined });
 
     return NextResponse.json(result.rows[0]);
   } catch (err) {
@@ -206,6 +246,8 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
         { status: 404 },
       );
     }
+
+    emitDocumentEvent({ type: "document:deleted", documentId: id, userId });
 
     return NextResponse.json({ deleted: true, id });
   } catch (err) {

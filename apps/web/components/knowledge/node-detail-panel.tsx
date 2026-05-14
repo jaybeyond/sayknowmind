@@ -37,6 +37,7 @@ const typeConfig: Record<string, { bg: string; text: string; icon: typeof FileTe
   document: { bg: "bg-cyan-500/20", text: "text-cyan-400", icon: FileText },
   entity: { bg: "bg-pink-500/20", text: "text-pink-400", icon: Tag },
   category: { bg: "bg-purple-500/20", text: "text-purple-400", icon: Folder },
+  tag: { bg: "bg-emerald-500/20", text: "text-emerald-400", icon: Tag },
   concept: { bg: "bg-emerald-500/20", text: "text-emerald-400", icon: Tag },
 };
 
