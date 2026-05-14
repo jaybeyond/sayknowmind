@@ -1,11 +1,20 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Copy, Check, Terminal, Globe, Zap, RefreshCw } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
 type Transport = "streamable-http" | "sse" | "stdio";
+
+interface AuditEntry {
+  id: number;
+  tool_name: string;
+  status: "ok" | "error" | "blocked";
+  duration_ms: number | null;
+  error_message: string | null;
+  created_at: string;
+}
 
 export function McpConnectTab() {
   const { t } = useTranslation();
@@ -13,6 +22,7 @@ export function McpConnectTab() {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [audit, setAudit] = useState<AuditEntry[] | null>(null);
 
   // Load existing key on mount
   if (!loaded && typeof window !== "undefined") {
@@ -21,6 +31,15 @@ export function McpConnectTab() {
       if (data?.apiKey) setApiKey(data.apiKey);
     }).catch(() => {});
   }
+
+  // Refresh audit log when the user opens the tab and again after each
+  // (re)generation, so they can see the new key start producing entries.
+  useEffect(() => {
+    fetch("/api/user/mcp-audit?limit=20")
+      .then((r) => (r.ok ? r.json() : { entries: [] }))
+      .then((d) => setAudit(d.entries ?? []))
+      .catch(() => setAudit([]));
+  }, [apiKey]);
 
   const serverUrl = typeof window !== "undefined"
     ? `${window.location.origin}/mcp`
@@ -31,6 +50,13 @@ export function McpConnectTab() {
     : "https://sayknowmind.ypai.click";
 
   const generateApiKey = useCallback(async () => {
+    // Regeneration invalidates the current key everywhere — any AI tool
+    // already configured with the old key will start getting 401s. Make
+    // the user confirm before doing that. Initial generation (no key
+    // yet) is non-destructive, so it skips the prompt.
+    if (apiKey && !window.confirm(t("mcp.regenerateConfirm"))) {
+      return;
+    }
     setGenerating(true);
     try {
       const res = await fetch("/api/user/mcp-key", { method: "POST" });
@@ -40,7 +66,7 @@ export function McpConnectTab() {
       }
     } catch { /* silent */ }
     setGenerating(false);
-  }, []);
+  }, [apiKey, t]);
 
   const configs: Record<Transport, { label: string; icon: typeof Globe; code: string }> = {
     "streamable-http": {
@@ -107,12 +133,17 @@ export function McpConnectTab() {
           </Button>
         </div>
         {apiKey ? (
-          <div className="flex items-center gap-2">
-            <code className="flex-1 text-xs bg-muted px-3 py-2 rounded-md font-mono break-all">
-              {apiKey}
-            </code>
-            <CopyButton text={apiKey} />
-          </div>
+          <>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-xs bg-muted px-3 py-2 rounded-md font-mono break-all">
+                {apiKey}
+              </code>
+              <CopyButton text={apiKey} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("mcp.regenerateWarning")}
+            </p>
+          </>
         ) : (
           <p className="text-xs text-muted-foreground">{t("mcp.noKey")}</p>
         )}
@@ -169,6 +200,47 @@ export function McpConnectTab() {
             </span>
           ))}
         </div>
+      </div>
+
+      {/* Recent activity — what the key has been doing */}
+      <div className="rounded-lg border p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-medium">{t("mcp.recentActivity")}</h4>
+          <span className="text-[10px] text-muted-foreground">
+            {t("mcp.recentActivityHint")}
+          </span>
+        </div>
+        {audit === null ? (
+          <p className="text-xs text-muted-foreground">{t("mcp.auditLoading")}</p>
+        ) : audit.length === 0 ? (
+          <p className="text-xs text-muted-foreground">{t("mcp.auditEmpty")}</p>
+        ) : (
+          <ul className="space-y-1 max-h-60 overflow-y-auto pr-1">
+            {audit.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex items-center justify-between gap-2 text-xs py-1.5 border-b last:border-b-0"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={
+                      "inline-block size-1.5 rounded-full " +
+                      (entry.status === "ok"
+                        ? "bg-emerald-500"
+                        : entry.status === "blocked"
+                        ? "bg-amber-500"
+                        : "bg-red-500")
+                    }
+                  />
+                  <code className="truncate font-mono">{entry.tool_name}</code>
+                </div>
+                <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
+                  {new Date(entry.created_at).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

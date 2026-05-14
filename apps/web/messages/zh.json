@@ -537,11 +537,17 @@
     "apiKey": "API 密钥",
     "generate": "生成密钥",
     "regenerate": "重新生成",
+    "regenerateConfirm": "重新生成将使当前密钥失效。所有已使用该密钥配置的 AI 工具在粘贴新密钥之前将停止工作。是否继续？",
+    "regenerateWarning": "请像对待密码一样对待此密钥。拥有此密钥的任何人都可以读取和修改您的 SayknowMind 数据。如果泄露，请立即重新生成。",
     "noKey": "生成 API 密钥以保护您的 MCP 连接。",
     "howToUse": "连接方法",
     "step1": "复制下面的配置并粘贴到 AI 工具的 MCP 设置中。",
     "step2": "Claude Desktop：设置 → 开发者 → 编辑配置",
     "step3": "重启 AI 工具即可激活连接。",
+    "recentActivity": "最近活动",
+    "recentActivityHint": "最近 20 次工具调用",
+    "auditLoading": "加载中…",
+    "auditEmpty": "尚无 MCP 工具调用记录。",
     "compatible": "兼容的 AI 工具"
   },
   "runtime": {

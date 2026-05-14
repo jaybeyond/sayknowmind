@@ -537,12 +537,18 @@
     "apiKey": "API Key",
     "generate": "Generate Key",
     "regenerate": "Regenerate",
+    "regenerateConfirm": "Regenerating will invalidate your current key. Every AI tool already configured with it will stop working until you paste the new key. Continue?",
+    "regenerateWarning": "Treat this like a password. Anyone with this key can read and modify your SayknowMind data. Rotate it if it ever leaks.",
     "noKey": "Generate an API key to secure your MCP connection.",
     "howToUse": "How to connect",
     "step1": "Copy the config below and paste into your AI tool's MCP settings.",
     "step2": "For Claude Desktop: Settings → Developer → Edit Config",
     "step3": "Restart your AI tool to activate the connection.",
-    "compatible": "Compatible AI Tools"
+    "compatible": "Compatible AI Tools",
+    "recentActivity": "Recent activity",
+    "recentActivityHint": "Last 20 tool calls",
+    "auditLoading": "Loading…",
+    "auditEmpty": "No MCP tool calls yet."
   },
   "runtime": {
     "title": "Local Runtime",

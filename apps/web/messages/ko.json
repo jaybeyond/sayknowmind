@@ -537,11 +537,17 @@
     "apiKey": "API 키",
     "generate": "키 생성",
     "regenerate": "재생성",
+    "regenerateConfirm": "재생성하면 현재 키는 무효화됩니다. 이미 이 키로 설정된 모든 AI 도구는 새 키를 붙여넣기 전까지 작동하지 않습니다. 계속하시겠습니까?",
+    "regenerateWarning": "이 키는 비밀번호처럼 다뤄주세요. 이 키를 가진 누구나 회원님의 SayknowMind 데이터를 읽고 수정할 수 있습니다. 노출되면 즉시 재생성하세요.",
     "noKey": "MCP 연결을 보호할 API 키를 생성하세요.",
     "howToUse": "연결 방법",
     "step1": "아래 설정을 복사하여 AI 도구의 MCP 설정에 붙여넣으세요.",
     "step2": "Claude Desktop: 설정 → 개발자 → 설정 편집",
     "step3": "AI 도구를 재시작하면 연결이 활성화됩니다.",
+    "recentActivity": "최근 활동",
+    "recentActivityHint": "최근 도구 호출 20건",
+    "auditLoading": "불러오는 중…",
+    "auditEmpty": "아직 MCP 도구 호출 기록이 없습니다.",
     "compatible": "호환 AI 도구"
   },
   "runtime": {
