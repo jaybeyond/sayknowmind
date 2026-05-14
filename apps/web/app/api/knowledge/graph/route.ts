@@ -60,7 +60,11 @@ export async function GET(request: NextRequest) {
     const documents = new Map<string, DocumentRow>();
 
     const docParams: unknown[] = [userId];
-    let docQuery = `SELECT DISTINCT d.id, d.title
+    // d.updated_at has to appear in the projection because we sort by it
+    // and Postgres rejects DISTINCT + ORDER BY on a column not in the
+    // SELECT list (error 42P10). addDocuments() only keeps id+title so
+    // the extra column is harmless.
+    let docQuery = `SELECT DISTINCT d.id, d.title, d.updated_at
        FROM documents d
        WHERE ${visibilityClause("d", 1)}`;
 
@@ -94,7 +98,7 @@ export async function GET(request: NextRequest) {
     if (searchPattern) {
       try {
         const tagMatchedDocs = await pool.query(
-          `SELECT DISTINCT d.id, d.title
+          `SELECT DISTINCT d.id, d.title, d.updated_at
            FROM documents d
            JOIN document_tags dt ON dt.document_id = d.id
            JOIN tags t ON t.id = dt.tag_id
