@@ -151,6 +151,7 @@ services:
       GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
       IPFS_KUBO_API: http://ipfs:5001
       IPFS_GATEWAY: http://ipfs:8080/ipfs
+      MCP_SERVER_URL: http://mcp-server:8082
     depends_on:
       postgres:
         condition: service_healthy
