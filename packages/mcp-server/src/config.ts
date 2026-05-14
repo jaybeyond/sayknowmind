@@ -9,8 +9,15 @@ export interface McpConfig {
 }
 
 export function resolveConfig(): McpConfig {
+  // Accept both EDGEQUAKE_URL (used by the web app, compose, and the
+  // Claude Desktop config snippet we hand users) and EDGEQUAKE_BASE_URL
+  // (the original MCP-only name). EDGEQUAKE_URL wins when both are set
+  // so the rest of the codebase stays canonical.
   const config: McpConfig = {
-    baseUrl: process.env.EDGEQUAKE_BASE_URL ?? "http://localhost:8080",
+    baseUrl:
+      process.env.EDGEQUAKE_URL ??
+      process.env.EDGEQUAKE_BASE_URL ??
+      "http://localhost:8080",
     apiKey: process.env.EDGEQUAKE_API_KEY,
     defaultTenant: process.env.EDGEQUAKE_DEFAULT_TENANT,
     defaultWorkspace: process.env.EDGEQUAKE_DEFAULT_WORKSPACE,
