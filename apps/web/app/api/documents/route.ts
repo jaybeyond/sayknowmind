@@ -95,7 +95,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       documents: dataResult.rows,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: offset + dataResult.rows.length < total && dataResult.rows.length > 0,
+        nextPage: offset + dataResult.rows.length < total ? page + 1 : null,
+      },
     });
   } catch (err) {
     console.error("[documents] GET error:", err);

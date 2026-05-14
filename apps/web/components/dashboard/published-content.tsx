@@ -310,9 +310,11 @@ export function PublishedContent() {
   const [shares, setShares] = React.useState<ShareItem[]>([]);
   const [total, setTotal] = React.useState(0);
   const [hasMore, setHasMore] = React.useState(false);
+  const [nextOffset, setNextOffset] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
   const fetchShares = React.useCallback(async () => {
     setLoading(true);
@@ -320,9 +322,11 @@ export function PublishedContent() {
       const res = await fetch(`/api/share?limit=${PAGE_SIZE}&offset=0`);
       if (!res.ok) return;
       const data = await res.json();
-      setShares(data.shares ?? []);
+      const firstShares = Array.isArray(data.shares) ? data.shares : [];
+      setShares(firstShares);
       setTotal(data.total ?? 0);
       setHasMore(data.hasMore ?? false);
+      setNextOffset(typeof data.nextOffset === "number" ? data.nextOffset : firstShares.length);
     } catch {
       // ignore
     } finally {
@@ -335,34 +339,41 @@ export function PublishedContent() {
   }, [fetchShares]);
 
   const loadMore = React.useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (loading || loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const res = await fetch(`/api/share?limit=${PAGE_SIZE}&offset=${shares.length}`);
+      const res = await fetch(`/api/share?limit=${PAGE_SIZE}&offset=${nextOffset}`);
       if (res.ok) {
         const data = await res.json();
-        setShares((prev) => [...prev, ...(data.shares ?? [])]);
-        setHasMore(data.hasMore ?? false);
+        const nextShares = Array.isArray(data.shares) ? data.shares : [];
+        setShares((prev) => {
+          const existingIds = new Set(prev.map((share) => share.id));
+          return [...prev, ...nextShares.filter((share: ShareItem) => !existingIds.has(share.id))];
+        });
+        setTotal(typeof data.total === "number" ? data.total : total);
+        setHasMore(Boolean(data.hasMore) && nextShares.length > 0);
+        setNextOffset(typeof data.nextOffset === "number" ? data.nextOffset : nextOffset + nextShares.length);
+      } else {
+        setHasMore(false);
       }
     } finally {
       setLoadingMore(false);
     }
-  }, [shares.length, hasMore, loadingMore]);
+  }, [hasMore, loading, loadingMore, nextOffset, total]);
 
-  const sentinelRef = React.useCallback(
-    (node: HTMLDivElement | null) => {
-      if (!node) return;
-      const observer = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting) loadMore();
-        },
-        { rootMargin: "200px" },
-      );
-      observer.observe(node);
-      return () => observer.disconnect();
-    },
-    [loadMore],
-  );
+  React.useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || loading || loadingMore || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) void loadMore();
+      },
+      { rootMargin: "240px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, loading, loadingMore]);
 
   const handleCopy = async (token: string, id: string) => {
     const url = `${window.location.origin}/s/${token}`;
@@ -473,17 +484,21 @@ export function PublishedContent() {
         {/* Infinite scroll sentinel */}
         {!loading && hasMore && shares.length > 0 && (
           <div ref={sentinelRef} className="flex justify-center py-6">
-            {loadingMore && (
+            {loadingMore ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <RefreshCw className="size-4 animate-spin" />
               </div>
+            ) : (
+              <Button variant="outline" size="sm" onClick={loadMore}>
+                {t("content.loadMore")}
+              </Button>
             )}
           </div>
         )}
 
-        {!loading && !hasMore && shares.length > 0 && total > PAGE_SIZE && (
+        {!loading && !hasMore && shares.length > 0 && (
           <p className="text-center text-xs text-muted-foreground py-4">
-            {t("published.countMany").replace("{{count}}", String(total))}
+            {t("published.allLoaded").replace("{{count}}", String(total || shares.length))}
           </p>
         )}
       </div>

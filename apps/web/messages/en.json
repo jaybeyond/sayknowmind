@@ -749,7 +749,8 @@
     "copyLink": "Copy link",
     "revokeShare": "Revoke share",
     "empty": "No published memories",
-    "emptyCta": "Share a memory to see it here"
+    "emptyCta": "Share a memory to see it here",
+    "allLoaded": "All {{count}} published memories loaded"
   },
   "gallery": {
     "hero": "Explore Shared Knowledge",
@@ -757,7 +758,8 @@
     "sharedCount": "{{count}} shared memories",
     "noShares": "No shared content yet",
     "loginToSave": "Log in to start saving your own knowledge",
-    "searchPlaceholder": "Search shared knowledge..."
+    "searchPlaceholder": "Search shared knowledge...",
+    "allLoaded": "All {{count}} shared items loaded"
   },
   "edit": {
     "title": "Edit Memory",

@@ -15,6 +15,7 @@ export function PublicGallery() {
   const [items, setItems] = React.useState<GalleryItem[]>([]);
   const [total, setTotal] = React.useState(0);
   const [hasMore, setHasMore] = React.useState(false);
+  const [nextOffset, setNextOffset] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [loadingMore, setLoadingMore] = React.useState(false);
   const sentinelRef = React.useRef<HTMLDivElement>(null);
@@ -58,9 +59,11 @@ export function PublicGallery() {
         const res = await fetch(buildUrl(0));
         if (res.ok) {
           const data = await res.json();
-          setItems(data.items);
-          setTotal(data.total);
-          setHasMore(data.hasMore);
+          const firstItems = Array.isArray(data.items) ? data.items : [];
+          setItems(firstItems);
+          setTotal(typeof data.total === "number" ? data.total : 0);
+          setHasMore(Boolean(data.hasMore));
+          setNextOffset(typeof data.nextOffset === "number" ? data.nextOffset : firstItems.length);
           if (data.categories) setCategories(data.categories);
         }
       } catch { /* network error */ }
@@ -77,34 +80,43 @@ export function PublicGallery() {
 
   // Infinite scroll
   const loadMore = React.useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (loading || loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const res = await fetch(buildUrl(items.length));
+      const res = await fetch(buildUrl(nextOffset));
       if (res.ok) {
         const data = await res.json();
-        setItems((prev) => [...prev, ...data.items]);
-        setHasMore(data.hasMore);
+        const nextItems = Array.isArray(data.items) ? data.items : [];
+        setItems((prev) => {
+          const existingTokens = new Set(prev.map((item) => item.shareToken));
+          return [...prev, ...nextItems.filter((item: GalleryItem) => !existingTokens.has(item.shareToken))];
+        });
+        setTotal(typeof data.total === "number" ? data.total : total);
+        setHasMore(Boolean(data.hasMore) && nextItems.length > 0);
+        setNextOffset(typeof data.nextOffset === "number" ? data.nextOffset : nextOffset + nextItems.length);
+      } else {
+        setHasMore(false);
       }
     } catch {
       /* network error */
     } finally {
       setLoadingMore(false);
     }
-  }, [items.length, hasMore, loadingMore]);
+  }, [buildUrl, hasMore, loading, loadingMore, nextOffset, total]);
 
   React.useEffect(() => {
     const el = sentinelRef.current;
-    if (!el) return;
+    if (!el || loading || loadingMore || !hasMore) return;
+
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) loadMore();
+        if (entry.isIntersecting) void loadMore();
       },
-      { rootMargin: "200px" },
+      { rootMargin: "240px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [loadMore]);
+  }, [hasMore, loadMore, loading, loadingMore]);
 
   return (
     <div className="min-h-screen">
@@ -246,6 +258,13 @@ export function PublicGallery() {
               </div>
             )}
 
+            {items.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Globe className="size-12 text-muted-foreground/20 mb-4" />
+                <h3 className="text-lg font-medium mb-1">{t("gallery.noShares")}</h3>
+              </div>
+            )}
+
             {/* Loading more indicator */}
             {loadingMore && (
               <div className="flex justify-center py-8">
@@ -254,7 +273,19 @@ export function PublicGallery() {
             )}
 
             {/* Sentinel for infinite scroll */}
-            {hasMore && <div ref={sentinelRef} className="h-1" />}
+            {hasMore ? (
+              <div ref={sentinelRef} className="flex justify-center py-8">
+                {!loadingMore && (
+                  <Button variant="outline" size="sm" onClick={loadMore}>
+                    {t("content.loadMore")}
+                  </Button>
+                )}
+              </div>
+            ) : items.length > 0 ? (
+              <p className="text-center text-xs text-muted-foreground py-6">
+                {t("gallery.allLoaded").replace("{{count}}", String(total || items.length))}
+              </p>
+            ) : null}
           </>
         )}
       </main>

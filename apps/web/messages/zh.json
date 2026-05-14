@@ -749,7 +749,8 @@
     "copyLink": "复制链接",
     "revokeShare": "撤销分享",
     "empty": "暂无已发布的记忆",
-    "emptyCta": "分享记忆后将显示在此处"
+    "emptyCta": "分享记忆后将显示在此处",
+    "allLoaded": "共 {{count}} 个已发布记忆已全部加载"
   },
   "gallery": {
     "hero": "探索共享知识",
@@ -757,7 +758,8 @@
     "sharedCount": "{{count}} 条共享记忆",
     "noShares": "暂无共享内容",
     "loginToSave": "登录开始保存您的知识",
-    "searchPlaceholder": "搜索共享知识..."
+    "searchPlaceholder": "搜索共享知识...",
+    "allLoaded": "共 {{count}} 个共享项目已全部加载"
   },
   "edit": {
     "title": "编辑记忆",

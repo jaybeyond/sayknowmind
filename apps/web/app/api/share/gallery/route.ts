@@ -117,7 +117,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       items,
       total,
-      hasMore: offset + limit < total,
+      hasMore: offset + items.length < total && items.length > 0,
+      nextOffset: offset + items.length < total ? offset + items.length : null,
       categories: catResult.rows,
     });
   } catch (error) {

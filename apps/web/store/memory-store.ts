@@ -32,6 +32,9 @@ type SortBy = "date-newest" | "date-oldest" | "alpha-az" | "alpha-za";
 type FilterType = "all" | "favorites" | "with-tags" | "without-tags";
 
 const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 300;
+let fetchMemoriesRequestId = 0;
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Map a DB document row to the Memory shape used by the UI */
 function documentToMemory(row: Record<string, unknown>): Memory {
@@ -202,11 +205,12 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   clearTags: () => set({ selectedTags: [] }),
 
   setSearchQuery: (query) => {
-    set({ searchQuery: query });
-    // Debounced server-side search: reset and re-fetch
-    const store = get();
-    set({ memories: [], page: 1, hasMore: true });
-    store.fetchMemories();
+    set({ searchQuery: query, page: 1, hasMore: true, error: null });
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      searchDebounceTimer = null;
+      void get().fetchMemories();
+    }, SEARCH_DEBOUNCE_MS);
   },
 
   setViewMode: (mode) => set({ viewMode: mode }),
@@ -428,8 +432,9 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
 
   /** Fetch first page of active memories (resets pagination) */
   fetchMemories: async () => {
-    const { searchQuery } = get();
-    set({ isLoading: true, error: null });
+    const { searchQuery, memories } = get();
+    const requestId = ++fetchMemoriesRequestId;
+    set({ isLoading: memories.length === 0, isLoadingMore: false, error: null });
     try {
       const url = buildDocumentsUrl({
         page: 1,
@@ -439,32 +444,41 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       });
       const res = await fetch(url);
 
+      if (requestId !== fetchMemoriesRequestId) return;
+
       if (!res.ok) {
         set({ isLoading: false, error: res.status === 401 ? null : "Failed to load memories" });
         return;
       }
 
       const data = await res.json();
-      const docs = Array.isArray(data.documents) ? data.documents.map(documentToMemory) : [];
+      const docs: Memory[] = Array.isArray(data.documents) ? data.documents.map(documentToMemory) : [];
       const total = data.pagination?.total ?? docs.length;
+      const hasMore = typeof data.pagination?.hasMore === "boolean"
+        ? data.pagination.hasMore
+        : docs.length >= PAGE_SIZE && docs.length < total;
 
       set({
         memories: docs,
         page: 1,
-        hasMore: docs.length >= PAGE_SIZE && docs.length < total,
+        hasMore,
         totalCount: total,
         isLoading: false,
+        isLoadingMore: false,
       });
     } catch {
-      set({ isLoading: false, error: "Network error" });
+      if (requestId === fetchMemoriesRequestId) {
+        set({ isLoading: false, isLoadingMore: false, error: "Network error" });
+      }
     }
   },
 
   /** Load next page and append to existing memories */
   loadMoreMemories: async () => {
-    const { hasMore, isLoadingMore, page, searchQuery } = get();
-    if (!hasMore || isLoadingMore) return;
+    const { hasMore, isLoading, isLoadingMore, page, searchQuery } = get();
+    if (!hasMore || isLoading || isLoadingMore) return;
 
+    const requestId = fetchMemoriesRequestId;
     set({ isLoadingMore: true });
     try {
       const nextPage = page + 1;
@@ -475,26 +489,32 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
         q: searchQuery || undefined,
       });
       const res = await fetch(url);
+      if (requestId !== fetchMemoriesRequestId) return;
       if (!res.ok) {
         set({ isLoadingMore: false });
         return;
       }
 
       const data = await res.json();
-      const docs = Array.isArray(data.documents) ? data.documents.map(documentToMemory) : [];
+      const docs: Memory[] = Array.isArray(data.documents) ? data.documents.map(documentToMemory) : [];
       const total = data.pagination?.total ?? 0;
 
       set((state) => {
-        const merged = [...state.memories, ...docs];
+        const existingIds = new Set(state.memories.map((memory) => memory.id));
+        const merged = [...state.memories, ...docs.filter((memory) => !existingIds.has(memory.id))];
+        const hasMoreFromApi = typeof data.pagination?.hasMore === "boolean"
+          ? data.pagination.hasMore
+          : docs.length > 0 && merged.length < total;
         return {
           memories: merged,
-          page: nextPage,
-          hasMore: merged.length < total,
+          page: docs.length > 0 ? nextPage : state.page,
+          hasMore: hasMoreFromApi,
+          totalCount: total || state.totalCount,
           isLoadingMore: false,
         };
       });
     } catch {
-      set({ isLoadingMore: false });
+      if (requestId === fetchMemoriesRequestId) set({ isLoadingMore: false });
     }
   },
 

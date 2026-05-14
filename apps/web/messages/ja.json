@@ -749,7 +749,8 @@
     "copyLink": "リンクをコピー",
     "revokeShare": "共有を取り消す",
     "empty": "公開されたメモリはありません",
-    "emptyCta": "メモリを共有するとここに表示されます"
+    "emptyCta": "メモリを共有するとここに表示されます",
+    "allLoaded": "公開済みメモリ {{count}} 件をすべて読み込みました"
   },
   "gallery": {
     "hero": "共有ナレッジを探索",
@@ -757,7 +758,8 @@
     "sharedCount": "共有メモリ {{count}}件",
     "noShares": "共有コンテンツはまだありません",
     "loginToSave": "ログインして知識の保存を始めよう",
-    "searchPlaceholder": "共有された知識を検索..."
+    "searchPlaceholder": "共有された知識を検索...",
+    "allLoaded": "共有アイテム {{count}} 件をすべて読み込みました"
   },
   "edit": {
     "title": "メモリを編集",

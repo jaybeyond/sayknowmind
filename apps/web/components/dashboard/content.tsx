@@ -26,8 +26,10 @@ function GalleryView() {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const gallerySentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -35,41 +37,52 @@ function GalleryView() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) {
-          setItems(data.items);
-          setTotal(data.total);
-          setHasMore(data.hasMore);
+          const firstItems = Array.isArray(data.items) ? data.items : [];
+          setItems(firstItems);
+          setTotal(typeof data.total === "number" ? data.total : 0);
+          setHasMore(Boolean(data.hasMore));
+          setNextOffset(typeof data.nextOffset === "number" ? data.nextOffset : firstItems.length);
         }
       })
       .finally(() => setLoading(false));
   }, []);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (loading || loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const res = await fetch(`/api/share/gallery?limit=24&offset=${items.length}`);
+      const res = await fetch(`/api/share/gallery?limit=24&offset=${nextOffset}`);
       if (res.ok) {
         const data = await res.json();
-        setItems((prev) => [...prev, ...data.items]);
-        setHasMore(data.hasMore);
+        const nextItems = Array.isArray(data.items) ? data.items : [];
+        setItems((prev) => {
+          const existingTokens = new Set(prev.map((item) => item.shareToken));
+          return [...prev, ...nextItems.filter((item: GalleryItem) => !existingTokens.has(item.shareToken))];
+        });
+        setTotal(typeof data.total === "number" ? data.total : total);
+        setHasMore(Boolean(data.hasMore) && nextItems.length > 0);
+        setNextOffset(typeof data.nextOffset === "number" ? data.nextOffset : nextOffset + nextItems.length);
+      } else {
+        setHasMore(false);
       }
     } finally {
       setLoadingMore(false);
     }
-  }, [items.length, hasMore, loadingMore]);
+  }, [hasMore, loading, loadingMore, nextOffset, total]);
 
-  const sentinelRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (!node) return;
-      const observer = new IntersectionObserver(
-        (entries) => { if (entries[0].isIntersecting) loadMore(); },
-        { rootMargin: "200px" },
-      );
-      observer.observe(node);
-      return () => observer.disconnect();
-    },
-    [loadMore],
-  );
+  useEffect(() => {
+    const node = gallerySentinelRef.current;
+    if (!node || loading || loadingMore || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) void loadMore();
+      },
+      { rootMargin: "240px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, loading, loadingMore]);
 
   // Derive tags from gallery items for filtering
   const allTags = items.flatMap((i) => i.tags);
@@ -176,7 +189,19 @@ function GalleryView() {
                 <RefreshCw className="size-4 animate-spin text-muted-foreground" />
               </div>
             )}
-            {hasMore && <div ref={sentinelRef} className="h-1" />}
+            {hasMore ? (
+              <div ref={gallerySentinelRef} className="flex justify-center py-6">
+                {!loadingMore && (
+                  <Button variant="outline" size="sm" onClick={loadMore}>
+                    {t("content.loadMore") ?? "Load more"}
+                  </Button>
+                )}
+              </div>
+            ) : items.length > 0 ? (
+              <p className="text-center text-xs text-muted-foreground py-4">
+                {(t("gallery.allLoaded") || t("content.allLoaded")).replace("{{count}}", String(total || items.length))}
+              </p>
+            ) : null}
           </>
         )}
       </div>
@@ -218,24 +243,21 @@ export function MemoryContent() {
   const [addingTab, setAddingTab] = useState(false);
   const [newTabName, setNewTabName] = useState("");
 
-  // Infinite scroll: trigger loadMore when sentinel enters viewport
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const loadMoreRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (!node) return;
-      const observer = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
-            loadMoreMemories();
-          }
-        },
-        { rootMargin: "200px" },
-      );
-      observer.observe(node);
-      return () => observer.disconnect();
-    },
-    [hasMore, isLoadingMore, loadMoreMemories],
-  );
+  // Infinite scroll: trigger loadMore when sentinel enters the scroll viewport.
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = loadMoreSentinelRef.current;
+    if (!node || isLoading || isLoadingMore || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) void loadMoreMemories();
+      },
+      { rootMargin: "240px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, isLoading, isLoadingMore, loadMoreMemories]);
 
   const filteredMemories = getFilteredMemories();
   const derivedTags = getDerivedTags();
@@ -276,6 +298,9 @@ export function MemoryContent() {
     selectedTags.length > 0 || filterType !== "all" || sortBy !== "date-newest";
 
   const displayCount = totalCount > filteredMemories.length ? totalCount : filteredMemories.length;
+  const endCount = hasActiveFilters || selectedCollection !== "all" || selectedTab
+    ? filteredMemories.length
+    : totalCount || filteredMemories.length;
   const memoryCountLabel =
     displayCount === 1
       ? t("content.memoryCountOne").replace("{{count}}", String(displayCount))
@@ -549,7 +574,7 @@ export function MemoryContent() {
 
             {/* Infinite scroll sentinel + load more indicator */}
             {!isLoading && hasMore && filteredMemories.length > 0 && (
-              <div ref={loadMoreRef} className="flex justify-center py-6">
+              <div ref={loadMoreSentinelRef} className="flex justify-center py-6">
                 {isLoadingMore ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <RefreshCw className="size-4 animate-spin" />
@@ -563,9 +588,9 @@ export function MemoryContent() {
               </div>
             )}
 
-            {!isLoading && !hasMore && filteredMemories.length > 0 && totalCount > 20 && (
+            {!isLoading && !hasMore && filteredMemories.length > 0 && (
               <p className="text-center text-xs text-muted-foreground py-4">
-                {t("content.allLoaded")?.replace("{{count}}", String(totalCount)) ?? `All ${totalCount} memories loaded`}
+                {t("content.allLoaded").replace("{{count}}", String(endCount))}
               </p>
             )}
 

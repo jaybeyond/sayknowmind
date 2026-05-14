@@ -184,7 +184,12 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ shares, total, hasMore: offset + shares.length < total });
+    return NextResponse.json({
+      shares,
+      total,
+      hasMore: offset + shares.length < total && shares.length > 0,
+      nextOffset: offset + shares.length < total ? offset + shares.length : null,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to list shares";
     return NextResponse.json(
