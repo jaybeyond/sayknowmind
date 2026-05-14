@@ -65,6 +65,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
 
   // Use displayed (which may have local edits) for rendering
   const m = displayed ?? memory;
+  const rawContent = m.content?.trim();
 
   return (
     <div
@@ -242,6 +243,20 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {/* Raw saved content */}
+        {rawContent && rawContent !== m.summary?.trim() && rawContent !== m.description?.trim() && (
+          <section className="space-y-2">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              {t("document.content")}
+            </h3>
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-3">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                {rawContent}
+              </p>
+            </div>
           </section>
         )}
 

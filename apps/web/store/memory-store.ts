@@ -4,6 +4,7 @@ import { useCategoriesStore } from "./categories-store";
 export type Memory = {
   id: string;
   title: string;
+  content: string;
   url: string;
   description: string;
   favicon: string;
@@ -65,6 +66,7 @@ function documentToMemory(row: Record<string, unknown>): Memory {
   return {
     id: String(row.id),
     title: String(row.title ?? ""),
+    content: String(row.content ?? ""),
     url: String(row.url ?? ""),
     description: String(row.summary ?? ""),
     favicon: row.url
