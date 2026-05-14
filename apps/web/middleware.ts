@@ -53,10 +53,24 @@ function withCors(response: NextResponse, origin: string | null): NextResponse {
   return response;
 }
 
+// Per-user MCP API keys (`sk-mcp-...` rows in user_mcp_keys) authenticate
+// API requests instead of the session cookie. The middleware can't look
+// the key up in the DB cheaply on every request, so it just lets the
+// request fall through to the route handler — `getUserIdFromRequest()`
+// in session-helper.ts resolves the bearer to a user_id (or returns
+// null → 401) inside the handler.
+function hasMcpApiKey(request: NextRequest): boolean {
+  const auth = request.headers.get("authorization");
+  if (!auth) return false;
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  return !!match?.[1]?.trim().startsWith("sk-mcp-");
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const origin = request.headers.get("origin");
   const sessionCookie = getSessionCookie(request);
+  const mcpAuth = hasMcpApiKey(request);
 
   // Handle CORS preflight from dashboard
   if (request.method === "OPTIONS" && origin === DASHBOARD_ORIGIN) {
@@ -68,7 +82,7 @@ export function middleware(request: NextRequest) {
   const isProtected =
     !isPublicApi &&
     protectedPaths.some((path) => pathname.startsWith(path));
-  if (isProtected && !sessionCookie) {
+  if (isProtected && !sessionCookie && !mcpAuth) {
     // API routes return 401, page routes redirect to login
     if (pathname.startsWith("/api/")) {
       return withCors(
