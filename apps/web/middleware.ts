@@ -20,6 +20,7 @@ const protectedPaths = [
   "/api/chat",
   "/api/conversations",
   "/api/categories",
+  "/api/tags",
   "/api/knowledge",
   "/api/documents",
   "/api/sync",
