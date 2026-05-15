@@ -11,6 +11,17 @@ let _client: EdgeQuake | null = null;
 let _config: McpConfig | null = null;
 let _initialized = false;
 
+const BOOTSTRAP_TIMEOUT_MS = 3000;
+
+async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
 /**
  * Get the EdgeQuake client. On first call, auto-discovers tenant/workspace
  * if not already configured. Must be awaited.
@@ -28,7 +39,11 @@ export async function getClient(): Promise<EdgeQuake> {
     // Auto-discover tenant
     if (!_config.defaultTenant) {
       try {
-        const tenants = await bootstrap.tenants.list();
+        const tenants = await withTimeout(
+          bootstrap.tenants.list(),
+          BOOTSTRAP_TIMEOUT_MS,
+          "tenant auto-discovery",
+        );
         if (tenants.length > 0) {
           _config.defaultTenant = tenants[0].id;
 
@@ -50,8 +65,10 @@ export async function getClient(): Promise<EdgeQuake> {
     // Auto-discover workspace
     if (!_config.defaultWorkspace && _config.defaultTenant) {
       try {
-        const workspaces = await bootstrap.tenants.listWorkspaces(
-          _config.defaultTenant,
+        const workspaces = await withTimeout(
+          bootstrap.tenants.listWorkspaces(_config.defaultTenant),
+          BOOTSTRAP_TIMEOUT_MS,
+          "workspace auto-discovery",
         );
         if (workspaces.length > 0) {
           _config.defaultWorkspace = workspaces[0].id;

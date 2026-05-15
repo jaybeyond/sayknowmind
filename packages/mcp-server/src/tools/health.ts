@@ -11,9 +11,25 @@ export function registerHealthTools(server: McpServer): void {
     "Check EdgeQuake server health and component status",
     {},
     async () => {
+      const TIMEOUT_MS = 5000;
       try {
-        const client = await getClient();
-        const health = await client.health();
+        const health = await Promise.race([
+          (async () => {
+            const client = await getClient();
+            return client.health();
+          })(),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `EdgeQuake health check timed out after ${TIMEOUT_MS}ms — server unreachable at the configured EDGEQUAKE_URL`,
+                  ),
+                ),
+              TIMEOUT_MS,
+            ),
+          ),
+        ]);
         return {
           content: [
             {
