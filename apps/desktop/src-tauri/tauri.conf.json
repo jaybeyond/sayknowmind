@@ -26,10 +26,12 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "entitlements": null,
+      "entitlements": "entitlements.plist",
       "exceptionDomain": "",
       "frameworks": [],
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "Developer ID Application: Sevgi Aksin (62KUWY2VZA)",
+      "providerShortName": "62KUWY2VZA"
     },
     "windows": {
       "nsis": {
