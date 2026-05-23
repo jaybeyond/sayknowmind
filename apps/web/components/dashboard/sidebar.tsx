@@ -317,8 +317,13 @@ export function MemorySidebar({
         <div className="flex items-center justify-between">
           <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
             <DialogTrigger asChild>
-              <button className="flex items-center gap-2 outline-none cursor-pointer">
-                <img src="/logo-icon.png" alt="SayknowMind" className="size-7 rounded-lg" />
+              <button
+                className="flex items-center gap-2 outline-none cursor-pointer"
+                aria-label={t("sidebar.accountSettings")}
+              >
+                <Avatar className="size-7">
+                  <AvatarFallback>{userInitials}</AvatarFallback>
+                </Avatar>
                 <ChevronDown className="size-3 text-muted-foreground" />
               </button>
             </DialogTrigger>
@@ -374,9 +379,6 @@ export function MemorySidebar({
           <div className="flex items-center gap-1">
             <TeamSwitcher />
             <NotificationBell />
-            <Avatar className="size-6.5">
-              <AvatarFallback>{userInitials}</AvatarFallback>
-            </Avatar>
           </div>
         </div>
       </SidebarHeader>
