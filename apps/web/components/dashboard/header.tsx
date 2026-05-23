@@ -42,6 +42,7 @@ import { useCategoriesStore } from "@/store/categories-store";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { useRuntimeStore } from "@/store/runtime-store";
 
 interface MemoryHeaderProps {
@@ -365,6 +366,7 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
               </Dialog>
             </>
           )}
+          <NotificationBell />
           <LanguageSwitcher />
           <ThemeToggle />
         </div>

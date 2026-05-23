@@ -54,7 +54,6 @@ import {
   X,
   Share2,
 } from "lucide-react";
-import { NotificationBell } from "./notification-bell";
 import { TeamSwitcher } from "./team-switcher";
 import { Button } from "@/components/ui/button";
 import { Input as SidebarInput } from "@/components/ui/input";
@@ -378,7 +377,6 @@ export function MemorySidebar({
           </Dialog>
           <div className="flex items-center gap-1">
             <TeamSwitcher />
-            <NotificationBell />
           </div>
         </div>
       </SidebarHeader>
