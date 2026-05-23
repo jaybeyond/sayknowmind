@@ -4,6 +4,7 @@ import { recordSyncEvent } from "@/lib/relay/sync-service";
 
 export interface InsertDocumentParams {
   userId: string;
+  organizationId: string;
   title: string;
   content: string;
   summary?: string;
@@ -36,11 +37,12 @@ export interface DocumentRow {
 
 export async function insertDocument(params: InsertDocumentParams): Promise<string> {
   const result = await pool.query(
-    `INSERT INTO documents (user_id, title, content, summary, url, source_type, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO documents (user_id, organization_id, title, content, summary, url, source_type, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id`,
     [
       params.userId,
+      params.organizationId,
       params.title,
       params.content,
       params.summary ?? null,
@@ -135,13 +137,15 @@ export async function insertEntities(entities: InsertEntityParams[]): Promise<st
 export async function findDuplicateByUrl(
   userId: string,
   url: string,
+  organizationId?: string,
 ): Promise<{ id: string; title: string } | null> {
   const result = await pool.query(
     `SELECT id, title FROM documents
      WHERE user_id = $1 AND url = $2
+       AND ($3::text IS NULL OR organization_id = $3)
        AND (metadata->>'status' IS NULL OR metadata->>'status' = 'active')
      LIMIT 1`,
-    [userId, url],
+    [userId, url, organizationId ?? null],
   );
   return result.rows[0] ?? null;
 }
@@ -149,13 +153,15 @@ export async function findDuplicateByUrl(
 export async function findDuplicateByFileName(
   userId: string,
   fileName: string,
+  organizationId?: string,
 ): Promise<{ id: string; title: string } | null> {
   const result = await pool.query(
     `SELECT id, title FROM documents
      WHERE user_id = $1 AND metadata->>'fileName' = $2
+       AND ($3::text IS NULL OR organization_id = $3)
        AND (metadata->>'status' IS NULL OR metadata->>'status' = 'active')
      LIMIT 1`,
-    [userId, fileName],
+    [userId, fileName, organizationId ?? null],
   );
   return result.rows[0] ?? null;
 }

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext, isOrgAdmin } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause, writableClause, editableViaShareClause } from "@/lib/visibility";
 import { emitDocumentEvent } from "@/lib/events";
 import { assignTags, clearDocumentTags, type Queryable } from "@/lib/tags/store";
 
@@ -26,6 +26,7 @@ function extractTags(metadata: Record<string, unknown> | null | undefined): stri
 
 async function syncDocumentTagsFromMetadata(
   userId: string,
+  organizationId: string,
   documentId: string,
   metadata: Record<string, unknown> | null | undefined,
   db: Queryable = pool,
@@ -33,14 +34,14 @@ async function syncDocumentTagsFromMetadata(
   await clearDocumentTags(documentId, db);
   const tags = extractTags(metadata);
   if (tags.length > 0) {
-    await assignTags(userId, documentId, tags, db);
+    await assignTags(userId, organizationId, documentId, tags, db);
   }
 }
 
 /** GET /api/documents/:id */
 export async function GET(_request: NextRequest, context: RouteContext) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -50,6 +51,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   try {
+    // params: $1 = id, $2 = ctx.userId, $3 = ctx.organizationId
     const result = await pool.query(
       `SELECT d.id, d.title, d.content, d.summary, d.url, d.source_type,
               d.metadata, d.privacy_level, d.created_at, d.updated_at, d.indexed_at,
@@ -57,11 +59,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
                 (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'color', c.color))
                  FROM document_categories dc
                  JOIN categories c ON c.id = dc.category_id
-                 WHERE dc.document_id = d.id AND ${visibilityClause("c", 2)}), '[]'
+                 WHERE dc.document_id = d.id AND ${readableClause("c", 3, 2, "category")}), '[]'
               ) AS categories
        FROM documents d
-       WHERE d.id = $1 AND ${visibilityClause("d", 2)}`,
-      [id, userId],
+       WHERE d.id = $1 AND ${readableClause("d", 3, 2, "document")}`,
+      [id, ctx.userId, ctx.organizationId],
     );
 
     if (result.rows.length === 0) {
@@ -83,8 +85,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
 /** PATCH /api/documents/:id — update metadata (isFavorite, tags, etc.) */
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -160,9 +162,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       // Handle category change inside the same transaction as the document
       // update so graph edges never observe half-applied category state.
       if (categoryId !== undefined) {
+        // params: $1 = id, $2 = ctx.userId, $3 = ctx.organizationId
         const docCheck = await client.query(
-          `SELECT id FROM documents WHERE id = $1 AND user_id = $2`,
-          [id, userId],
+          `SELECT id FROM documents WHERE id = $1 AND (${writableClause("documents", 3, 2, isOrgAdmin(ctx.role))} OR ${editableViaShareClause("documents", 2, "document")})`,
+          [id, ctx.userId, ctx.organizationId],
         );
         if (docCheck.rows.length === 0) {
           return await rollbackAndReturn(NextResponse.json(
@@ -172,9 +175,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         }
 
         if (categoryId) {
+          // params: $1 = categoryId, $2 = ctx.userId, $3 = ctx.organizationId
           const categoryCheck = await client.query(
-            `SELECT id FROM categories WHERE id = $1 AND user_id = $2`,
-            [categoryId, userId],
+            `SELECT id FROM categories WHERE id = $1 AND (${writableClause("categories", 3, 2, isOrgAdmin(ctx.role))} OR ${editableViaShareClause("categories", 2, "category")})`,
+            [categoryId, ctx.userId, ctx.organizationId],
           );
           if (categoryCheck.rows.length === 0) {
             return await rollbackAndReturn(NextResponse.json(
@@ -196,15 +200,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       // If only categoryId was changed, no need to update documents table.
       if (setClauses.length === 1) {
         await client.query("COMMIT");
-        emitDocumentEvent({ type: "document:updated", documentId: id, userId });
+        emitDocumentEvent({ type: "document:updated", documentId: id, userId: ctx.userId });
         return NextResponse.json({ id, categoryUpdated: true });
       }
 
-      params.push(id, userId);
+      // Append id, userId, organizationId as the last three params.
+      // paramIdx currently points to the next available slot.
+      // $paramIdx = id, $(paramIdx+1) = ctx.userId, $(paramIdx+2) = ctx.organizationId
+      params.push(id, ctx.userId, ctx.organizationId);
 
       const result = await client.query(
         `UPDATE documents SET ${setClauses.join(", ")}
-         WHERE id = $${paramIdx} AND user_id = $${paramIdx + 1}
+         WHERE id = $${paramIdx} AND (${writableClause("documents", paramIdx + 2, paramIdx + 1, isOrgAdmin(ctx.role))} OR ${editableViaShareClause("documents", paramIdx + 1, "document")})
          RETURNING id, title, summary, metadata, privacy_level, updated_at`,
         params,
       );
@@ -219,7 +226,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       if (metadataTouchesTags) {
         await client.query("SAVEPOINT document_tags_sync");
         try {
-          await syncDocumentTagsFromMetadata(userId, id, result.rows[0].metadata ?? {}, client);
+          await syncDocumentTagsFromMetadata(ctx.userId, ctx.organizationId, id, result.rows[0].metadata ?? {}, client);
           await client.query("RELEASE SAVEPOINT document_tags_sync");
         } catch (err) {
           await client.query("ROLLBACK TO SAVEPOINT document_tags_sync");
@@ -231,7 +238,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
 
       await client.query("COMMIT");
-      emitDocumentEvent({ type: "document:updated", documentId: id, userId, title: result.rows[0].title ?? undefined });
+      emitDocumentEvent({ type: "document:updated", documentId: id, userId: ctx.userId, title: result.rows[0].title ?? undefined });
 
       return NextResponse.json(result.rows[0]);
     } catch (err) {
@@ -253,8 +260,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 /** DELETE /api/documents/:id — soft-delete via metadata or hard-delete */
 export async function DELETE(_request: NextRequest, context: RouteContext) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -264,9 +271,10 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   try {
+    // params: $1 = id, $2 = ctx.userId, $3 = ctx.organizationId
     const result = await pool.query(
-      `DELETE FROM documents WHERE id = $1 AND user_id = $2 RETURNING id`,
-      [id, userId],
+      `DELETE FROM documents WHERE id = $1 AND (${writableClause("documents", 3, 2, isOrgAdmin(ctx.role))} OR ${editableViaShareClause("documents", 2, "document")}) RETURNING id`,
+      [id, ctx.userId, ctx.organizationId],
     );
 
     if (result.rows.length === 0) {
@@ -276,7 +284,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       );
     }
 
-    emitDocumentEvent({ type: "document:deleted", documentId: id, userId });
+    emitDocumentEvent({ type: "document:deleted", documentId: id, userId: ctx.userId });
 
     return NextResponse.json({ deleted: true, id });
   } catch (err) {

@@ -22,7 +22,7 @@ import { saveFile } from "@/lib/ingest/file-storage";
 import { listCategories, type CategoryRow } from "@/lib/categories/store";
 import { callAiCloudFirst } from "@/lib/agents/cloud-ai";
 import { checkAndIncrementUsage } from "@/lib/usage-limit";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause } from "@/lib/visibility";
 
 // ── i18n Message Map ─────────────────────────────────────────
 
@@ -516,7 +516,11 @@ function notifyJobCompletion(
 
 // ── Telegram Conversation History ────────────────────────────
 
-async function getOrCreateTelegramConversation(userId: string, tgUserId: string): Promise<string> {
+async function getOrCreateTelegramConversation(
+  userId: string,
+  tgUserId: string,
+  organizationId: string,
+): Promise<string> {
   const tag = `telegram:${tgUserId}`;
   try {
     const existing = await pool.query(
@@ -526,8 +530,8 @@ async function getOrCreateTelegramConversation(userId: string, tgUserId: string)
     if (existing.rows[0]) return existing.rows[0].id;
 
     const created = await pool.query(
-      `INSERT INTO conversations (user_id, title) VALUES ($1, $2) RETURNING id`,
-      [userId, tag],
+      `INSERT INTO conversations (user_id, organization_id, title) VALUES ($1, $2, $3) RETURNING id`,
+      [userId, organizationId || null, tag],
     );
     return created.rows[0].id;
   } catch {
@@ -563,6 +567,34 @@ async function saveMessage(conversationId: string, role: string, content: string
   } catch { /* non-critical */ }
 }
 
+// ── Org Resolution (for Telegram webhook — no session context) ──
+
+async function resolveUserOrgId(userId: string): Promise<string | null> {
+  try {
+    const result = await pool.query(
+      `SELECT "organizationId" FROM member WHERE "userId" = $1 ORDER BY "createdAt" ASC LIMIT 1`,
+      [userId],
+    );
+    return (result.rows[0]?.organizationId as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * List a Telegram user's own collections. The webhook has no session, so we
+ * resolve the user's personal organization from `member` and act as its
+ * owner (a Telegram-linked user always operates inside their own org).
+ */
+async function listCategoriesForUser(userId: string) {
+  const organizationId = await resolveUserOrgId(userId);
+  if (!organizationId) return [];
+  return listCategories(
+    { userId, organizationId, role: "owner" },
+    { includeShared: false },
+  );
+}
+
 // ── Search Knowledge Base ────────────────────────────────────
 
 async function searchKnowledge(userId: string, query: string): Promise<string> {
@@ -588,14 +620,25 @@ async function searchKnowledge(userId: string, query: string): Promise<string> {
 
   // Fallback: simple SQL search
   try {
-    const sqlRes = await pool.query(
-      `SELECT d.title, LEFT(d.content, 300) as snippet
-       FROM documents d
-       WHERE ${visibilityClause("d", 1)}
-         AND (d.title ILIKE '%' || $2 || '%' OR d.content ILIKE '%' || $2 || '%')
-       ORDER BY d.created_at DESC LIMIT 3`,
-      [userId, query.split(/\s+/)[0]],
-    );
+    const orgId = await resolveUserOrgId(userId);
+    const keyword = query.split(/\s+/)[0];
+    const sqlRes = orgId
+      ? await pool.query(
+          `SELECT d.title, LEFT(d.content, 300) as snippet
+           FROM documents d
+           WHERE ${readableClause("d", 2, 1, "document")}
+             AND (d.title ILIKE '%' || $3 || '%' OR d.content ILIKE '%' || $3 || '%')
+           ORDER BY d.created_at DESC LIMIT 3`,
+          [userId, orgId, keyword],
+        )
+      : await pool.query(
+          `SELECT d.title, LEFT(d.content, 300) as snippet
+           FROM documents d
+           WHERE d.user_id = $1
+             AND (d.title ILIKE '%' || $2 || '%' OR d.content ILIKE '%' || $2 || '%')
+           ORDER BY d.created_at DESC LIMIT 3`,
+          [userId, keyword],
+        );
     if (sqlRes.rows.length > 0) {
       return sqlRes.rows.map((r: { title: string; snippet: string }, i: number) =>
         `[${i + 1}] ${r.title}\n${r.snippet}`
@@ -790,6 +833,8 @@ export async function handleTelegramUpdate(
       return NextResponse.json({ ok: true });
     }
 
+    const cbOrgId = (await resolveUserOrgId(cbUserId)) ?? "";
+
     const data = cbq.data ?? "";
 
     // ── Language selection callback ──
@@ -864,15 +909,15 @@ export async function handleTelegramUpdate(
         if (pending.type === "url" && pending.url) {
           const fetched = await fetchUrl(pending.url);
           const documentId = await insertDocument({
-            userId: cbUserId, title: newTitle, content: fetched.content,
+            userId: cbUserId, organizationId: cbOrgId, title: newTitle, content: fetched.content,
             url: pending.url, sourceType: "web",
             metadata: { wordCount: fetched.wordCount, language: L, source: "telegram", ...fetched.metadata },
           });
-          const jobId = await createJob(cbUserId, documentId);
+          const jobId = await createJob(cbUserId, documentId, cbOrgId);
           await answerCallbackQuery(cbBotToken, cbq.id, "✅");
           await editMessageText(cbBotToken, cbChatId, cbMessageId, msg("dupSaved", L, { title: newTitle }));
           await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
-          const categories = await listCategories(cbUserId, { includeShared: false });
+          const categories = await listCategoriesForUser(cbUserId);
           if (categories.length > 0) {
             await sendMessage(cbBotToken, cbChatId, msg("urlSaved", L, { title: newTitle }), {
               replyMarkup: buildCategoryKeyboard(categories, documentId, L),
@@ -897,7 +942,7 @@ export async function handleTelegramUpdate(
 
           const fileType = pending.type === "photo" ? "image" : mimeType.split("/")[0];
           const documentId = await insertDocument({
-            userId: cbUserId, title: newTitle, content, sourceType: "file",
+            userId: cbUserId, organizationId: cbOrgId, title: newTitle, content, sourceType: "file",
             metadata: {
               wordCount: content.split(/\s+/).filter(Boolean).length,
               language: L, fileType, fileName: newFileName,
@@ -910,11 +955,11 @@ export async function handleTelegramUpdate(
             `UPDATE documents SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
             [JSON.stringify({ filePath }), documentId],
           );
-          const jobId = await createJob(cbUserId, documentId);
+          const jobId = await createJob(cbUserId, documentId, cbOrgId);
           await answerCallbackQuery(cbBotToken, cbq.id, "✅");
           await editMessageText(cbBotToken, cbChatId, cbMessageId, msg("dupSaved", L, { title: newTitle }));
           await editMessageReplyMarkup(cbBotToken, cbChatId, cbMessageId);
-          const categories = await listCategories(cbUserId, { includeShared: false });
+          const categories = await listCategoriesForUser(cbUserId);
           if (categories.length > 0) {
             const savedMsg = pending.type === "photo" ? "photoSaved" : "fileSaved";
             await sendMessage(cbBotToken, cbChatId, msg(savedMsg, L, { title: newTitle }), {
@@ -959,6 +1004,10 @@ export async function handleTelegramUpdate(
 
   // Look up linked SayKnowMind user (prefer most recently linked if duplicates exist)
   let userId = await findLinkedTelegramUserId(tgUserId, pinnedBotToken);
+
+  // Resolve org eagerly so it's available inside command handlers and content handlers alike.
+  // Falls back to "" for users not yet in an organization.
+  const telegramOrgId = userId ? ((await resolveUserOrgId(userId)) ?? "") : "";
 
   // ── Commands ────────────────────────────────────────────
 
@@ -1095,7 +1144,7 @@ export async function handleTelegramUpdate(
 
     // /categories
     if (text === "/categories" && userId) {
-      const categories = await listCategories(userId, { includeShared: false });
+      const categories = await listCategoriesForUser(userId);
       if (categories.length === 0) {
         await sendMessage(botToken, chatId, msg("noCats", L));
       } else {
@@ -1120,12 +1169,12 @@ export async function handleTelegramUpdate(
         const title = content.slice(0, 80) + (content.length > 80 ? "..." : "");
         const wordCount = content.split(/\s+/).filter(Boolean).length + (L === "en" ? 0 : content.length);
         const documentId = await insertDocument({
-          userId, title, content, sourceType: "text",
+          userId, organizationId: telegramOrgId, title, content, sourceType: "text",
           metadata: { wordCount, language: L, source: "telegram" },
         });
-        const jobId = await createJob(userId, documentId);
+        const jobId = await createJob(userId, documentId, telegramOrgId);
 
-        const categories = await listCategories(userId, { includeShared: false });
+        const categories = await listCategoriesForUser(userId);
         await sendMessage(botToken, chatId, msg("memoSaved", L, { title }), {
           replyToMessageId: message.message_id,
           replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
@@ -1185,7 +1234,7 @@ export async function handleTelegramUpdate(
 
     try {
       // Duplicate check
-      const existingUrl = await findDuplicateByUrl(userId, url);
+      const existingUrl = await findDuplicateByUrl(userId, url, telegramOrgId);
       if (existingUrl) {
         const dupId = storePendingDup({ type: "url", userId, lang: L, url, existingTitle: existingUrl.title });
         await sendMessage(botToken, chatId, msg("dupFound", L, { title: existingUrl.title }), {
@@ -1200,12 +1249,12 @@ export async function handleTelegramUpdate(
       const wordCount = fetched.wordCount || fetched.content.split(/\s+/).filter(Boolean).length;
 
       const documentId = await insertDocument({
-        userId, title, content: fetched.content, url, sourceType: "web",
+        userId, organizationId: telegramOrgId, title, content: fetched.content, url, sourceType: "web",
         metadata: { wordCount, language: L, source: "telegram", ...fetched.metadata },
       });
-      const jobId = await createJob(userId, documentId);
+      const jobId = await createJob(userId, documentId, telegramOrgId);
 
-      const categories = await listCategories(userId, { includeShared: false });
+      const categories = await listCategoriesForUser(userId);
       await sendMessage(botToken, chatId, msg("urlSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
@@ -1241,7 +1290,7 @@ export async function handleTelegramUpdate(
       const title = caption || `${msg("imageLabel", L)} ${new Date().toLocaleDateString(L === "ko" ? "ko-KR" : L === "ja" ? "ja-JP" : L === "zh" ? "zh-CN" : "en-US")}`;
 
       // Duplicate check by fileName
-      const existingPhoto = await findDuplicateByFileName(userId, fileName);
+      const existingPhoto = await findDuplicateByFileName(userId, fileName, telegramOrgId);
       if (existingPhoto) {
         const dupId = storePendingDup({
           type: "photo", userId, lang: L, fileId: largest.file_id,
@@ -1265,7 +1314,7 @@ export async function handleTelegramUpdate(
       } catch { /* use caption as content */ }
 
       const documentId = await insertDocument({
-        userId, title, content, sourceType: "file",
+        userId, organizationId: telegramOrgId, title, content, sourceType: "file",
         metadata: {
           wordCount: content.split(/\s+/).filter(Boolean).length,
           language: L,
@@ -1289,9 +1338,9 @@ export async function handleTelegramUpdate(
         console.error("[telegram] Photo disk mirror failed (non-fatal):", (diskErr as Error).message);
       }
 
-      const jobId = await createJob(userId, documentId);
+      const jobId = await createJob(userId, documentId, telegramOrgId);
 
-      const categories = await listCategories(userId, { includeShared: false });
+      const categories = await listCategoriesForUser(userId);
       await sendMessage(botToken, chatId, msg("photoSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
@@ -1323,7 +1372,7 @@ export async function handleTelegramUpdate(
       const caption = message.caption ?? "";
 
       // Duplicate check by fileName
-      const existingDoc = await findDuplicateByFileName(userId, fileName);
+      const existingDoc = await findDuplicateByFileName(userId, fileName, telegramOrgId);
       if (existingDoc) {
         const dupId = storePendingDup({
           type: "document", userId, lang: L, fileId: doc.file_id,
@@ -1353,7 +1402,7 @@ export async function handleTelegramUpdate(
       }
 
       const documentId = await insertDocument({
-        userId, title, content, sourceType: "file",
+        userId, organizationId: telegramOrgId, title, content, sourceType: "file",
         metadata: {
           wordCount: content.split(/\s+/).filter(Boolean).length,
           language: L,
@@ -1377,9 +1426,9 @@ export async function handleTelegramUpdate(
         console.error("[telegram] Document disk mirror failed (non-fatal):", (diskErr as Error).message);
       }
 
-      const jobId = await createJob(userId, documentId);
+      const jobId = await createJob(userId, documentId, telegramOrgId);
 
-      const categories = await listCategories(userId, { includeShared: false });
+      const categories = await listCategoriesForUser(userId);
       await sendMessage(botToken, chatId, msg("fileSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
@@ -1408,12 +1457,12 @@ export async function handleTelegramUpdate(
       const title = content.slice(0, 80) + (content.length > 80 ? "..." : "");
       const wordCount = content.split(/\s+/).filter(Boolean).length + (L === "en" ? 0 : content.length);
       const documentId = await insertDocument({
-        userId, title, content, sourceType: "text",
+        userId, organizationId: telegramOrgId, title, content, sourceType: "text",
         metadata: { wordCount, language: L, source: "telegram" },
       });
-      const jobId = await createJob(userId, documentId);
+      const jobId = await createJob(userId, documentId, telegramOrgId);
 
-      const categories = await listCategories(userId, { includeShared: false });
+      const categories = await listCategoriesForUser(userId);
       await sendMessage(botToken, chatId, msg("memoSaved", L, { title }), {
         replyToMessageId: message.message_id,
         replyMarkup: categories.length > 0 ? buildCategoryKeyboard(categories, documentId, L) : undefined,
@@ -1434,7 +1483,7 @@ export async function handleTelegramUpdate(
     const [context, userCtx, convId] = await Promise.all([
       searchKnowledge(userId, text),
       getUserContext(userId),
-      getOrCreateTelegramConversation(userId, tgUserId),
+      getOrCreateTelegramConversation(userId, tgUserId, telegramOrgId),
     ]);
 
     // Load conversation history and build context string

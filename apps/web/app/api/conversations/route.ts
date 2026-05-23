@@ -1,26 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
+import { orgScopeClause } from "@/lib/visibility";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 
-/** GET /api/conversations — List user's conversations */
+/** GET /api/conversations — List organization's conversations */
 export async function GET() {
   try {
-    const userId = await getUserIdFromRequest();
-    if (!userId) {
+    const ctx = await getOrgContext();
+    if (!ctx) {
       return NextResponse.json(
         { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
         { status: 401 },
       );
     }
 
+    // orgScopeClause(alias, 1) => "c.organization_id = $1"
     const result = await pool.query(
       `SELECT id, title, created_at, updated_at
-       FROM conversations
-       WHERE user_id = $1
+       FROM conversations c
+       WHERE ${orgScopeClause("c", 1)}
        ORDER BY updated_at DESC
        LIMIT 50`,
-      [userId],
+      [ctx.organizationId],
     );
 
     return NextResponse.json({ conversations: result.rows });
@@ -43,8 +45,8 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const userId = await getUserIdFromRequest();
-    if (!userId) {
+    const ctx = await getOrgContext();
+    if (!ctx) {
       return NextResponse.json(
         { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
         { status: 401 },
@@ -63,11 +65,12 @@ export async function POST(request: NextRequest) {
         ? body.title.slice(0, 500)
         : "New Conversation";
 
+    // $1 = user_id, $2 = organization_id, $3 = title
     const result = await pool.query(
-      `INSERT INTO conversations (user_id, title)
-       VALUES ($1, $2)
+      `INSERT INTO conversations (user_id, organization_id, title)
+       VALUES ($1, $2, $3)
        RETURNING id, title, created_at, updated_at`,
-      [userId, title],
+      [ctx.userId, ctx.organizationId, title],
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });

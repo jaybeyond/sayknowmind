@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause } from "@/lib/visibility";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 /** GET /api/documents/:id/related — fetch related documents */
 export async function GET(_request: NextRequest, context: RouteContext) {
-  let userId: string | null = null;
-  try { userId = await getUserIdFromRequest(); } catch { /* auth error */ }
-  if (!userId) {
+  let ctx: Awaited<ReturnType<typeof getOrgContext>> = null;
+  try { ctx = await getOrgContext(); } catch { /* auth error */ }
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -20,10 +20,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   try {
+    // params: $1 = id, $2 = ctx.userId, $3 = ctx.organizationId
     // Verify the document is visible to the user.
     const docCheck = await pool.query(
-      `SELECT d.id FROM documents d WHERE d.id = $1 AND ${visibilityClause("d", 2)}`,
-      [id, userId],
+      `SELECT d.id FROM documents d WHERE d.id = $1 AND ${readableClause("d", 3, 2, "document")}`,
+      [id, ctx.userId, ctx.organizationId],
     );
     if (docCheck.rows.length === 0) {
       return NextResponse.json(
@@ -36,10 +37,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       `SELECT dr.related_document_id AS id, d.title, dr.score
        FROM document_relations dr
        JOIN documents d ON d.id = dr.related_document_id
-       WHERE dr.document_id = $1 AND ${visibilityClause("d", 2)}
+       WHERE dr.document_id = $1 AND ${readableClause("d", 3, 2, "document")}
        ORDER BY dr.score DESC
        LIMIT 10`,
-      [id, userId],
+      [id, ctx.userId, ctx.organizationId],
     );
 
     return NextResponse.json({ relations: result.rows });

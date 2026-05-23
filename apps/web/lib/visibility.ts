@@ -1,15 +1,99 @@
 /**
- * SQL helpers for multitenant read/write scoping.
+ * SQL helpers for team-scoped read/write isolation.
  *
- * Read paths may access documents/categories owned by the current user or
- * explicitly shared by another user. Write paths must stay owner-only.
+ * Team feature, Phase 3: scoping moved from "owned by this user" to
+ * "belongs to the caller's active organization". A resource is visible to a
+ * teammate when it is shared with the team; private resources stay
+ * creator-only. Writes are creator-only unless the caller is an org admin.
  *
  * `alias` must be a static SQL alias from the caller; never pass user input.
+ * Param placeholders ($N) are 1-based positions in the caller's value array.
  */
-export function visibilityClause(alias: string, userIdParam: number): string {
-  return `(${alias}.user_id = $${userIdParam} OR ${alias}.privacy_level = 'shared')`;
+
+/**
+ * Read scope for tables that carry both `organization_id` and
+ * `privacy_level` (documents, categories): visible when shared with the org,
+ * or when it is the caller's own — even if private.
+ *
+ * @param orgParam   placeholder index bound to the active organization id
+ * @param userParam  placeholder index bound to the caller's user id
+ */
+export function visibilityClause(
+  alias: string,
+  orgParam: number,
+  userParam: number,
+): string {
+  return `(${alias}.organization_id = $${orgParam} AND (${alias}.privacy_level <> 'private' OR ${alias}.user_id = $${userParam}))`;
 }
 
-export function writableClause(alias: string, userIdParam: number): string {
-  return `${alias}.user_id = $${userIdParam}`;
+/**
+ * Read scope for org-scoped tables without a `privacy_level` column
+ * (tags, conversations, ingestion_jobs, shared_content): everything that
+ * belongs to the organization is visible to its members.
+ */
+export function orgScopeClause(alias: string, orgParam: number): string {
+  return `${alias}.organization_id = $${orgParam}`;
+}
+
+/**
+ * Write scope: the creator may always modify their own resource; org owners
+ * and admins may modify anything in the organization.
+ *
+ * @param isAdmin  caller's role grants org-wide write (see `isOrgAdmin`)
+ */
+export function writableClause(
+  alias: string,
+  orgParam: number,
+  userParam: number,
+  isAdmin: boolean,
+): string {
+  return isAdmin
+    ? `${alias}.organization_id = $${orgParam}`
+    : `(${alias}.organization_id = $${orgParam} AND ${alias}.user_id = $${userParam})`;
+}
+
+// ── Phase 4: per-resource ACL (resource_shares) ──────────────────────────────
+// `resourceType` is always a code-side literal, never user input.
+
+/** Resource kinds that support per-user sharing (resource_shares.resource_type). */
+export type ShareableResource = "document" | "category";
+
+/**
+ * Read access granted by an explicit per-resource share: the row exists in
+ * `resource_shares` with the caller as grantee. Reuses `userParam` — adds no
+ * new placeholder.
+ */
+export function sharedWithClause(
+  alias: string,
+  userParam: number,
+  resourceType: ShareableResource,
+): string {
+  return `EXISTS (SELECT 1 FROM resource_shares rs WHERE rs.resource_type = '${resourceType}' AND rs.resource_id = ${alias}.id AND rs.grantee_user_id = $${userParam})`;
+}
+
+/**
+ * Full read scope for a shareable resource: visible to the team
+ * (`visibilityClause`) OR explicitly shared with the caller. Drop-in
+ * replacement for `visibilityClause` on documents/categories read paths —
+ * same placeholders, plus the resource-type literal.
+ */
+export function readableClause(
+  alias: string,
+  orgParam: number,
+  userParam: number,
+  resourceType: ShareableResource,
+): string {
+  return `(${visibilityClause(alias, orgParam, userParam)} OR ${sharedWithClause(alias, userParam, resourceType)})`;
+}
+
+/**
+ * Write access granted by an explicit 'edit' share. OR this into a write
+ * check alongside `writableClause` to honour edit grants. Reuses `userParam`.
+ */
+export function editableViaShareClause(
+  alias: string,
+  userParam: number,
+  resourceType: ShareableResource,
+): string {
+  return `EXISTS (SELECT 1 FROM resource_shares rs WHERE rs.resource_type = '${resourceType}' AND rs.resource_id = ${alias}.id AND rs.grantee_user_id = $${userParam} AND rs.permission = 'edit')`;
 }

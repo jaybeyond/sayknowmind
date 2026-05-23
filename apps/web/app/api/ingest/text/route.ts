@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import { detectLanguage } from "@/lib/ingest/language-detect";
 import { insertDocument, assignDocumentCategory } from "@/lib/ingest/document-store";
@@ -8,8 +8,8 @@ import { ErrorCode } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   // Auth check
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Rate limiting
-  const blocked = checkAntiBot(request, userId);
+  const blocked = checkAntiBot(request, ctx.userId);
   if (blocked) return blocked;
 
   try {
@@ -44,14 +44,15 @@ export async function POST(request: NextRequest) {
       : detectLanguage(content);
 
     // Count words
-    const cjk = content.match(/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g);
+    const cjk = content.match(/[一-鿿぀-ゟ゠-ヿ가-힯]/g);
     const latin = content.match(/[a-zA-Z0-9]+/g);
     const wordCount = (cjk?.length ?? 0) + (latin?.length ?? 0);
 
     // Store document
     const docTitle = title || content.slice(0, 80).trim() + (content.length > 80 ? "..." : "");
     const documentId = await insertDocument({
-      userId,
+      userId: ctx.userId,
+      organizationId: ctx.organizationId,
       title: docTitle,
       content: content.trim(),
       sourceType: "text",
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create async processing job
-    const jobId = await createJob(userId, documentId);
+    const jobId = await createJob(ctx.userId, documentId, ctx.organizationId);
 
     return NextResponse.json({
       documentId,

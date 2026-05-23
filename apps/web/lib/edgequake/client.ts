@@ -287,17 +287,18 @@ export interface SyncResult {
  */
 export async function syncUnindexedToEdgeQuake(
   userId: string,
+  organizationId: string,
   limit = 50,
 ): Promise<SyncResult> {
   const { pool } = await import("@/lib/db");
 
   const result = await pool.query(
     `SELECT id, title, content, metadata FROM documents
-     WHERE user_id = $1
+     WHERE organization_id = $1
        AND indexed_at IS NULL
        AND content IS NOT NULL AND content != ''
      ORDER BY created_at ASC LIMIT $2`,
-    [userId, limit],
+    [organizationId, limit],
   );
 
   let synced = 0;
@@ -314,6 +315,7 @@ export async function syncUnindexedToEdgeQuake(
         metadata: {
           language: doc.metadata?.language,
           user_id: userId,
+          organization_id: organizationId,
           synced_at: new Date().toISOString(),
         },
         async_processing: true,

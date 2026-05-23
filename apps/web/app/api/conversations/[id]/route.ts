@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext, isOrgAdmin } from "@/lib/org-context";
+import { writableClause } from "@/lib/visibility";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 
@@ -9,8 +10,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await getUserIdFromRequest();
-    if (!userId) {
+    const ctx = await getOrgContext();
+    if (!ctx) {
       return NextResponse.json(
         { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
         { status: 401 },
@@ -19,10 +20,13 @@ export async function DELETE(
 
     const { id } = await params;
 
+    // writableClause(alias, orgIdx, userIdx, isAdmin)
+    // $1 = id, $2 = organizationId, $3 = userId
     // Messages cascade-delete via FK
     const result = await pool.query(
-      `DELETE FROM conversations WHERE id = $1 AND user_id = $2`,
-      [id, userId],
+      `DELETE FROM conversations c
+       WHERE c.id = $1 AND ${writableClause("c", 2, 3, isOrgAdmin(ctx.role))}`,
+      [id, ctx.organizationId, ctx.userId],
     );
 
     if (result.rowCount === 0) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import { pool } from "@/lib/db";
 import { runPipeline } from "@/lib/agents/pipeline";
@@ -17,6 +18,9 @@ export async function POST(request: NextRequest) {
         { status: 401 },
       );
     }
+
+    const orgCtx = await getOrgContext();
+    const organizationId = orgCtx?.organizationId ?? "";
 
     const blocked = checkAntiBot(request, userId);
     if (blocked) return blocked;
@@ -61,9 +65,9 @@ export async function POST(request: NextRequest) {
     let convId = reqConvId;
     if (!convId) {
       const convResult = await pool.query(
-        `INSERT INTO conversations (user_id, title)
-         VALUES ($1, $2) RETURNING id`,
-        [userId, message.slice(0, 100)],
+        `INSERT INTO conversations (user_id, organization_id, title)
+         VALUES ($1, $2, $3) RETURNING id`,
+        [userId, organizationId || null, message.slice(0, 100)],
       );
       convId = convResult.rows[0].id;
     } else {
@@ -103,6 +107,7 @@ export async function POST(request: NextRequest) {
           message,
           conversationId: convId!,
           userId,
+          organizationId,
           history,
           writer,
           providers,

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import { listCategories, createCategory } from "@/lib/categories/store";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause } from "@/lib/visibility";
 
 /** GET /api/categories - List all categories for user */
 export async function GET(request: NextRequest) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -17,17 +17,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const categories = await listCategories(userId);
+    const categories = await listCategories(ctx);
 
     // Get document counts per category
+    // $1 = userId, $2 = organizationId
     const countResult = await pool.query(
       `SELECT dc.category_id, COUNT(*)::int as count
        FROM document_categories dc
        JOIN categories c ON c.id = dc.category_id
        JOIN documents d ON d.id = dc.document_id
-       WHERE ${visibilityClause("c", 1)} AND ${visibilityClause("d", 1)}
+       WHERE ${readableClause("c", 2, 1, "category")} AND ${readableClause("d", 2, 1, "document")}
        GROUP BY dc.category_id`,
-      [userId],
+      [ctx.userId, ctx.organizationId],
     );
     const docCounts = new Map<string, number>(
       countResult.rows.map((r: { category_id: string; count: number }) => [r.category_id, r.count]),
@@ -50,15 +51,15 @@ export async function GET(request: NextRequest) {
 
 /** POST /api/categories - Create a new category */
 export async function POST(request: NextRequest) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
     );
   }
 
-  const blocked = checkAntiBot(request, userId);
+  const blocked = checkAntiBot(request, ctx.userId);
   if (blocked) return blocked;
 
   try {
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
     }
 
     const category = await createCategory({
-      userId,
+      ctx,
       name: name.trim(),
       parentId,
       description,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { syncUnindexedToEdgeQuake, healthCheck } from "@/lib/edgequake/client";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +10,9 @@ export const dynamic = "force-dynamic";
  * Does NOT re-run AI processing — only the EdgeQuake indexing step.
  */
 export async function POST() {
-  let userId: string | null = null;
+  let ctx: Awaited<ReturnType<typeof getOrgContext>> = null;
   try {
-    userId = await getUserIdFromRequest();
+    ctx = await getOrgContext();
   } catch { /* fall through */ }
 
   const eqUp = await healthCheck();
@@ -23,14 +23,14 @@ export async function POST() {
     );
   }
 
-  if (!userId) {
+  if (!ctx) {
     return NextResponse.json(
       { message: "Unauthorized", synced: 0, failed: 0 },
       { status: 401 },
     );
   }
 
-  const result = await syncUnindexedToEdgeQuake(userId);
+  const result = await syncUnindexedToEdgeQuake(ctx.userId, ctx.organizationId);
   return NextResponse.json({
     message: `Synced ${result.synced} document(s) to EdgeQuake`,
     ...result,

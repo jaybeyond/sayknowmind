@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import { queryEdgeQuake } from "@/lib/edgequake/client";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import type { QueryMode, SearchResponse, SearchResult, Citation } from "@/lib/types";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause } from "@/lib/visibility";
 
 // Map our QueryMode to EdgeQuake modes
 const MODE_MAP: Record<QueryMode, string> = {
@@ -19,13 +19,14 @@ const MODE_MAP: Record<QueryMode, string> = {
 
 export async function POST(request: NextRequest) {
   // Auth check
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
     );
   }
+  const { userId, organizationId } = ctx;
 
   // Rate limiting
   const blocked = checkAntiBot(request, userId);
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
       });
     } catch {
       // Fallback: direct PostgreSQL full-text search if EdgeQuake is unavailable
-      return await fallbackSearch(query, userId, limit, offset, filters, startTime);
+      return await fallbackSearch(query, userId, organizationId, limit, offset, filters, startTime);
     }
 
     // Build search results with citations from EdgeQuake sources
@@ -86,8 +87,8 @@ export async function POST(request: NextRequest) {
       const docResult = await pool.query(
         `SELECT d.id, d.title, d.url, d.content, d.summary
          FROM documents d
-         WHERE d.id = ANY($1) AND ${visibilityClause("d", 2)}`,
-        [Array.from(documentIds), userId],
+         WHERE d.id = ANY($1) AND ${readableClause("d", 3, 2, "document")}`,
+        [Array.from(documentIds), userId, organizationId],
       );
 
       const docMap = new Map<string, { id: string; title: string; url: string | null; content: string; summary: string | null }>();
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
     // because it may have been synthesized from documents that are not visible
     // to this user. Use the PostgreSQL scoped fallback instead.
     if (results.length === 0) {
-      return await fallbackSearch(query, userId, limit, offset, filters, startTime);
+      return await fallbackSearch(query, userId, organizationId, limit, offset, filters, startTime);
     }
 
     // Apply offset
@@ -157,14 +158,16 @@ export async function POST(request: NextRequest) {
 async function fallbackSearch(
   query: string,
   userId: string,
+  organizationId: string,
   limit: number,
   offset: number,
   filters: { categoryIds?: string[]; dateRange?: { start: string; end: string }; tags?: string[] } | undefined,
   startTime: number,
 ): Promise<NextResponse> {
-  const conditions: string[] = [visibilityClause("d", 1)];
-  const params: unknown[] = [userId];
-  let idx = 2;
+  // params[0]=userId ($1), params[1]=organizationId ($2) — fixed positions
+  const params: unknown[] = [userId, organizationId];
+  const conditions: string[] = [readableClause("d", 2, 1, "document")];
+  let idx = 3;
 
   // Full-text search using ILIKE (basic fallback)
   conditions.push(`(d.title ILIKE $${idx} OR d.content ILIKE $${idx})`);
@@ -178,7 +181,7 @@ async function fallbackSearch(
         SELECT dc.document_id
         FROM document_categories dc
         JOIN categories c ON c.id = dc.category_id
-        WHERE dc.category_id = ANY($${idx}) AND ${visibilityClause("c", 1)}
+        WHERE dc.category_id = ANY($${idx}) AND ${readableClause("c", 2, 1, "category")}
       )`,
     );
     params.push(filters.categoryIds);

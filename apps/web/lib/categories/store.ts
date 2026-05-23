@@ -1,9 +1,11 @@
 import { pool } from "@/lib/db";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause, writableClause, editableViaShareClause } from "@/lib/visibility";
+import { isOrgAdmin, OrgContext } from "@/lib/org-context";
 
 export interface CategoryRow {
   id: string;
   user_id: string;
+  organization_id: string;
   parent_id: string | null;
   name: string;
   description: string | null;
@@ -16,48 +18,56 @@ export interface CategoryRow {
 }
 
 export async function listCategories(
-  userId: string,
+  ctx: OrgContext,
   options: { includeShared?: boolean } = {},
 ): Promise<CategoryRow[]> {
-  const scope = options.includeShared === false ? "c.user_id = $1" : visibilityClause("c", 1);
+  // $1 = userId, $2 = organizationId
+  const scope =
+    options.includeShared === false
+      ? `(c.organization_id = $2 AND c.user_id = $1)`
+      : readableClause("c", 2, 1, "category");
   const result = await pool.query(
     `SELECT c.* FROM categories c WHERE ${scope} ORDER BY c.path, c.name`,
-    [userId],
+    [ctx.userId, ctx.organizationId],
   );
   return result.rows;
 }
 
-export async function getCategory(id: string, userId: string): Promise<CategoryRow | null> {
+export async function getCategory(id: string, ctx: OrgContext): Promise<CategoryRow | null> {
+  // $1 = id, $2 = userId, $3 = organizationId
   const result = await pool.query(
-    `SELECT c.* FROM categories c WHERE c.id = $1 AND ${visibilityClause("c", 2)}`,
-    [id, userId],
+    `SELECT c.* FROM categories c WHERE c.id = $1 AND ${readableClause("c", 3, 2, "category")}`,
+    [id, ctx.userId, ctx.organizationId],
   );
   return result.rows[0] ?? null;
 }
 
-async function getOwnedCategory(id: string, userId: string): Promise<CategoryRow | null> {
+async function getOwnedCategory(id: string, ctx: OrgContext): Promise<CategoryRow | null> {
+  // $1 = id, $2 = userId, $3 = organizationId
+  const admin = isOrgAdmin(ctx.role);
   const result = await pool.query(
-    `SELECT * FROM categories WHERE id = $1 AND user_id = $2`,
-    [id, userId],
+    `SELECT * FROM categories WHERE id = $1 AND ${writableClause("categories", 3, 2, admin)}`,
+    [id, ctx.userId, ctx.organizationId],
   );
   return result.rows[0] ?? null;
 }
 
 export async function createCategory(params: {
-  userId: string;
+  ctx: OrgContext;
   name: string;
   parentId?: string;
   description?: string;
   color?: string;
   privacyLevel?: string;
 }): Promise<CategoryRow> {
+  const { ctx } = params;
   let depth = 0;
   let path = params.name;
   let privacyLevel = params.privacyLevel ?? "private";
 
   // If parent specified, compute depth, path, and inherit privacy
   if (params.parentId) {
-    const parent = await getOwnedCategory(params.parentId, params.userId);
+    const parent = await getOwnedCategory(params.parentId, ctx);
     if (!parent) {
       throw new Error("Parent category not found");
     }
@@ -69,21 +79,29 @@ export async function createCategory(params: {
     }
   }
 
-  // Check for duplicate name under same parent
+  // Check for duplicate name under same parent (org-scoped)
   const existing = await pool.query(
-    `SELECT * FROM categories WHERE user_id = $1 AND name = $2 AND COALESCE(parent_id, '00000000-0000-0000-0000-000000000000') = $3`,
-    [params.userId, params.name, params.parentId ?? "00000000-0000-0000-0000-000000000000"],
+    `SELECT * FROM categories
+     WHERE organization_id = $1 AND user_id = $2 AND name = $3
+       AND COALESCE(parent_id, '00000000-0000-0000-0000-000000000000') = $4`,
+    [
+      ctx.organizationId,
+      ctx.userId,
+      params.name,
+      params.parentId ?? "00000000-0000-0000-0000-000000000000",
+    ],
   );
   if (existing.rows.length > 0) {
     return existing.rows[0]; // Return existing instead of creating duplicate
   }
 
   const result = await pool.query(
-    `INSERT INTO categories (user_id, parent_id, name, description, color, depth, path, privacy_level)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO categories (user_id, organization_id, parent_id, name, description, color, depth, path, privacy_level)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
-      params.userId,
+      ctx.userId,
+      ctx.organizationId,
       params.parentId ?? null,
       params.name,
       params.description ?? null,
@@ -98,7 +116,7 @@ export async function createCategory(params: {
 
 export async function updateCategory(
   id: string,
-  userId: string,
+  ctx: OrgContext,
   updates: {
     name?: string;
     parentId?: string;
@@ -107,7 +125,7 @@ export async function updateCategory(
     privacyLevel?: string;
   },
 ): Promise<CategoryRow | null> {
-  const current = await getOwnedCategory(id, userId);
+  const current = await getOwnedCategory(id, ctx);
   if (!current) return null;
 
   const name = updates.name ?? current.name;
@@ -122,7 +140,7 @@ export async function updateCategory(
       if (parentId === id) {
         throw Object.assign(new Error("Circular reference"), { code: 4003 });
       }
-      const parent = await getOwnedCategory(parentId, userId);
+      const parent = await getOwnedCategory(parentId, ctx);
       if (!parent) throw new Error("Parent category not found");
       if (parent.path.startsWith(current.path + "/")) {
         throw Object.assign(new Error("Circular reference"), { code: 4003 });
@@ -135,18 +153,22 @@ export async function updateCategory(
     }
   }
 
+  const admin = isOrgAdmin(ctx.role);
+
   // Wrap both UPDATE statements in a transaction for atomicity
   const client = await pool.connect();
   let result;
   try {
     await client.query("BEGIN");
 
+    // $1=name $2=parentId $3=description $4=color $5=depth $6=path $7=privacyLevel
+    // $8=id $9=userId $10=organizationId
     result = await client.query(
       `UPDATE categories
        SET name = $1, parent_id = $2, description = $3, color = $4,
-           depth = $5, path = $6, privacy_level = COALESCE($9, privacy_level),
+           depth = $5, path = $6, privacy_level = COALESCE($7, privacy_level),
            updated_at = NOW()
-       WHERE id = $7 AND user_id = $8
+       WHERE id = $8 AND (${writableClause("categories", 10, 9, admin)} OR ${editableViaShareClause("categories", 9, "category")})
        RETURNING *`,
       [
         name,
@@ -155,22 +177,35 @@ export async function updateCategory(
         updates.color !== undefined ? updates.color : current.color,
         depth,
         path,
-        id,
-        userId,
         updates.privacyLevel ?? null,
+        id,
+        ctx.userId,
+        ctx.organizationId,
       ],
     );
 
-    // Update paths of all children atomically
+    // Update paths of all children atomically (org-scoped, admin-aware)
     if (current.path !== path) {
-      await client.query(
-        `UPDATE categories
-         SET path = $1 || substring(path from $2),
-             depth = depth + ($3 - $4),
-             updated_at = NOW()
-         WHERE user_id = $5 AND path LIKE $6 AND id != $7`,
-        [path, current.path.length + 1, depth, current.depth, userId, `${current.path}/%`, id],
-      );
+      // $1=newPath $2=oldPathLen+1 $3=newDepth $4=oldDepth $5=userId $6=organizationId $7=pathPattern $8=id
+      if (admin) {
+        await client.query(
+          `UPDATE categories
+           SET path = $1 || substring(path from $2),
+               depth = depth + ($3 - $4),
+               updated_at = NOW()
+           WHERE organization_id = $5 AND path LIKE $6 AND id != $7`,
+          [path, current.path.length + 1, depth, current.depth, ctx.organizationId, `${current.path}/%`, id],
+        );
+      } else {
+        await client.query(
+          `UPDATE categories
+           SET path = $1 || substring(path from $2),
+               depth = depth + ($3 - $4),
+               updated_at = NOW()
+           WHERE organization_id = $5 AND user_id = $6 AND path LIKE $7 AND id != $8`,
+          [path, current.path.length + 1, depth, current.depth, ctx.organizationId, ctx.userId, `${current.path}/%`, id],
+        );
+      }
     }
 
     await client.query("COMMIT");
@@ -186,12 +221,14 @@ export async function updateCategory(
 
 export async function deleteCategory(
   id: string,
-  userId: string,
+  ctx: OrgContext,
 ): Promise<{ success: boolean; movedDocuments: number }> {
-  const cat = await getOwnedCategory(id, userId);
+  const cat = await getOwnedCategory(id, ctx);
   if (!cat) {
     return { success: false, movedDocuments: 0 };
   }
+
+  const admin = isOrgAdmin(ctx.role);
 
   // Move documents to uncategorized (remove category assignment)
   const docResult = await pool.query(
@@ -200,18 +237,29 @@ export async function deleteCategory(
     [id],
   );
 
-  // Move children to parent
-  await pool.query(
-    `UPDATE categories SET parent_id = $1,
-       depth = GREATEST(0, depth - 1),
-       updated_at = NOW()
-     WHERE parent_id = $2 AND user_id = $3`,
-    [cat.parent_id, id, userId],
-  );
+  // Move children to parent (org-scoped, admin-aware)
+  if (admin) {
+    await pool.query(
+      `UPDATE categories SET parent_id = $1,
+         depth = GREATEST(0, depth - 1),
+         updated_at = NOW()
+       WHERE parent_id = $2 AND organization_id = $3`,
+      [cat.parent_id, id, ctx.organizationId],
+    );
+  } else {
+    await pool.query(
+      `UPDATE categories SET parent_id = $1,
+         depth = GREATEST(0, depth - 1),
+         updated_at = NOW()
+       WHERE parent_id = $2 AND organization_id = $3 AND user_id = $4`,
+      [cat.parent_id, id, ctx.organizationId, ctx.userId],
+    );
+  }
 
+  // Delete the category itself (writable check already done via getOwnedCategory)
   await pool.query(
-    `DELETE FROM categories WHERE id = $1 AND user_id = $2`,
-    [id, userId],
+    `DELETE FROM categories WHERE id = $1 AND (${writableClause("categories", 3, 2, admin)} OR ${editableViaShareClause("categories", 2, "category")})`,
+    [id, ctx.userId, ctx.organizationId],
   );
 
   return {
@@ -223,10 +271,12 @@ export async function deleteCategory(
 export async function mergeCategories(
   sourceIds: string[],
   targetId: string,
-  userId: string,
+  ctx: OrgContext,
 ): Promise<{ success: boolean; mergedCount: number }> {
-  // Verify target exists
-  const target = await getOwnedCategory(targetId, userId);
+  const admin = isOrgAdmin(ctx.role);
+
+  // Verify target is writable by the caller
+  const target = await getOwnedCategory(targetId, ctx);
   if (!target) throw new Error("Target category not found");
 
   let mergedCount = 0;
@@ -234,7 +284,7 @@ export async function mergeCategories(
   for (const sourceId of sourceIds) {
     if (sourceId === targetId) continue;
 
-    const source = await getOwnedCategory(sourceId, userId);
+    const source = await getOwnedCategory(sourceId, ctx);
     if (!source) continue;
 
     // Move document assignments from source to target
@@ -245,21 +295,30 @@ export async function mergeCategories(
       [targetId, sourceId],
     );
 
-    // Move children to target
-    await pool.query(
-      `UPDATE categories SET parent_id = $1, updated_at = NOW()
-       WHERE parent_id = $2 AND user_id = $3`,
-      [targetId, sourceId, userId],
-    );
+    // Move children to target (org-scoped, admin-aware)
+    if (admin) {
+      await pool.query(
+        `UPDATE categories SET parent_id = $1, updated_at = NOW()
+         WHERE parent_id = $2 AND organization_id = $3`,
+        [targetId, sourceId, ctx.organizationId],
+      );
+    } else {
+      await pool.query(
+        `UPDATE categories SET parent_id = $1, updated_at = NOW()
+         WHERE parent_id = $2 AND organization_id = $3 AND user_id = $4`,
+        [targetId, sourceId, ctx.organizationId, ctx.userId],
+      );
+    }
 
-    // Delete source category
+    // Delete source category document assignments
     await pool.query(
       `DELETE FROM document_categories WHERE category_id = $1`,
       [sourceId],
     );
+    // Delete source category (writable already confirmed above)
     await pool.query(
-      `DELETE FROM categories WHERE id = $1 AND user_id = $2`,
-      [sourceId, userId],
+      `DELETE FROM categories WHERE id = $1 AND ${writableClause("categories", 3, 2, admin)}`,
+      [sourceId, ctx.userId, ctx.organizationId],
     );
 
     mergedCount++;

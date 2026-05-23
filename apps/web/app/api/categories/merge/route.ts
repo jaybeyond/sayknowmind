@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import { mergeCategories } from "@/lib/categories/store";
 import { ErrorCode } from "@/lib/types";
 
 /** POST /api/categories/merge - Merge multiple categories into one */
 export async function POST(request: NextRequest) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
     );
   }
 
-  const blocked = checkAntiBot(request, userId);
+  const blocked = checkAntiBot(request, ctx.userId);
   if (blocked) return blocked;
 
   try {
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await mergeCategories(sourceIds, targetId, userId);
+    const result = await mergeCategories(sourceIds, targetId, ctx);
     return NextResponse.json(result);
   } catch (err) {
     console.error("[categories/merge] Error:", err);

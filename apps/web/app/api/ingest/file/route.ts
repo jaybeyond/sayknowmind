@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import { parseFile } from "@/lib/ingest/parsers";
 import { detectLanguage } from "@/lib/ingest/language-detect";
@@ -12,8 +12,8 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB (images/videos need more)
 
 export async function POST(request: NextRequest) {
   // Auth check
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Rate limiting
-  const blocked = checkAntiBot(request, userId);
+  const blocked = checkAntiBot(request, ctx.userId);
   if (blocked) return blocked;
 
   try {
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     // Duplicate check
     const forceParam = formData.get("force") as string | null;
     if (forceParam !== "true") {
-      const existing = await findDuplicateByFileName(userId, file.name);
+      const existing = await findDuplicateByFileName(ctx.userId, file.name, ctx.organizationId);
       if (existing) {
         return NextResponse.json(
           { duplicate: true, existingId: existing.id, existingTitle: existing.title, message: "File already saved" },
@@ -90,14 +90,15 @@ export async function POST(request: NextRequest) {
     // Rename if force-saving a duplicate
     let savedFileName = file.name;
     if (forceParam === "true") {
-      const dup = await findDuplicateByFileName(userId, file.name);
+      const dup = await findDuplicateByFileName(ctx.userId, file.name, ctx.organizationId);
       if (dup) savedFileName = deduplicateName(file.name);
     }
 
     // Store document immediately (vision analysis runs in background job)
     const title = parsed.title || savedFileName.replace(/\.[^.]+$/, "");
     const documentId = await insertDocument({
-      userId,
+      userId: ctx.userId,
+      organizationId: ctx.organizationId,
       title,
       content: parsed.content,
       sourceType: "file",
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create async processing job
-    const jobId = await createJob(userId, documentId);
+    const jobId = await createJob(ctx.userId, documentId, ctx.organizationId);
 
     return NextResponse.json({
       documentId,

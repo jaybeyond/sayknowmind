@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import { fetchUrl } from "@/lib/ingest/url-fetcher";
 import { detectLanguage } from "@/lib/ingest/language-detect";
@@ -11,8 +11,8 @@ import { ErrorCode } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   // Auth check
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Rate limiting
-  const blocked = checkAntiBot(request, userId);
+  const blocked = checkAntiBot(request, ctx.userId);
   if (blocked) return blocked;
 
   try {
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     // Duplicate check
     if (!force) {
-      const existing = await findDuplicateByUrl(userId, url);
+      const existing = await findDuplicateByUrl(ctx.userId, url, ctx.organizationId);
       if (existing) {
         return NextResponse.json(
           { duplicate: true, existingId: existing.id, existingTitle: existing.title, message: "URL already saved" },
@@ -70,11 +70,12 @@ export async function POST(request: NextRequest) {
     // Store document (rename title if force-saving duplicate)
     let title = fetched.title || new URL(url).hostname;
     if (force) {
-      const dup = await findDuplicateByUrl(userId, url);
+      const dup = await findDuplicateByUrl(ctx.userId, url, ctx.organizationId);
       if (dup) title = deduplicateName(dup.title);
     }
     const documentId = await insertDocument({
-      userId,
+      userId: ctx.userId,
+      organizationId: ctx.organizationId,
       title,
       content: fetched.content,
       url,
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create async processing job
-    const jobId = await createJob(userId, documentId);
+    const jobId = await createJob(ctx.userId, documentId, ctx.organizationId);
 
     return NextResponse.json({
       documentId,

@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause, orgScopeClause } from "@/lib/visibility";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ nodeId: string }> },
 ) {
   let userId: string | null = null;
+  let organizationId: string | null = null;
   try {
-    userId = await getUserIdFromRequest();
+    const ctx = await getOrgContext();
+    if (ctx) {
+      userId = ctx.userId;
+      organizationId = ctx.organizationId;
+    }
   } catch { /* auth failed */ }
 
-  if (!userId) {
+  if (!userId || !organizationId) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -27,8 +32,8 @@ export async function GET(
     const docResult = await pool.query(
       `SELECT d.id, d.title, d.url, d.source_type, d.metadata, d.created_at
        FROM documents d
-       WHERE d.id = $1 AND ${visibilityClause("d", 2)}`,
-      [nodeId, userId],
+       WHERE d.id = $1 AND ${readableClause("d", 3, 2, "document")}`,
+      [nodeId, userId, organizationId],
     );
 
     if (docResult.rows.length > 0) {
@@ -58,8 +63,8 @@ export async function GET(
       `SELECT e.id, e.name, e.type, e.confidence, e.properties, e.document_id
        FROM entities e
        JOIN documents d ON d.id = e.document_id
-       WHERE e.id = $1 AND ${visibilityClause("d", 2)}`,
-      [nodeId, userId],
+       WHERE e.id = $1 AND ${readableClause("d", 3, 2, "document")}`,
+      [nodeId, userId, organizationId],
     );
 
     if (entityResult.rows.length > 0) {
@@ -69,8 +74,8 @@ export async function GET(
         `SELECT DISTINCT d.id, d.title, d.url
          FROM documents d
          JOIN entities e ON e.document_id = d.id
-         WHERE e.name = $1 AND ${visibilityClause("d", 2)}`,
-        [entity.name, userId],
+         WHERE e.name = $1 AND ${readableClause("d", 3, 2, "document")}`,
+        [entity.name, userId, organizationId],
       );
 
       return NextResponse.json({
@@ -94,8 +99,8 @@ export async function GET(
     const catResult = await pool.query(
       `SELECT c.id, c.name, c.description, c.depth, c.path
        FROM categories c
-       WHERE c.id = $1 AND ${visibilityClause("c", 2)}`,
-      [nodeId, userId],
+       WHERE c.id = $1 AND ${readableClause("c", 3, 2, "category")}`,
+      [nodeId, userId, organizationId],
     );
 
     if (catResult.rows.length > 0) {
@@ -104,8 +109,8 @@ export async function GET(
         `SELECT d.id, d.title, d.url
          FROM documents d
          JOIN document_categories dc ON dc.document_id = d.id
-         WHERE dc.category_id = $1 AND ${visibilityClause("d", 2)}`,
-        [nodeId, userId],
+         WHERE dc.category_id = $1 AND ${readableClause("d", 3, 2, "document")}`,
+        [nodeId, userId, organizationId],
       );
 
       return NextResponse.json({
@@ -130,8 +135,8 @@ export async function GET(
       const tagResult = await pool.query(
         `SELECT t.id, t.name, t.canonical_name, t.created_at
          FROM tags t
-         WHERE t.id = $1 AND t.user_id = $2`,
-        [nodeId, userId],
+         WHERE t.id = $1 AND ${orgScopeClause("t", 3)}`,
+        [nodeId, userId, organizationId],
       );
 
       if (tagResult.rows.length > 0) {
@@ -140,9 +145,9 @@ export async function GET(
           `SELECT DISTINCT d.id, d.title, d.url
            FROM documents d
            JOIN document_tags dt ON dt.document_id = d.id
-           WHERE dt.tag_id = $1 AND ${visibilityClause("d", 2)}
+           WHERE dt.tag_id = $1 AND ${readableClause("d", 3, 2, "document")}
            ORDER BY d.title`,
-          [nodeId, userId],
+          [nodeId, userId, organizationId],
         );
 
         return NextResponse.json({

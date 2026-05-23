@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { createJob } from "@/lib/ingest/job-queue";
 import { runReprocessor } from "@/lib/ingest/reprocessor";
 import { ErrorCode } from "@/lib/types";
+import { readableClause } from "@/lib/visibility";
 
 export const dynamic = "force-dynamic";
 
 async function reprocess(request: NextRequest) {
-  let userId: string | null = null;
+  let ctx: Awaited<ReturnType<typeof getOrgContext>> = null;
   try {
-    userId = await getUserIdFromRequest();
+    ctx = await getOrgContext();
   } catch {
     // Auth check failed
   }
 
-  if (!userId) {
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -36,14 +37,15 @@ async function reprocess(request: NextRequest) {
   const locale = request.nextUrl.searchParams.get("locale");
   const all = request.nextUrl.searchParams.get("all") === "1";
 
-  // Find documents to reprocess
+  // Find documents to reprocess — scoped to the caller's active organization.
+  // params: $1 = ctx.userId, $2 = ctx.organizationId
   const query = all
-    ? `SELECT id, title FROM documents WHERE user_id = $1 ORDER BY created_at DESC`
-    : `SELECT id, title FROM documents
-       WHERE user_id = $1
-         AND (metadata->>'summary' IS NULL OR metadata->>'summary' = '')
-       ORDER BY created_at DESC`;
-  const result = await pool.query(query, [userId]);
+    ? `SELECT id, title FROM documents d WHERE ${readableClause("d", 2, 1, "document")} ORDER BY d.created_at DESC`
+    : `SELECT id, title FROM documents d
+       WHERE ${readableClause("d", 2, 1, "document")}
+         AND (d.metadata->>'summary' IS NULL OR d.metadata->>'summary' = '')
+       ORDER BY d.created_at DESC`;
+  const result = await pool.query(query, [ctx.userId, ctx.organizationId]);
 
   const docs = result.rows;
   if (docs.length === 0) {
@@ -63,7 +65,7 @@ async function reprocess(request: NextRequest) {
 
   const jobIds: string[] = [];
   for (const doc of docs) {
-    const jobId = await createJob(userId, doc.id);
+    const jobId = await createJob(ctx.userId, doc.id, ctx.organizationId);
     jobIds.push(jobId);
   }
 

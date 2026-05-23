@@ -1,8 +1,44 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
+import { organization } from "better-auth/plugins";
 import { pool } from "@/lib/db";
 
 const AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "build-placeholder";
+
+// Team feature, Phase 1 — every user owns a "personal" organization, so the
+// team model always has an org context to fall back to. These hooks keep that
+// invariant true without depending on deploy/migration ordering: a failure
+// here is logged but never blocks sign-up or sign-in.
+
+/** Create a personal organization the first time a user is created. */
+async function createPersonalOrg(user: { id: string; name?: string | null; email: string }) {
+  const orgId = crypto.randomUUID().replace(/-/g, "");
+  const memberId = crypto.randomUUID().replace(/-/g, "");
+  const displayName = (user.name?.trim() || user.email.split("@")[0]) + " (Personal)";
+  await pool.query(
+    `INSERT INTO organization (id, name, slug, "createdAt") VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (slug) DO NOTHING`,
+    [orgId, displayName, "personal-" + user.id],
+  );
+  await pool.query(
+    `INSERT INTO member (id, "organizationId", "userId", role, "createdAt")
+     SELECT $1, o.id, $2, 'owner', NOW()
+       FROM organization o
+      WHERE o.slug = $3
+     ON CONFLICT ("organizationId", "userId") DO NOTHING`,
+    [memberId, user.id, "personal-" + user.id],
+  );
+}
+
+/** Resolve the organization a new session should start active in. */
+async function resolveActiveOrg(userId: string): Promise<string | null> {
+  const result = await pool.query(
+    `SELECT "organizationId" FROM member
+      WHERE "userId" = $1 ORDER BY "createdAt" ASC LIMIT 1`,
+    [userId],
+  );
+  return (result.rows[0]?.organizationId as string | undefined) ?? null;
+}
 
 export const auth = betterAuth({
   database: pool,
@@ -43,7 +79,41 @@ export const auth = betterAuth({
     },
   },
 
-  plugins: [nextCookies()],
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          try {
+            await createPersonalOrg(user);
+          } catch (err) {
+            console.error("[auth] failed to create personal organization", err);
+          }
+        },
+      },
+    },
+    session: {
+      create: {
+        before: async (session) => {
+          try {
+            return {
+              data: {
+                ...session,
+                activeOrganizationId: await resolveActiveOrg(session.userId),
+              },
+            };
+          } catch (err) {
+            console.error("[auth] failed to resolve active organization", err);
+            return undefined;
+          }
+        },
+      },
+    },
+  },
+
+  // `organization` is the unit of a "team": members share a knowledge pool.
+  // The nested `teams` sub-feature is intentionally left disabled.
+  // `nextCookies()` must stay last in the plugin list.
+  plugins: [organization(), nextCookies()],
 
   trustedOrigins: process.env.TRUSTED_ORIGINS
     ? process.env.TRUSTED_ORIGINS.split(",").map((o) => o.trim())

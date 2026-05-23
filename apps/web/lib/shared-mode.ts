@@ -366,8 +366,8 @@ export async function shareDocument(
   const expiryHours = options.expiryHours ?? 0;
   const shareTokenValue = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
   const result = await pool.query(
-    `INSERT INTO shared_content (document_id, user_id, ipfs_cid, access_conditions, encryption_method, expires_at, share_token)
-     VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 > 0 THEN NOW() + ($6 || ' hours')::interval ELSE NULL END, $7)
+    `INSERT INTO shared_content (document_id, user_id, organization_id, ipfs_cid, access_conditions, encryption_method, expires_at, share_token)
+     VALUES ($1, $2, (SELECT organization_id FROM documents WHERE id = $1), $3, $4, $5, CASE WHEN $6 > 0 THEN NOW() + ($6 || ' hours')::interval ELSE NULL END, $7)
      RETURNING id, share_token`,
     [documentId, userId, ipfsCid, JSON.stringify(accessConditions), encryptionMethod, expiryHours, shareTokenValue],
   );

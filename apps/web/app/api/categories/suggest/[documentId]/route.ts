@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext, isOrgAdmin } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { assignDocumentCategory } from "@/lib/ingest/document-store";
 import { createCategory } from "@/lib/categories/store";
 import { ErrorCode } from "@/lib/types";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause, writableClause } from "@/lib/visibility";
 
 /** GET /api/categories/suggest/[documentId] - Get suggestions for a document */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ documentId: string }> },
 ) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -22,11 +22,12 @@ export async function GET(
   const { documentId } = await params;
 
   try {
+    // $1=documentId $2=userId $3=organizationId
     const doc = await pool.query(
       `SELECT d.metadata
        FROM documents d
-       WHERE d.id = $1 AND ${visibilityClause("d", 2)}`,
-      [documentId, userId],
+       WHERE d.id = $1 AND ${readableClause("d", 3, 2, "document")}`,
+      [documentId, ctx.userId, ctx.organizationId],
     );
 
     if (doc.rows.length === 0) {
@@ -54,8 +55,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ documentId: string }> },
 ) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -79,10 +80,13 @@ export async function POST(
       );
     }
 
-    // Verify document ownership
+    const admin = isOrgAdmin(ctx.role);
+
+    // Verify document is writable by the caller
+    // $1=documentId $2=userId $3=organizationId
     const doc = await pool.query(
-      `SELECT id, metadata FROM documents WHERE id = $1 AND user_id = $2`,
-      [documentId, userId],
+      `SELECT id, metadata FROM documents WHERE id = $1 AND ${writableClause("documents", 3, 2, admin)}`,
+      [documentId, ctx.userId, ctx.organizationId],
     );
     if (doc.rows.length === 0) {
       return NextResponse.json(
@@ -97,7 +101,7 @@ export async function POST(
       // If categoryId is "new", create a new category
       if (categoryId === "new" && categoryName) {
         const newCat = await createCategory({
-          userId,
+          ctx,
           name: categoryName,
         });
         targetCategoryId = newCat.id;
@@ -110,9 +114,11 @@ export async function POST(
         );
       }
 
+      // Verify target category is visible to the caller
+      // $1=targetCategoryId $2=userId $3=organizationId
       const category = await pool.query(
-        `SELECT id FROM categories WHERE id = $1 AND user_id = $2`,
-        [targetCategoryId, userId],
+        `SELECT id FROM categories WHERE id = $1 AND ${readableClause("categories", 3, 2, "category")}`,
+        [targetCategoryId, ctx.userId, ctx.organizationId],
       );
       if (category.rows.length === 0) {
         return NextResponse.json(

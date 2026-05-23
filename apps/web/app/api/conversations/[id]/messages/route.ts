@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
+import { orgScopeClause } from "@/lib/visibility";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 
@@ -9,8 +10,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await getUserIdFromRequest();
-    if (!userId) {
+    const ctx = await getOrgContext();
+    if (!ctx) {
       return NextResponse.json(
         { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
         { status: 401 },
@@ -19,10 +20,12 @@ export async function GET(
 
     const { id } = await params;
 
-    // Verify conversation belongs to user
+    // Verify conversation belongs to caller's org
+    // $1 = conversation id, $2 = organizationId
     const convCheck = await pool.query(
-      `SELECT id FROM conversations WHERE id = $1 AND user_id = $2`,
-      [id, userId],
+      `SELECT c.id FROM conversations c
+       WHERE c.id = $1 AND ${orgScopeClause("c", 2)}`,
+      [id, ctx.organizationId],
     );
     if (convCheck.rowCount === 0) {
       return NextResponse.json(
@@ -63,8 +66,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await getUserIdFromRequest();
-    if (!userId) {
+    const ctx = await getOrgContext();
+    if (!ctx) {
       return NextResponse.json(
         { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
         { status: 401 },
@@ -73,11 +76,13 @@ export async function POST(
 
     const { id } = await params;
 
-    // Verify conversation belongs to user — prevents an authenticated user
-    // from injecting messages into someone else's conversation by ID guess.
+    // Verify conversation belongs to caller's org — prevents an authenticated
+    // member from injecting messages into a conversation in another org by ID guess.
+    // $1 = conversation id, $2 = organizationId
     const convCheck = await pool.query(
-      `SELECT id FROM conversations WHERE id = $1 AND user_id = $2`,
-      [id, userId],
+      `SELECT c.id FROM conversations c
+       WHERE c.id = $1 AND ${orgScopeClause("c", 2)}`,
+      [id, ctx.organizationId],
     );
     if (convCheck.rowCount === 0) {
       return NextResponse.json(
@@ -111,6 +116,7 @@ export async function POST(
       );
     }
 
+    // messages has no organization_id — parent conversation already verified above
     const result = await pool.query(
       `INSERT INTO messages (conversation_id, role, content)
        VALUES ($1, $2, $3)

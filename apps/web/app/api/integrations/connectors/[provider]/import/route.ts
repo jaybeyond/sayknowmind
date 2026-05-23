@@ -19,6 +19,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/admin";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import { parseFile } from "@/lib/ingest/parsers";
 import { detectLanguage } from "@/lib/ingest/language-detect";
@@ -54,6 +55,12 @@ export async function POST(
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const orgCtx = await getOrgContext();
+  if (!orgCtx) {
+    return NextResponse.json({ error: "No organization context" }, { status: 401 });
+  }
+  const organizationId = orgCtx.organizationId;
 
   // Rate limit (reuses the same anti-bot logic as /api/ingest/file)
   const blocked = checkAntiBot(req, userId);
@@ -161,7 +168,7 @@ export async function POST(
 
       // Avoid clashing names if the user happened to upload the same name before
       let savedFileName = filename;
-      const existing = await findDuplicateByFileName(userId, filename);
+      const existing = await findDuplicateByFileName(userId, filename, organizationId);
       if (existing) {
         savedFileName = deduplicateName(filename);
       }
@@ -169,6 +176,7 @@ export async function POST(
       const title = parsed.title || savedFileName.replace(/\.[^.]+$/, "");
       const documentId = await insertDocument({
         userId,
+        organizationId,
         title,
         content: parsed.content,
         sourceType: "file",
@@ -203,7 +211,7 @@ export async function POST(
         await assignDocumentCategory(documentId, categoryId);
       }
 
-      const jobId = await createJob(userId, documentId);
+      const jobId = await createJob(userId, documentId, organizationId);
 
       // Record the import for de-duplication on the next browse
       await pool.query(

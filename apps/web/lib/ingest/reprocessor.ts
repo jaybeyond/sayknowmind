@@ -5,6 +5,7 @@ import { syncUnindexedToEdgeQuake } from "@/lib/edgequake/client";
 interface StaleDoc {
   id: string;
   user_id: string;
+  organization_id: string;
   title: string;
   reason: string;
 }
@@ -22,14 +23,14 @@ export async function runReprocessor(opts?: { limit?: number }): Promise<{
 
   // 1. Documents with no summary (older than 1 hour — give initial processing time)
   const noSummary = await pool.query(
-    `SELECT id, user_id, title FROM documents
+    `SELECT id, user_id, organization_id, title FROM documents
      WHERE (metadata->>'summary' IS NULL OR metadata->>'summary' = '')
        AND created_at < NOW() - INTERVAL '1 hour'
      ORDER BY created_at DESC LIMIT $1`,
     [limit],
   );
   for (const row of noSummary.rows) {
-    staleDocs.push({ id: row.id, user_id: row.user_id, title: row.title, reason: "no_summary" });
+    staleDocs.push({ id: row.id, user_id: row.user_id, organization_id: row.organization_id, title: row.title, reason: "no_summary" });
   }
 
   // 2. Documents with content but not indexed in EdgeQuake
@@ -37,7 +38,7 @@ export async function runReprocessor(opts?: { limit?: number }): Promise<{
   if (remaining > 0) {
     const existingIds = staleDocs.map((d) => d.id);
     const notIndexed = await pool.query(
-      `SELECT id, user_id, title FROM documents
+      `SELECT id, user_id, organization_id, title FROM documents
        WHERE indexed_at IS NULL
          AND content IS NOT NULL AND content != ''
          AND created_at < NOW() - INTERVAL '1 hour'
@@ -46,7 +47,7 @@ export async function runReprocessor(opts?: { limit?: number }): Promise<{
       existingIds.length > 0 ? [remaining, existingIds] : [remaining],
     );
     for (const row of notIndexed.rows) {
-      staleDocs.push({ id: row.id, user_id: row.user_id, title: row.title, reason: "not_indexed" });
+      staleDocs.push({ id: row.id, user_id: row.user_id, organization_id: row.organization_id, title: row.title, reason: "not_indexed" });
     }
   }
 
@@ -55,7 +56,7 @@ export async function runReprocessor(opts?: { limit?: number }): Promise<{
   if (remaining2 > 0) {
     const existingIds = staleDocs.map((d) => d.id);
     const noRelations = await pool.query(
-      `SELECT d.id, d.user_id, d.title FROM documents d
+      `SELECT d.id, d.user_id, d.organization_id, d.title FROM documents d
        LEFT JOIN document_relations dr ON dr.document_id = d.id
        WHERE dr.id IS NULL
          AND d.indexed_at IS NOT NULL
@@ -65,7 +66,7 @@ export async function runReprocessor(opts?: { limit?: number }): Promise<{
       existingIds.length > 0 ? [remaining2, existingIds] : [remaining2],
     );
     for (const row of noRelations.rows) {
-      staleDocs.push({ id: row.id, user_id: row.user_id, title: row.title, reason: "no_relations" });
+      staleDocs.push({ id: row.id, user_id: row.user_id, organization_id: row.organization_id, title: row.title, reason: "no_relations" });
     }
   }
 
@@ -75,12 +76,20 @@ export async function runReprocessor(opts?: { limit?: number }): Promise<{
 
   // EdgeQuake-only sync (lightweight — no AI re-processing)
   if (needsEdgeQuakeOnly.length > 0) {
-    const userIds = [...new Set(needsEdgeQuakeOnly.map((d) => d.user_id))];
-    for (const uid of userIds) {
+    // Group by organization so each org's docs are synced together
+    const orgGroups = new Map<string, StaleDoc[]>();
+    for (const d of needsEdgeQuakeOnly) {
+      if (!d.organization_id) continue;
+      const group = orgGroups.get(d.organization_id) ?? [];
+      group.push(d);
+      orgGroups.set(d.organization_id, group);
+    }
+    for (const [orgId, docs] of orgGroups) {
+      const uid = docs[0].user_id;
       try {
-        await syncUnindexedToEdgeQuake(uid, needsEdgeQuakeOnly.length);
+        await syncUnindexedToEdgeQuake(uid, orgId, docs.length);
       } catch (err) {
-        console.error(`[reprocessor] EdgeQuake sync failed for user ${uid}:`, err);
+        console.error(`[reprocessor] EdgeQuake sync failed for org ${orgId}:`, err);
       }
     }
   }
@@ -95,7 +104,7 @@ export async function runReprocessor(opts?: { limit?: number }): Promise<{
       [doc.id],
     );
     if (existing.rows.length === 0) {
-      await createJob(doc.user_id, doc.id);
+      await createJob(doc.user_id, doc.id, doc.organization_id);
       queued.push(doc);
     }
   }

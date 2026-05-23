@@ -10,12 +10,13 @@ import { StreamWriter, type StreamSource } from "./stream-writer";
 import { queryEdgeQuake } from "@/lib/edgequake/client";
 import { pool } from "@/lib/db";
 import { loadPrompts } from "@/app/api/settings/prompts/route";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause } from "@/lib/visibility";
 
 interface PipelineInput {
   message: string;
   conversationId: string;
   userId: string;
+  organizationId: string;
   history: { role: string; content: string }[];
   writer: StreamWriter;
   providers?: ProviderInput[];
@@ -165,6 +166,7 @@ function needsSearch(message: string): boolean {
 async function searchKnowledge(
   message: string,
   userId: string,
+  organizationId: string,
   writer: StreamWriter,
   intent: MessageIntent = "general",
 ): Promise<{ sources: StreamSource[]; contextText: string; catalogText: string }> {
@@ -219,8 +221,8 @@ async function searchKnowledge(
         const visibleDocs = await pool.query(
           `SELECT d.id, d.title, d.url, d.summary, d.content
            FROM documents d
-           WHERE d.id = ANY($1) AND ${visibilityClause("d", 2)}`,
-          [candidateIds, userId],
+           WHERE d.id = ANY($1) AND ${readableClause("d", 3, 2, "document")}`,
+          [candidateIds, userId, organizationId],
         );
         for (const row of visibleDocs.rows as Array<{
           id: string;
@@ -264,10 +266,11 @@ async function searchKnowledge(
       const keywords = expandKeywords(rawKeywords);
 
       if (keywords.length > 0) {
+        // params[0]=userId ($1), params[1]=organizationId ($2) — fixed; keywords start at $3
         const conditions = keywords.map(
-          (_, i) => `(d.title ILIKE $${i + 2} OR d.content ILIKE $${i + 2})`,
+          (_, i) => `(d.title ILIKE $${i + 3} OR d.content ILIKE $${i + 3})`,
         );
-        const params: (string | number)[] = [userId];
+        const params: (string | number)[] = [userId, organizationId];
         for (const kw of keywords) {
           params.push(`%${kw}%`);
         }
@@ -275,10 +278,10 @@ async function searchKnowledge(
         const sqlQuery = `
           SELECT d.id, d.title, d.url, LEFT(d.content, 500) as excerpt,
                  (${keywords.map((_, i) =>
-                   `(CASE WHEN d.title ILIKE $${i + 2} THEN 2 ELSE 0 END + CASE WHEN d.content ILIKE $${i + 2} THEN 1 ELSE 0 END)`,
+                   `(CASE WHEN d.title ILIKE $${i + 3} THEN 2 ELSE 0 END + CASE WHEN d.content ILIKE $${i + 3} THEN 1 ELSE 0 END)`,
                  ).join(" + ")}) as relevance
           FROM documents d
-          WHERE ${visibilityClause("d", 1)}
+          WHERE ${readableClause("d", 2, 1, "document")}
             AND (${conditions.join(" OR ")})
           ORDER BY relevance DESC, d.updated_at DESC
           LIMIT 5
@@ -317,11 +320,11 @@ async function searchKnowledge(
         `SELECT d.id, d.title, d.url, d.source_type, LEFT(d.content, 200) as excerpt,
                 d.metadata->>'fileType' as file_type
          FROM documents d
-         WHERE ${visibilityClause("d", 1)}
+         WHERE ${readableClause("d", 2, 1, "document")}
            AND d.content IS NOT NULL AND d.content != ''
          ORDER BY d.updated_at DESC
          LIMIT 20`,
-        [userId],
+        [userId, organizationId],
       );
       writer.log(`Loaded ${catalogResult.rowCount ?? 0} documents for LLM filtering`);
 
@@ -347,8 +350,8 @@ async function searchKnowledge(
       const metaResult = await pool.query(
         `SELECT d.id, d.title, d.url
          FROM documents d
-         WHERE d.id = ANY($1) AND ${visibilityClause("d", 2)}`,
-        [ids, userId],
+         WHERE d.id = ANY($1) AND ${readableClause("d", 3, 2, "document")}`,
+        [ids, userId, organizationId],
       );
       const metaMap = new Map<string, { title: string; url: string | null }>(
         metaResult.rows.map((r: { id: string; title: string; url: string | null }) => [
@@ -397,6 +400,7 @@ async function generateAnswer(
   contextText: string,
   catalogText: string,
   userId: string,
+  organizationId: string,
   writer: StreamWriter,
   intent: MessageIntent = "general",
   providers: ProviderInput[] = [],
@@ -407,8 +411,8 @@ async function generateAnswer(
   let docCount = 0;
   try {
     const statsResult = await pool.query(
-      `SELECT COUNT(*) as count FROM documents WHERE user_id = $1`,
-      [userId],
+      `SELECT COUNT(*) as count FROM documents WHERE organization_id = $1`,
+      [organizationId],
     );
     docCount = parseInt(statsResult.rows[0]?.count ?? "0", 10);
   } catch {
@@ -476,6 +480,8 @@ async function generateAnswer(
     },
     // userId — required for OCP/Codex relay routing
     userId,
+    // organizationId — scopes AI server memory to the caller's team
+    organizationId,
   );
 
   return answerText || fullAnswer;
@@ -484,17 +490,17 @@ async function generateAnswer(
 // ── Main Pipeline ───────────────────────────────────────────────
 
 export async function runPipeline(input: PipelineInput): Promise<void> {
-  const { message, conversationId, userId, history, writer, providers } = input;
+  const { message, conversationId, userId, organizationId, history, writer, providers } = input;
 
   try {
     // Detect user intent (recommend / search / explain / general)
     const intent = detectIntent(message);
 
     // Stage 1: Vector search (MiniLM embedding, no LLM)
-    const { sources, contextText, catalogText } = await searchKnowledge(message, userId, writer, intent);
+    const { sources, contextText, catalogText } = await searchKnowledge(message, userId, organizationId, writer, intent);
 
     // Always generate LLM answer — sources are shown separately in the UI
-    const answer = await generateAnswer(message, history, contextText, catalogText, userId, writer, intent, providers ?? []);
+    const answer = await generateAnswer(message, history, contextText, catalogText, userId, organizationId, writer, intent, providers ?? []);
 
     // Store assistant message with citations
     const citations = sources.map((s) => ({

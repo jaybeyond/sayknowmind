@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import {
   insertDocument,
@@ -17,15 +17,15 @@ import { parseBookmarkHtml, isBookmarkHtml } from "@/lib/ingest/bookmark-parser"
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB — bookmark files are text, rarely large
 
 export async function POST(request: NextRequest) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
     );
   }
 
-  const blocked = checkAntiBot(request, userId);
+  const blocked = checkAntiBot(request, ctx.userId);
   if (blocked) return blocked;
 
   try {
@@ -67,8 +67,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Narrow userId for closures (already null-checked above)
-    const uid = userId as string;
+    // Narrow ctx for closures (already null-checked above)
+    const uid = ctx.userId;
+    const orgId = ctx.organizationId;
 
     // Resolve folder names → category IDs (create if needed)
     const folderCategoryMap = new Map<string, string>();
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
     for (const folder of uniqueFolders) {
       const categoryName = folder.includes("/") ? folder.split("/").pop()! : folder;
 
+      // $1 = user_id, $2 = categoryName
       const existing = await pool.query(
         `SELECT id FROM categories WHERE user_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1`,
         [uid, categoryName],
@@ -86,9 +88,10 @@ export async function POST(request: NextRequest) {
         folderCategoryMap.set(folder, existing.rows[0].id);
       } else {
         const path = folder.replace(/\//g, ".");
+        // $1 = user_id, $2 = organization_id, $3 = name, $4 = path
         const created = await pool.query(
-          `INSERT INTO categories (user_id, name, path) VALUES ($1, $2, $3) RETURNING id`,
-          [uid, categoryName, path],
+          `INSERT INTO categories (user_id, organization_id, name, path) VALUES ($1, $2, $3, $4) RETURNING id`,
+          [uid, orgId, categoryName, path],
         );
         folderCategoryMap.set(folder, created.rows[0].id);
       }
@@ -102,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     async function importOne(bookmark: typeof bookmarks[number]): Promise<void> {
       if (skipDuplicates) {
-        const dup = await findDuplicateByUrl(uid, bookmark.url);
+        const dup = await findDuplicateByUrl(uid, bookmark.url, orgId);
         if (dup) {
           skipped++;
           return;
@@ -125,6 +128,7 @@ export async function POST(request: NextRequest) {
 
       const documentId = await insertDocument({
         userId: uid,
+        organizationId: orgId,
         title: bookmark.title || (fetchedMeta.title as string) || bookmark.url,
         content,
         url: bookmark.url,
@@ -161,7 +165,8 @@ export async function POST(request: NextRequest) {
         await assignDocumentCategory(documentId, catId);
       }
 
-      const jobId = await createJob(uid, documentId);
+      const jobId = await createJob(uid, documentId, orgId);
+
       jobIds.push(jobId);
       imported++;
     }

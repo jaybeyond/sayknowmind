@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
+import { writableClause, readableClause, editableViaShareClause } from "@/lib/visibility";
+import { isOrgAdmin } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
-import { visibilityClause } from "@/lib/visibility";
 
 /** GET /api/categories/[id]/documents — List documents in a category */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -20,10 +21,11 @@ export async function GET(
   const { id } = await params;
 
   try {
-    // Verify category is visible to the user.
+    // Verify category is visible to the caller.
+    // $1=id $2=userId $3=organizationId
     const catCheck = await pool.query(
-      `SELECT c.id FROM categories c WHERE c.id = $1 AND ${visibilityClause("c", 2)}`,
-      [id, userId],
+      `SELECT c.id FROM categories c WHERE c.id = $1 AND ${readableClause("c", 3, 2, "category")}`,
+      [id, ctx.userId, ctx.organizationId],
     );
     if (catCheck.rowCount === 0) {
       return NextResponse.json(
@@ -37,22 +39,24 @@ export async function GET(
     const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 20)));
     const offset = (page - 1) * limit;
 
+    // $1=categoryId $2=userId $3=organizationId
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM documents d
        JOIN document_categories dc ON dc.document_id = d.id
-       WHERE dc.category_id = $1 AND ${visibilityClause("d", 2)}`,
-      [id, userId],
+       WHERE dc.category_id = $1 AND ${readableClause("d", 3, 2, "document")}`,
+      [id, ctx.userId, ctx.organizationId],
     );
     const total = Number(countResult.rows[0].count);
 
+    // $1=categoryId $2=userId $3=organizationId $4=limit $5=offset
     const result = await pool.query(
       `SELECT d.id, d.title, d.url, d.source_type, d.created_at
        FROM documents d
        JOIN document_categories dc ON dc.document_id = d.id
-       WHERE dc.category_id = $1 AND ${visibilityClause("d", 2)}
+       WHERE dc.category_id = $1 AND ${readableClause("d", 3, 2, "document")}
        ORDER BY d.created_at DESC
-       LIMIT $3 OFFSET $4`,
-      [id, userId, limit, offset],
+       LIMIT $4 OFFSET $5`,
+      [id, ctx.userId, ctx.organizationId, limit, offset],
     );
 
     return NextResponse.json({
@@ -73,8 +77,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -94,10 +98,13 @@ export async function DELETE(
       );
     }
 
-    // Verify category belongs to user
+    const admin = isOrgAdmin(ctx.role);
+
+    // Verify category is writable by the caller
+    // $1=id $2=userId $3=organizationId
     const catCheck = await pool.query(
-      `SELECT id FROM categories WHERE id = $1 AND user_id = $2`,
-      [id, userId],
+      `SELECT id FROM categories WHERE id = $1 AND (${writableClause("categories", 3, 2, admin)} OR ${editableViaShareClause("categories", 2, "category")})`,
+      [id, ctx.userId, ctx.organizationId],
     );
     if (catCheck.rowCount === 0) {
       return NextResponse.json(
@@ -106,9 +113,11 @@ export async function DELETE(
       );
     }
 
+    // Verify document is writable by the caller
+    // $1=documentId $2=userId $3=organizationId
     const docCheck = await pool.query(
-      `SELECT id FROM documents WHERE id = $1 AND user_id = $2`,
-      [documentId, userId],
+      `SELECT id FROM documents WHERE id = $1 AND (${writableClause("documents", 3, 2, admin)} OR ${editableViaShareClause("documents", 2, "document")})`,
+      [documentId, ctx.userId, ctx.organizationId],
     );
     if (docCheck.rowCount === 0) {
       return NextResponse.json(

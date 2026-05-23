@@ -12,6 +12,7 @@ import { checkAndIncrementUsage } from "@/lib/usage-limit";
 interface JobRow {
   id: string;
   user_id: string;
+  organization_id: string;
   document_id: string;
   status: IngestStatus;
   progress: number;
@@ -47,12 +48,12 @@ async function isDocumentAlive(documentId: string): Promise<boolean> {
   return r.rows.length > 0;
 }
 
-export async function createJob(userId: string, documentId: string): Promise<string> {
+export async function createJob(userId: string, documentId: string, organizationId: string): Promise<string> {
   const result = await pool.query(
-    `INSERT INTO ingestion_jobs (user_id, document_id)
-     VALUES ($1, $2)
+    `INSERT INTO ingestion_jobs (user_id, document_id, organization_id)
+     VALUES ($1, $2, $3)
      RETURNING id`,
-    [userId, documentId],
+    [userId, documentId, organizationId],
   );
   const jobId = result.rows[0].id;
 
@@ -140,7 +141,7 @@ async function processJobById(jobId: string): Promise<void> {
 }
 
 async function processJob(job: JobRow): Promise<void> {
-  const { id: jobId, document_id: documentId, user_id: userId } = job;
+  const { id: jobId, document_id: documentId, user_id: userId, organization_id: organizationId } = job;
 
   try {
     await updateJobProgress(jobId, 10, "processing");
@@ -252,7 +253,7 @@ async function processJob(job: JobRow): Promise<void> {
 
         // Fetch existing tags from dedicated tags table for deduplication
         const { listTagNames } = await import("@/lib/tags/store");
-        const existingTags = await listTagNames(doc.user_id);
+        const existingTags = await listTagNames(organizationId);
 
         structuredMeta = await generateStructuredMetadata(doc.content ?? "", language, wordCount, existingTags, userId);
 
@@ -272,7 +273,7 @@ async function processJob(job: JobRow): Promise<void> {
         // Save tags to dedicated tags table (canonical deduplication)
         if (structuredMeta.aiTags.length > 0) {
           const { assignTags } = await import("@/lib/tags/store");
-          await assignTags(doc.user_id, documentId, structuredMeta.aiTags);
+          await assignTags(doc.user_id, organizationId, documentId, structuredMeta.aiTags);
         }
       } catch (err) {
         stepFailures.metadata = true;
@@ -312,10 +313,10 @@ async function processJob(job: JobRow): Promise<void> {
       return;
     }
     try {
-      // Fetch user's existing categories
+      // Fetch org's existing categories
       const catResult = await pool.query(
-        `SELECT id, name FROM categories WHERE user_id = $1`,
-        [userId],
+        `SELECT id, name FROM categories WHERE organization_id = $1`,
+        [organizationId],
       );
       const existingCategories = catResult.rows.map((r: { id: string; name: string }) => ({
         id: r.id,
@@ -355,12 +356,12 @@ async function processJob(job: JobRow): Promise<void> {
             categoryId = similar.id;
           } else {
             const insertResult = await pool.query(
-              `INSERT INTO categories (user_id, name, depth, path)
-               VALUES ($1, $2, 0, $3::text)
+              `INSERT INTO categories (user_id, organization_id, name, depth, path)
+               VALUES ($1, $2, $3, 0, $4::text)
                ON CONFLICT (user_id, name, COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'))
                DO UPDATE SET name = EXCLUDED.name
                RETURNING id`,
-              [userId, suggestion.categoryName, suggestion.categoryName],
+              [userId, organizationId, suggestion.categoryName, suggestion.categoryName],
             );
             categoryId = insertResult.rows[0]?.id;
             newCategoryCreated = true;

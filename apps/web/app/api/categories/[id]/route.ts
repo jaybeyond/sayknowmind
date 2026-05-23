@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import { getCategory, updateCategory, deleteCategory } from "@/lib/categories/store";
 import { ErrorCode } from "@/lib/types";
@@ -10,8 +10,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await getUserIdFromRequest();
-    if (!userId) {
+    const ctx = await getOrgContext();
+    if (!ctx) {
       return NextResponse.json(
         { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
         { status: 401 },
@@ -20,7 +20,7 @@ export async function GET(
 
     const { id } = await params;
 
-    const category = await getCategory(id, userId);
+    const category = await getCategory(id, ctx);
     if (!category) {
       return NextResponse.json(
         { code: ErrorCode.CATEGORY_NOT_FOUND, message: "Category not found", timestamp: new Date().toISOString() },
@@ -44,15 +44,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await getUserIdFromRequest();
-    if (!userId) {
+    const ctx = await getOrgContext();
+    if (!ctx) {
       return NextResponse.json(
         { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
         { status: 401 },
       );
     }
 
-    const blocked = checkAntiBot(request, userId);
+    const blocked = checkAntiBot(request, ctx.userId);
     if (blocked) return blocked;
 
     const { id } = await params;
@@ -65,7 +65,7 @@ export async function PUT(
       color?: string;
     };
 
-    const updated = await updateCategory(id, userId, {
+    const updated = await updateCategory(id, ctx, {
       name: name?.trim(),
       parentId,
       description,
@@ -108,8 +108,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await getUserIdFromRequest();
-    if (!userId) {
+    const ctx = await getOrgContext();
+    if (!ctx) {
       return NextResponse.json(
         { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
         { status: 401 },
@@ -118,7 +118,7 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const result = await deleteCategory(id, userId);
+    const result = await deleteCategory(id, ctx);
     if (!result.success) {
       return NextResponse.json(
         { code: ErrorCode.CATEGORY_NOT_FOUND, message: "Category not found", timestamp: new Date().toISOString() },

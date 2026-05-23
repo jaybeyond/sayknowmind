@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause } from "@/lib/visibility";
 
 export const dynamic = "force-dynamic";
 
 /** GET /api/documents — list documents with pagination, search, and category filter */
 export async function GET(request: NextRequest) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -26,9 +26,21 @@ export async function GET(request: NextRequest) {
   const isFavorite = searchParams.get("isFavorite");
 
   try {
-    const conditions: string[] = [visibilityClause("d", 1)];
-    const params: unknown[] = [userId];
+    // $1 = ctx.userId, orgId appended last as $N
+    const params: unknown[] = [ctx.userId];
     let paramIdx = 2;
+
+    // Reserve slot for orgId — will be appended after all other params are built.
+    // We use a placeholder reference "orgIdx" that equals params.length + 1 once
+    // orgId is appended. Build conditions first, then push orgId.
+    //
+    // Strategy: push orgId as the SECOND param so all visibilityClause calls use
+    // consistent indices. $1 = userId, $2 = organizationId, $3+ = filter values.
+    // Insert orgId at index 1 (position $2) before building conditions.
+    params.push(ctx.organizationId); // $2
+    paramIdx = 3; // next filter param starts at $3
+
+    const conditions: string[] = [readableClause("d", 2, 1, "document")];
 
     if (search) {
       conditions.push(`(d.title ILIKE $${paramIdx} OR d.summary ILIKE $${paramIdx} OR d.url ILIKE $${paramIdx})`);
@@ -42,7 +54,7 @@ export async function GET(request: NextRequest) {
           SELECT 1 FROM document_categories dc
           JOIN categories c ON c.id = dc.category_id
           WHERE dc.document_id = d.id AND dc.category_id = $${paramIdx}
-            AND ${visibilityClause("c", 1)}
+            AND ${readableClause("c", 2, 1, "category")}
         )`,
       );
       params.push(categoryId);
@@ -81,7 +93,7 @@ export async function GET(request: NextRequest) {
                 (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'color', c.color))
                  FROM document_categories dc
                  JOIN categories c ON c.id = dc.category_id
-                 WHERE dc.document_id = d.id AND ${visibilityClause("c", 1)}), '[]'
+                 WHERE dc.document_id = d.id AND ${readableClause("c", 2, 1, "category")}), '[]'
               ) AS categories,
               (SELECT ij.status FROM ingestion_jobs ij
                WHERE ij.document_id = d.id

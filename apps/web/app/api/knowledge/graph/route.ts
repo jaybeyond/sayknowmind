@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
-import { visibilityClause } from "@/lib/visibility";
+import { readableClause, orgScopeClause } from "@/lib/visibility";
 
 type GraphNodeResponse = {
   id: string;
@@ -34,11 +34,16 @@ function addDocuments(documents: Map<string, DocumentRow>, rows: DocumentRow[]) 
 
 export async function GET(request: NextRequest) {
   let userId: string | null = null;
+  let organizationId: string | null = null;
   try {
-    userId = await getUserIdFromRequest();
+    const ctx = await getOrgContext();
+    if (ctx) {
+      userId = ctx.userId;
+      organizationId = ctx.organizationId;
+    }
   } catch { /* auth check failed */ }
 
-  if (!userId) {
+  if (!userId || !organizationId) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
@@ -59,32 +64,33 @@ export async function GET(request: NextRequest) {
     const edges: GraphEdgeResponse[] = [];
     const documents = new Map<string, DocumentRow>();
 
-    const docParams: unknown[] = [userId];
+    // params[0]=userId ($1), params[1]=organizationId ($2) — fixed positions
+    const docParams: unknown[] = [userId, organizationId];
     // d.updated_at has to appear in the projection because we sort by it
     // and Postgres rejects DISTINCT + ORDER BY on a column not in the
     // SELECT list (error 42P10). addDocuments() only keeps id+title so
     // the extra column is harmless.
     let docQuery = `SELECT DISTINCT d.id, d.title, d.updated_at
        FROM documents d
-       WHERE ${visibilityClause("d", 1)}`;
+       WHERE ${readableClause("d", 2, 1, "document")}`;
 
     if (searchPattern) {
       docParams.push(searchPattern);
       docQuery += `
          AND (
-           d.title ILIKE $2
-           OR d.content ILIKE $2
+           d.title ILIKE $3
+           OR d.content ILIKE $3
            OR EXISTS (
              SELECT 1 FROM entities e
-             WHERE e.document_id = d.id AND e.name ILIKE $2
+             WHERE e.document_id = d.id AND e.name ILIKE $3
            )
            OR EXISTS (
              SELECT 1
              FROM document_categories dc
              JOIN categories c ON c.id = dc.category_id
              WHERE dc.document_id = d.id
-               AND ${visibilityClause("c", 1)}
-               AND c.name ILIKE $2
+               AND ${readableClause("c", 2, 1, "category")}
+               AND c.name ILIKE $3
            )
          )`;
     }
@@ -102,12 +108,12 @@ export async function GET(request: NextRequest) {
            FROM documents d
            JOIN document_tags dt ON dt.document_id = d.id
            JOIN tags t ON t.id = dt.tag_id
-           WHERE ${visibilityClause("d", 1)}
-             AND t.user_id = $1
+           WHERE ${readableClause("d", 3, 1, "document")}
+             AND ${orgScopeClause("t", 3)}
              AND (t.name ILIKE $2 OR t.canonical_name ILIKE $2)
            ORDER BY d.updated_at DESC
            LIMIT 100`,
-          [userId, searchPattern],
+          [userId, searchPattern, organizationId],
         );
         addDocuments(documents, tagMatchedDocs.rows);
       } catch (err) {
@@ -175,7 +181,8 @@ export async function GET(request: NextRequest) {
     // Fetch categories. Search narrows categories by name for category-filter
     // mode, and by either name or matched document context in the all-types view.
     if (!typeFilter || typeFilter === "category") {
-      const catParams: unknown[] = [userId];
+      // params[0]=userId ($1), params[1]=organizationId ($2) — fixed positions
+      const catParams: unknown[] = [userId, organizationId];
       let catQuery = `SELECT DISTINCT c.id, c.name, c.parent_id
          FROM categories c`;
 
@@ -183,15 +190,15 @@ export async function GET(request: NextRequest) {
         catQuery += ` LEFT JOIN document_categories dc ON dc.category_id = c.id`;
       }
 
-      catQuery += ` WHERE ${visibilityClause("c", 1)}`;
+      catQuery += ` WHERE ${readableClause("c", 2, 1, "category")}`;
 
       if (searchPattern) {
         catParams.push(searchPattern);
         if (!typeFilter && docIds.length > 0) {
           catParams.push(docIds);
-          catQuery += ` AND (c.name ILIKE $2 OR dc.document_id = ANY($3))`;
+          catQuery += ` AND (c.name ILIKE $3 OR dc.document_id = ANY($4))`;
         } else {
-          catQuery += ` AND c.name ILIKE $2`;
+          catQuery += ` AND c.name ILIKE $3`;
         }
       }
 
@@ -217,8 +224,8 @@ export async function GET(request: NextRequest) {
           `SELECT dc.document_id, dc.category_id
            FROM document_categories dc
            JOIN categories c ON c.id = dc.category_id
-           WHERE dc.document_id = ANY($1) AND ${visibilityClause("c", 2)}`,
-          [docIds, userId],
+           WHERE dc.document_id = ANY($1) AND ${readableClause("c", 3, 2, "category")}`,
+          [docIds, userId, organizationId],
         );
         for (const dc of docCats.rows) {
           edges.push({ source: dc.document_id, target: dc.category_id, type: "belongs_to", label: "belongs_to" });
@@ -230,11 +237,12 @@ export async function GET(request: NextRequest) {
     // tag labels, while all-types search keeps tag context for matched docs.
     if (docIds.length > 0 && (!typeFilter || typeFilter === "tag")) {
       try {
-        const tagParams: unknown[] = [userId, docIds];
-        let tagWhere = `t.user_id = $1 AND dt.document_id = ANY($2)`;
+        // params[0]=userId ($1), params[1]=docIds ($2), params[2]=organizationId ($3) — fixed
+        const tagParams: unknown[] = [userId, docIds, organizationId];
+        let tagWhere = `${orgScopeClause("t", 3)} AND dt.document_id = ANY($2)`;
         if (typeFilter === "tag" && searchPattern) {
           tagParams.push(searchPattern);
-          tagWhere += ` AND (t.name ILIKE $3 OR t.canonical_name ILIKE $3)`;
+          tagWhere += ` AND (t.name ILIKE $4 OR t.canonical_name ILIKE $4)`;
         }
 
         const tags = await pool.query(
