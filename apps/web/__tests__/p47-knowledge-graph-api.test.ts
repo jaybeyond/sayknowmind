@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   getUserIdFromRequest: vi.fn(),
+  getOrgContext: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -12,6 +13,12 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/ingest/session-helper", () => ({
   getUserIdFromRequest: mocks.getUserIdFromRequest,
+}));
+
+// The knowledge-graph routes now scope by active organization, not just user.
+vi.mock("@/lib/org-context", () => ({
+  getOrgContext: mocks.getOrgContext,
+  isOrgAdmin: (role: string) => role === "owner" || role === "admin",
 }));
 
 let getGraph: typeof import("@/app/api/knowledge/graph/route").GET;
@@ -26,6 +33,11 @@ describe("Knowledge graph API", () => {
   beforeEach(() => {
     mocks.query.mockReset();
     mocks.getUserIdFromRequest.mockResolvedValue("user-1");
+    mocks.getOrgContext.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "owner",
+    });
   });
 
   it("finds tag-filtered graph results by tag name and returns document-tag edges", async () => {
