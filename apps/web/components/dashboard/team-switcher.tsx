@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { Building2, ChevronDown, Plus, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "@/lib/i18n";
 
 function slugify(name: string): string {
   return name
@@ -32,6 +33,7 @@ function slugify(name: string): string {
 
 export function TeamSwitcher() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { data: orgs, isPending: orgsLoading } = authClient.useListOrganizations();
   const { data: activeOrg } = authClient.useActiveOrganization();
 
@@ -47,7 +49,7 @@ export function TeamSwitcher() {
       await authClient.organization.setActive({ organizationId: orgId });
       router.refresh();
     } catch {
-      toast.error("Failed to switch team");
+      toast.error(t("team.switcher.switchFailed"));
     } finally {
       setSwitching(null);
     }
@@ -61,19 +63,19 @@ export function TeamSwitcher() {
       const slug = slugify(name) || `team-${Date.now()}`;
       const result = await authClient.organization.create({ name, slug });
       if (result.error) {
-        toast.error(result.error.message ?? "Failed to create team");
+        toast.error(result.error.message ?? t("team.switcher.createFailed"));
         return;
       }
       const newOrgId = result.data?.id;
       if (newOrgId) {
         await authClient.organization.setActive({ organizationId: newOrgId });
       }
-      toast.success(`Team "${name}" created`);
+      toast.success(t("team.switcher.createSuccess").replace("{name}", name));
       setCreateOpen(false);
       setTeamName("");
       router.refresh();
     } catch {
-      toast.error("Failed to create team");
+      toast.error(t("team.switcher.createFailed"));
     } finally {
       setCreating(false);
     }
@@ -95,7 +97,7 @@ export function TeamSwitcher() {
           {orgsLoading ? (
             <div className="px-2 py-1.5 text-sm text-muted-foreground flex items-center gap-2">
               <Loader2 className="size-3.5 animate-spin" />
-              Loading...
+              {t("team.switcher.loading")}
             </div>
           ) : (
             <>
@@ -122,7 +124,7 @@ export function TeamSwitcher() {
             className="cursor-pointer"
           >
             <Plus className="size-3.5 text-muted-foreground" />
-            Create team
+            {t("team.switcher.createTeam")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -130,9 +132,9 @@ export function TeamSwitcher() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Create a team</DialogTitle>
+            <DialogTitle>{t("team.switcher.createDialogTitle")}</DialogTitle>
             <DialogDescription>
-              Teams let you share documents and collaborate with others.
+              {t("team.switcher.createDialogDesc")}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -144,13 +146,13 @@ export function TeamSwitcher() {
           >
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="team-name">
-                Team name
+                {t("team.switcher.teamNameLabel")}
               </label>
               <Input
                 id="team-name"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
-                placeholder="My Team"
+                placeholder={t("team.switcher.teamNamePlaceholder")}
                 autoFocus
               />
             </div>
@@ -160,11 +162,11 @@ export function TeamSwitcher() {
                 variant="outline"
                 onClick={() => { setCreateOpen(false); setTeamName(""); }}
               >
-                Cancel
+                {t("team.switcher.cancel")}
               </Button>
               <Button type="submit" disabled={!teamName.trim() || creating}>
                 {creating && <Loader2 className="size-4 animate-spin" />}
-                Create team
+                {t("team.switcher.create")}
               </Button>
             </div>
           </form>

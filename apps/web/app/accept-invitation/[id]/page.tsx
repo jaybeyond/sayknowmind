@@ -6,11 +6,13 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Loader2, Building2, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "@/lib/i18n";
 
 type PageState = "loading" | "ready" | "accepting" | "rejecting" | "accepted" | "rejected" | "error";
 
 export default function AcceptInvitationPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useParams();
   const invitationId = params.id as string;
 
@@ -44,15 +46,15 @@ export default function AcceptInvitationPage() {
     try {
       const result = await authClient.organization.acceptInvitation({ invitationId });
       if (result.error) {
-        setErrorMsg(result.error.message ?? "Failed to accept invitation");
+        setErrorMsg(result.error.message ?? t("team.accept.acceptFailed"));
         setState("error");
         return;
       }
       setState("accepted");
-      toast.success("Welcome to the team!");
+      toast.success(t("team.accept.welcomeToast"));
       setTimeout(() => router.push("/"), 1500);
     } catch {
-      setErrorMsg("Something went wrong. Please try again.");
+      setErrorMsg(t("team.accept.genericError"));
       setState("error");
     }
   };
@@ -62,14 +64,14 @@ export default function AcceptInvitationPage() {
     try {
       const result = await authClient.organization.rejectInvitation({ invitationId });
       if (result.error) {
-        setErrorMsg(result.error.message ?? "Failed to reject invitation");
+        setErrorMsg(result.error.message ?? t("team.accept.declineFailed"));
         setState("error");
         return;
       }
       setState("rejected");
       setTimeout(() => router.push("/"), 1500);
     } catch {
-      setErrorMsg("Something went wrong. Please try again.");
+      setErrorMsg(t("team.accept.genericError"));
       setState("error");
     }
   };
@@ -88,7 +90,7 @@ export default function AcceptInvitationPage() {
           {state === "loading" && (
             <div className="flex flex-col items-center gap-3 py-4">
               <Loader2 className="size-8 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Loading invitation…</p>
+              <p className="text-sm text-muted-foreground">{t("team.accept.loading")}</p>
             </div>
           )}
 
@@ -99,11 +101,11 @@ export default function AcceptInvitationPage() {
                   <Building2 className="size-6" />
                 </div>
                 <div>
-                  <h1 className="text-lg font-semibold">Team invitation</h1>
+                  <h1 className="text-lg font-semibold">{t("team.accept.title")}</h1>
                   <p className="text-sm text-muted-foreground mt-1">
                     {orgName
-                      ? `You've been invited to join "${orgName}"`
-                      : "You've been invited to join a team on SayknowMind."}
+                      ? t("team.accept.subtitleWithOrg").replace("{org}", orgName)
+                      : t("team.accept.subtitleGeneric")}
                   </p>
                 </div>
               </div>
@@ -116,7 +118,7 @@ export default function AcceptInvitationPage() {
                   disabled={state === "accepting" || state === "rejecting"}
                 >
                   {state === "rejecting" && <Loader2 className="size-4 animate-spin" />}
-                  Decline
+                  {t("team.accept.decline")}
                 </Button>
                 <Button
                   className="flex-1"
@@ -124,7 +126,7 @@ export default function AcceptInvitationPage() {
                   disabled={state === "accepting" || state === "rejecting"}
                 >
                   {state === "accepting" && <Loader2 className="size-4 animate-spin" />}
-                  Accept invitation
+                  {t("team.accept.accept")}
                 </Button>
               </div>
             </>
@@ -133,16 +135,16 @@ export default function AcceptInvitationPage() {
           {state === "accepted" && (
             <div className="flex flex-col items-center gap-3 py-4 text-center">
               <CheckCircle className="size-10 text-emerald-500" />
-              <p className="text-sm font-medium">You&apos;ve joined the team!</p>
-              <p className="text-xs text-muted-foreground">Redirecting you to the app…</p>
+              <p className="text-sm font-medium">{t("team.accept.joinedTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t("team.accept.joinedRedirect")}</p>
             </div>
           )}
 
           {state === "rejected" && (
             <div className="flex flex-col items-center gap-3 py-4 text-center">
               <XCircle className="size-10 text-muted-foreground" />
-              <p className="text-sm font-medium">Invitation declined</p>
-              <p className="text-xs text-muted-foreground">Redirecting you to the app…</p>
+              <p className="text-sm font-medium">{t("team.accept.declinedTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t("team.accept.declinedRedirect")}</p>
             </div>
           )}
 
@@ -150,13 +152,13 @@ export default function AcceptInvitationPage() {
             <div className="flex flex-col items-center gap-4 py-4 text-center">
               <XCircle className="size-10 text-destructive" />
               <div>
-                <p className="text-sm font-medium text-destructive">Something went wrong</p>
+                <p className="text-sm font-medium text-destructive">{t("team.accept.errorTitle")}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {errorMsg ?? "The invitation may have expired or already been used."}
+                  {errorMsg ?? t("team.accept.errorFallback")}
                 </p>
               </div>
               <Button variant="outline" size="sm" onClick={() => router.push("/")}>
-                Go home
+                {t("team.accept.goHome")}
               </Button>
             </div>
           )}

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Loader2, Mail, Trash2, Eye, Pencil } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 export type ResourceType = "document" | "category";
 export type Permission = "view" | "edit";
@@ -42,6 +43,7 @@ export function ShareResourceDialog({
   resourceId,
   resourceName,
 }: ShareResourceDialogProps) {
+  const { t } = useTranslation();
   const [shares, setShares] = React.useState<ShareEntry[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [email, setEmail] = React.useState("");
@@ -58,7 +60,7 @@ export function ShareResourceDialog({
       );
       if (!res.ok) {
         if (res.status !== 404) {
-          toast.error("Failed to load shares");
+          toast.error(t("team.share.loadFailed"));
         }
         setShares([]);
         return;
@@ -66,7 +68,7 @@ export function ShareResourceDialog({
       const data = await res.json();
       setShares(data.shares ?? []);
     } catch {
-      toast.error("Failed to load shares");
+      toast.error(t("team.share.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -94,14 +96,14 @@ export function ShareResourceDialog({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        toast.error(data.message ?? "Failed to share");
+        toast.error(data.message ?? t("team.share.shareFailed"));
         return;
       }
-      toast.success(`Shared with ${granteeEmail}`);
+      toast.success(t("team.share.shareSuccess").replace("{email}", granteeEmail));
       setEmail("");
       void loadShares();
     } catch {
-      toast.error("Failed to share");
+      toast.error(t("team.share.shareFailed"));
     } finally {
       setGranting(false);
     }
@@ -114,13 +116,13 @@ export function ShareResourceDialog({
         method: "DELETE",
       });
       if (!res.ok) {
-        toast.error("Failed to revoke share");
+        toast.error(t("team.share.revokeFailed"));
         return;
       }
-      toast.success("Share revoked");
+      toast.success(t("team.share.revokeSuccess"));
       void loadShares();
     } catch {
-      toast.error("Failed to revoke share");
+      toast.error(t("team.share.revokeFailed"));
     } finally {
       setRevoking(null);
     }
@@ -130,10 +132,9 @@ export function ShareResourceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share with teammates</DialogTitle>
+          <DialogTitle>{t("team.share.dialogTitle")}</DialogTitle>
           <DialogDescription>
-            {resourceName ? `"${resourceName}"` : `This ${resourceType}`} is only visible to
-            people you share it with.
+            {resourceName ? `"${resourceName}"` : `This ${resourceType}`} {t("team.share.dialogDesc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -143,7 +144,7 @@ export function ShareResourceDialog({
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
               type="email"
-              placeholder="teammate@example.com"
+              placeholder={t("team.share.emailPlaceholder")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="pl-9"
@@ -154,12 +155,12 @@ export function ShareResourceDialog({
             value={permission}
             onChange={(e) => setPermission(e.target.value as Permission)}
           >
-            <option value="view">View</option>
-            <option value="edit">Edit</option>
+            <option value="view">{t("team.share.permissionView")}</option>
+            <option value="edit">{t("team.share.permissionEdit")}</option>
           </select>
           <Button type="submit" disabled={!email.trim() || granting} size="sm" className="h-9">
             {granting && <Loader2 className="size-4 animate-spin" />}
-            Share
+            {t("team.share.shareButton")}
           </Button>
         </form>
 
@@ -180,7 +181,7 @@ export function ShareResourceDialog({
             </>
           ) : shares.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
-              No one has access yet.
+              {t("team.share.noAccess")}
             </p>
           ) : (
             shares.map((share) => (
@@ -203,13 +204,13 @@ export function ShareResourceDialog({
                   ) : (
                     <Pencil className="size-3" />
                   )}
-                  {share.permission}
+                  {share.permission === "view" ? t("team.share.permissionView") : t("team.share.permissionEdit")}
                 </span>
                 <button
                   onClick={() => handleRevoke(share.id)}
                   disabled={revoking === share.id}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-                  title="Revoke access"
+                  title={t("team.share.revokeTitle")}
                 >
                   {revoking === share.id ? (
                     <Loader2 className="size-3.5 animate-spin" />

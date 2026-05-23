@@ -38,7 +38,7 @@ export function SettingsPage() {
       { id: "integrations", label: t("settings.tabIntegrations") },
       { id: "services", label: t("settings.tabServices") },
       { id: "mcp", label: "MCP" },
-      { id: "team", label: "Team" },
+      { id: "team", label: t("settings.tabTeam") },
       ...(showLocalTab ? [{ id: "runtime" as TabId, label: t("settings.tabLocal") }] : []),
     ];
     return all;

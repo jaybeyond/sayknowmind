@@ -7,8 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Loader2, Mail, Shield, User, X } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 type Role = "owner" | "admin" | "member";
+
+type RoleKey = "roles.owner" | "roles.admin" | "roles.member";
 
 interface Member {
   id: string;
@@ -33,15 +36,16 @@ interface Invitation {
   organizationId: string;
 }
 
-const ROLE_LABELS: Record<Role, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  member: "Member",
+const ROLE_KEYS: Record<Role, RoleKey> = {
+  owner: "roles.owner",
+  admin: "roles.admin",
+  member: "roles.member",
 };
 
 const INVITE_ROLES: Role[] = ["admin", "member"];
 
 export function TeamTab() {
+  const { t } = useTranslation();
   const { data: session } = useSession();
   const { data: activeOrg } = authClient.useActiveOrganization();
 
@@ -69,7 +73,7 @@ export function TeamTab() {
         setInvitations((result.data.invitations ?? []) as Invitation[]);
       }
     } catch {
-      toast.error("Failed to load team data");
+      toast.error(t("team.settings.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -94,14 +98,14 @@ export function TeamTab() {
         role: inviteRole,
       });
       if (result.error) {
-        toast.error(result.error.message ?? "Failed to send invitation");
+        toast.error(result.error.message ?? t("team.settings.inviteFailed"));
         return;
       }
-      toast.success(`Invitation sent to ${email}`);
+      toast.success(t("team.settings.inviteSuccess").replace("{email}", email));
       setInviteEmail("");
       void loadOrgData();
     } catch {
-      toast.error("Failed to send invitation");
+      toast.error(t("team.settings.inviteFailed"));
     } finally {
       setInviting(false);
     }
@@ -115,13 +119,13 @@ export function TeamTab() {
         role: newRole,
       });
       if (result.error) {
-        toast.error(result.error.message ?? "Failed to update role");
+        toast.error(result.error.message ?? t("team.settings.roleUpdateFailed"));
         return;
       }
-      toast.success("Role updated");
+      toast.success(t("team.settings.roleUpdated"));
       void loadOrgData();
     } catch {
-      toast.error("Failed to update role");
+      toast.error(t("team.settings.roleUpdateFailed"));
     } finally {
       setUpdatingRole(null);
     }
@@ -132,13 +136,13 @@ export function TeamTab() {
     try {
       const result = await authClient.organization.removeMember({ memberIdOrEmail: memberId });
       if (result.error) {
-        toast.error(result.error.message ?? "Failed to remove member");
+        toast.error(result.error.message ?? t("team.settings.removeFailed"));
         return;
       }
-      toast.success("Member removed");
+      toast.success(t("team.settings.memberRemoved"));
       void loadOrgData();
     } catch {
-      toast.error("Failed to remove member");
+      toast.error(t("team.settings.removeFailed"));
     } finally {
       setRemoving(null);
     }
@@ -149,13 +153,13 @@ export function TeamTab() {
     try {
       const result = await authClient.organization.cancelInvitation({ invitationId });
       if (result.error) {
-        toast.error(result.error.message ?? "Failed to cancel invitation");
+        toast.error(result.error.message ?? t("team.settings.cancelInviteFailed"));
         return;
       }
-      toast.success("Invitation cancelled");
+      toast.success(t("team.settings.inviteCancelled"));
       void loadOrgData();
     } catch {
-      toast.error("Failed to cancel invitation");
+      toast.error(t("team.settings.cancelInviteFailed"));
     } finally {
       setCancelling(null);
     }
@@ -165,7 +169,7 @@ export function TeamTab() {
     return (
       <div className="space-y-4">
         <div className="rounded-lg border border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-          No active team. Create or join a team from the team switcher in the sidebar.
+          {t("team.settings.noActiveTeam")}
         </div>
       </div>
     );
@@ -197,13 +201,15 @@ export function TeamTab() {
       <div>
         <h2 className="text-base font-semibold">{activeOrg.name}</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
-          {members.length} {members.length === 1 ? "member" : "members"}
+          {members.length === 1
+            ? t("team.settings.membersCount").replace("{count}", String(members.length))
+            : t("team.settings.membersCountPlural").replace("{count}", String(members.length))}
         </p>
       </div>
 
       {/* Members */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold">Members</h3>
+        <h3 className="text-sm font-semibold">{t("team.settings.membersHeading")}</h3>
         {members.map((member) => {
           const isMe = member.userId === currentUserId;
           const isOwner = member.role === "owner";
@@ -220,7 +226,7 @@ export function TeamTab() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">
                   {member.user.name ?? member.user.email}
-                  {isMe && <span className="ml-1.5 text-xs text-muted-foreground">(you)</span>}
+                  {isMe && <span className="ml-1.5 text-xs text-muted-foreground">{t("team.settings.you")}</span>}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">{member.user.email}</p>
               </div>
@@ -234,14 +240,14 @@ export function TeamTab() {
                 >
                   {INVITE_ROLES.map((r) => (
                     <option key={r} value={r}>
-                      {ROLE_LABELS[r]}
+                      {t(`team.${ROLE_KEYS[r]}`)}
                     </option>
                   ))}
                 </select>
               ) : (
                 <span className="text-xs text-muted-foreground px-2 py-1 rounded-md border border-border bg-muted/30 flex items-center gap-1">
                   {member.role === "owner" && <Shield className="size-3" />}
-                  {ROLE_LABELS[member.role]}
+                  {t(`team.${ROLE_KEYS[member.role]}`)}
                 </span>
               )}
 
@@ -250,7 +256,7 @@ export function TeamTab() {
                   onClick={() => handleRemove(member.id)}
                   disabled={removing === member.id}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  title="Remove member"
+                  title={t("team.settings.removeMemberTitle")}
                 >
                   {removing === member.id ? (
                     <Loader2 className="size-3.5 animate-spin" />
@@ -267,13 +273,13 @@ export function TeamTab() {
       {/* Invite form — admin only */}
       {isAdmin && (
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold">Invite a teammate</h3>
+          <h3 className="text-sm font-semibold">{t("team.settings.inviteHeading")}</h3>
           <form onSubmit={handleInvite} className="flex gap-2">
             <div className="relative flex-1">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
               <Input
                 type="email"
-                placeholder="colleague@example.com"
+                placeholder={t("team.settings.invitePlaceholder")}
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 className="pl-9"
@@ -286,13 +292,13 @@ export function TeamTab() {
             >
               {INVITE_ROLES.map((r) => (
                 <option key={r} value={r}>
-                  {ROLE_LABELS[r]}
+                  {t(`team.${ROLE_KEYS[r]}`)}
                 </option>
               ))}
             </select>
             <Button type="submit" disabled={!inviteEmail.trim() || inviting}>
               {inviting && <Loader2 className="size-4 animate-spin" />}
-              Invite
+              {t("team.settings.inviteButton")}
             </Button>
           </form>
         </div>
@@ -301,7 +307,7 @@ export function TeamTab() {
       {/* Pending invitations */}
       {pendingInvites.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold">Pending invitations</h3>
+          <h3 className="text-sm font-semibold">{t("team.settings.pendingHeading")}</h3>
           {pendingInvites.map((inv) => (
             <div
               key={inv.id}
@@ -313,7 +319,7 @@ export function TeamTab() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{inv.email}</p>
                 <p className="text-xs text-muted-foreground">
-                  Invited as {ROLE_LABELS[inv.role]} · Pending
+                  {t("team.settings.invitedAs").replace("{role}", t(`team.${ROLE_KEYS[inv.role]}`))}
                 </p>
               </div>
               {isAdmin && (
@@ -321,7 +327,7 @@ export function TeamTab() {
                   onClick={() => handleCancelInvitation(inv.id)}
                   disabled={cancelling === inv.id}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  title="Cancel invitation"
+                  title={t("team.settings.cancelInviteTitle")}
                 >
                   {cancelling === inv.id ? (
                     <Loader2 className="size-3.5 animate-spin" />
