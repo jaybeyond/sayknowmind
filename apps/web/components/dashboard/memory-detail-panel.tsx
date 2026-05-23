@@ -23,6 +23,7 @@ import { useTranslation } from "@/lib/i18n";
 import { getVideoEmbedUrl } from "@/lib/video-embed";
 import { openExternal } from "@/lib/open-external";
 import { ShareDialog } from "./share-dialog";
+import { ShareResourceDialog } from "@/components/share-resource-dialog";
 import { MemoryEditModal } from "./memory-edit-modal";
 
 interface MemoryDetailPanelProps {
@@ -40,6 +41,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
   const { t } = useTranslation();
   const [relatedDocs, setRelatedDocs] = useState<RelatedDoc[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
+  const [teamShareOpen, setTeamShareOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [currentMemory, setCurrentMemory] = useState<Memory | null>(memory);
 
@@ -117,6 +119,13 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
             <Share2 className="size-4" />
           </button>
           <button
+            onClick={() => setTeamShareOpen(true)}
+            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+            title="Share with teammates"
+          >
+            <Link2 className="size-4" />
+          </button>
+          <button
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
           >
@@ -124,6 +133,13 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
           </button>
         </div>
         <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={m} />
+        <ShareResourceDialog
+          open={teamShareOpen}
+          onOpenChange={setTeamShareOpen}
+          resourceType="document"
+          resourceId={m.id}
+          resourceName={m.title}
+        />
       </div>
 
       {/* Content */}

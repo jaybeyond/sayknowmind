@@ -55,6 +55,7 @@ import {
   Share2,
 } from "lucide-react";
 import { NotificationBell } from "./notification-bell";
+import { TeamSwitcher } from "./team-switcher";
 import { Button } from "@/components/ui/button";
 import { Input as SidebarInput } from "@/components/ui/input";
 import { useMemoryStore } from "@/store/memory-store";
@@ -371,6 +372,7 @@ export function MemorySidebar({
             </DialogContent>
           </Dialog>
           <div className="flex items-center gap-1">
+            <TeamSwitcher />
             <NotificationBell />
             <Avatar className="size-6.5">
               <AvatarFallback>{userInitials}</AvatarFallback>

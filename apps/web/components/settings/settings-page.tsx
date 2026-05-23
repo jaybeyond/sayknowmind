@@ -12,10 +12,11 @@ import { IntegrationsTab } from "./integrations-tab";
 import { ServicesTab } from "./services-tab";
 import { LocalRuntimeTab } from "./local-runtime-tab";
 import { McpConnectTab } from "./mcp-connect-tab";
+import { TeamTab } from "./team-tab";
 import { useTranslation } from "@/lib/i18n";
 import { useEnvironmentStore } from "@/lib/environment";
 
-type TabId = "profile" | "appearance" | "ai" | "prompts" | "privacy" | "integrations" | "services" | "mcp" | "runtime";
+type TabId = "profile" | "appearance" | "ai" | "prompts" | "privacy" | "integrations" | "services" | "mcp" | "runtime" | "team";
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -37,6 +38,7 @@ export function SettingsPage() {
       { id: "integrations", label: t("settings.tabIntegrations") },
       { id: "services", label: t("settings.tabServices") },
       { id: "mcp", label: "MCP" },
+      { id: "team", label: "Team" },
       ...(showLocalTab ? [{ id: "runtime" as TabId, label: t("settings.tabLocal") }] : []),
     ];
     return all;
@@ -98,6 +100,7 @@ export function SettingsPage() {
         {activeTab === "integrations" && <IntegrationsTab />}
         {activeTab === "services" && <ServicesTab />}
         {activeTab === "mcp" && <McpConnectTab />}
+        {activeTab === "team" && <TeamTab />}
         {activeTab === "runtime" && <LocalRuntimeTab />}
       </div>
     </main>
