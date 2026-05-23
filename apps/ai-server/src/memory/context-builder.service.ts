@@ -184,9 +184,10 @@ export class ContextBuilderService {
     userMessage: string,
     assistantResponse: string,
     aiRouter?: any,
+    organizationId?: string,
   ): Promise<{ needsSummary: boolean; context: { messageCount: number } }> {
     this.logger.log(`🔄 Updating memory: userId=${userId}, sessionId=${sessionId}`);
-    
+
     // 1. 사용자 메시지 추가
     const userMsg: ChatMessage = {
       role: 'user',
@@ -211,6 +212,7 @@ export class ContextBuilderService {
       assistantResponse,
       context.messageCount,  // 메시지 수 before달
       aiRouter,              // AI 라우터 before달
+      organizationId,        // team scope for Redis keys
     );
 
     // 4. 추출된 info 로깅

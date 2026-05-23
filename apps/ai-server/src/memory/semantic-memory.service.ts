@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from './redis.service';
 import axios from 'axios';
+import { MemoryKeysHelper } from './memory-keys.helper';
 
 interface MemoryEntry {
   id: string;
@@ -23,8 +24,6 @@ interface SearchResult {
 @Injectable()
 export class SemanticMemoryService {
   private readonly logger = new Logger(SemanticMemoryService.name);
-  private readonly MEMORY_KEY_PREFIX = 'semantic:';
-  private readonly INDEX_KEY = 'semantic:index:';
   private readonly TTL_DAYS: number;
   private readonly openrouterApiKey: string;
   private readonly enabled: boolean;
@@ -38,12 +37,8 @@ export class SemanticMemoryService {
     this.enabled = this.configService.get('ENABLE_SEMANTIC_MEMORY', 'true') === 'true';
   }
 
-  private getMemoryKey(userId: string): string {
-    return `${this.MEMORY_KEY_PREFIX}${userId}`;
-  }
-
-  private getIndexKey(userId: string): string {
-    return `${this.INDEX_KEY}${userId}`;
+  private keys(organizationId?: string): MemoryKeysHelper {
+    return new MemoryKeysHelper(organizationId);
   }
 
   private getTTL(): number {
@@ -150,6 +145,7 @@ export class SemanticMemoryService {
     type: MemoryEntry['type'],
     sessionId?: string,
     confidence: number = 0.8,
+    organizationId?: string,
   ): Promise<void> {
     if (!this.enabled || !this.redis.isReady()) return;
     if (!content || content.length < 5) return;
@@ -168,7 +164,7 @@ export class SemanticMemoryService {
     };
 
     // 메모리 list에 추가
-    const key = this.getMemoryKey(userId);
+    const key = this.keys(organizationId).semanticMemory(userId);
     await this.redis.rpush(key, JSON.stringify(entry));
     await this.redis.expire(key, this.getTTL());
 
@@ -189,13 +185,14 @@ export class SemanticMemoryService {
     query: string,
     topK: number = 5,
     minSimilarity: number = 0.3,
+    organizationId?: string,
   ): Promise<SearchResult[]> {
     if (!this.enabled || !this.redis.isReady()) return [];
 
     const queryEmbedding = await this.getEmbedding(query);
     if (!queryEmbedding) return [];
 
-    const key = this.getMemoryKey(userId);
+    const key = this.keys(organizationId).semanticMemory(userId);
     const memories = await this.redis.lrange(key, 0, -1);
     
     if (memories.length === 0) return [];
@@ -236,6 +233,7 @@ export class SemanticMemoryService {
     sessionId: string,
     userMessage: string,
     assistantResponse: string,
+    organizationId?: string,
   ): Promise<void> {
     if (!this.enabled) return;
 
@@ -254,7 +252,7 @@ export class SemanticMemoryService {
     for (const { pattern, type } of importantPatterns) {
       const match = userMessage.match(pattern);
       if (match) {
-        await this.saveMemory(userId, match[0], type, sessionId, 0.85);
+        await this.saveMemory(userId, match[0], type, sessionId, 0.85, organizationId);
       }
     }
 
@@ -266,6 +264,7 @@ export class SemanticMemoryService {
         'conversation',
         sessionId,
         0.7,
+        organizationId,
       );
     }
   }
@@ -273,8 +272,8 @@ export class SemanticMemoryService {
   /**
    * 관련 메모리를 Context로 변환
    */
-  async getRelevantContext(userId: string, query: string): Promise<string | null> {
-    const results = await this.searchMemory(userId, query, 5, 0.35);
+  async getRelevantContext(userId: string, query: string, organizationId?: string): Promise<string | null> {
+    const results = await this.searchMemory(userId, query, 5, 0.35, organizationId);
     
     if (results.length === 0) return null;
 
@@ -295,9 +294,9 @@ export class SemanticMemoryService {
   /**
    * Delete user memory
    */
-  async deleteMemory(userId: string): Promise<void> {
+  async deleteMemory(userId: string, organizationId?: string): Promise<void> {
     if (!this.redis.isReady()) return;
-    await this.redis.del(this.getMemoryKey(userId));
+    await this.redis.del(this.keys(organizationId).semanticMemory(userId));
     this.logger.log(`🗑️ Deleted semantic memory for user ${userId}`);
   }
 }

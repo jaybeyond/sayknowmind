@@ -373,14 +373,15 @@ ${dto.systemPrompt || ''}`;
   ) {
     const startTime = Date.now();
     const useMemory = dto.useMemory !== false && !!dto.userId && !!dto.sessionId;
-    
-    this.logger.log(`📨 Chat request: useMemory=${useMemory}, userId=${dto.userId}, sessionId=${dto.sessionId}`);
+    const organizationId = dto.organizationId;
+
+    this.logger.log(`📨 Chat request: useMemory=${useMemory}, userId=${dto.userId}, sessionId=${dto.sessionId}, orgId=${organizationId ?? 'none'}`);
 
     // Auto-save user profile to memory if provided (info from Clerk)
     if (useMemory && dto.userProfile && dto.userId) {
       try {
         if (dto.userProfile.name) {
-          await this.userMemory.updateProfile(dto.userId, { name: dto.userProfile.name });
+          await this.userMemory.updateProfile(dto.userId, { name: dto.userProfile.name }, organizationId);
           this.logger.log(`👤 Auto-saved user name from Clerk: ${dto.userProfile.name}`);
         }
         // Don't store email in memory for privacy reasons
@@ -401,9 +402,9 @@ ${dto.systemPrompt || ''}`;
         // Load additional context from Redis when memory system is active (parallel)
         if (useMemory) {
           const [userMemorySummary, sessionCtx, entitySummary] = await Promise.all([
-            this.userMemory.getMemorySummary(dto.userId!),
+            this.userMemory.getMemorySummary(dto.userId!, organizationId),
             this.sessionContext.getContext(dto.sessionId!),
-            this.entityStore.getEntitySummary(dto.userId!),  // Entity Store summary
+            this.entityStore.getEntitySummary(dto.userId!, organizationId),  // Entity Store summary
           ]);
           
           // Load recent conversation history (max 6)
@@ -444,10 +445,10 @@ ${dto.systemPrompt || ''}`;
         // Load history + context from Redis when memory system is active (parallel)
         if (useMemory) {
           const [userMemorySummary, sessionCtx, relevantMemory, entitySummary] = await Promise.all([
-            this.userMemory.getMemorySummary(dto.userId!),
+            this.userMemory.getMemorySummary(dto.userId!, organizationId),
             this.sessionContext.getContext(dto.sessionId!),
-            this.semanticMemory.getRelevantContext(dto.userId!, dto.message),
-            this.entityStore.getEntitySummary(dto.userId!),  // Entity Store summary
+            this.semanticMemory.getRelevantContext(dto.userId!, dto.message, organizationId),
+            this.entityStore.getEntitySummary(dto.userId!, organizationId),  // Entity Store summary
           ]);
           
           // Debug: detailed Redis lookup result log
@@ -629,6 +630,8 @@ ${dto.systemPrompt || ''}`;
                 lastUserMessage,
                 result.content,
                 result.modelUsed,  // Save model used
+                undefined,
+                organizationId,
               );
             }
           }
@@ -872,6 +875,8 @@ ${dto.systemPrompt || ''}`;
               lastUserMessage,
               fullResponse,
               modelUsed,  // Save model used
+              undefined,
+              organizationId,
             );
           }
         }
@@ -963,6 +968,7 @@ ${dto.systemPrompt || ''}`;
     assistantResponse: string,
     modelUsed?: string,
     messageCount?: number,
+    organizationId?: string,
   ): Promise<void> {
     try {
       const { needsSummary, context } = await this.contextBuilder.updateAfterResponse(
@@ -971,6 +977,7 @@ ${dto.systemPrompt || ''}`;
         userMessage,
         assistantResponse,
         this.aiRouterService,  // Pass AI router (for conditional AI extraction)
+        organizationId,
       );
 
       // Save model used (for branding)
@@ -984,6 +991,7 @@ ${dto.systemPrompt || ''}`;
         sessionId,
         userMessage,
         assistantResponse,
+        organizationId,
       );
 
       // Update Entity Store (smart extraction - rule-based + conditional AI)
@@ -996,9 +1004,9 @@ ${dto.systemPrompt || ''}`;
         this.aiRouterService,
         isLocalModelAvailable,
       );
-      
+
       if (entities.length > 0) {
-        await this.entityStore.updateStore(userId, entities, userMessage);
+        await this.entityStore.updateStore(userId, entities, userMessage, organizationId);
         this.logger.log(`🏷️ Extracted ${entities.length} entities for user ${userId}`);
       }
 

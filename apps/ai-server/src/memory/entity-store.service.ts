@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from './redis.service';
+import { MemoryKeysHelper } from './memory-keys.helper';
 
 // Entity type definition
 export enum EntityType {
@@ -94,8 +95,8 @@ export class EntityStoreService {
     this.TTL_DAYS = parseInt(this.configService.get('ENTITY_STORE_TTL_DAYS', '60'));
   }
 
-  private getKey(userId: string): string {
-    return `user:${userId}:entities`;
+  private keys(organizationId?: string): MemoryKeysHelper {
+    return new MemoryKeysHelper(organizationId);
   }
 
   private getTTL(): number {
@@ -105,12 +106,13 @@ export class EntityStoreService {
   /**
    * Entity Store 조회
    */
-  async getStore(userId: string): Promise<EntityStore | null> {
+  async getStore(userId: string, organizationId?: string): Promise<EntityStore | null> {
     if (!this.redis.isReady()) return null;
-    
-    const store = await this.redis.getJson<EntityStore>(this.getKey(userId));
+
+    const key = this.keys(organizationId).userEntities(userId);
+    const store = await this.redis.getJson<EntityStore>(key);
     if (store) {
-      await this.redis.expire(this.getKey(userId), this.getTTL());
+      await this.redis.expire(key, this.getTTL());
     }
     return store;
   }
@@ -118,11 +120,11 @@ export class EntityStoreService {
   /**
    * Entity Store 저장
    */
-  async saveStore(userId: string, store: EntityStore): Promise<void> {
+  async saveStore(userId: string, store: EntityStore, organizationId?: string): Promise<void> {
     if (!this.redis.isReady()) return;
-    
+
     store.lastUpdated = new Date().toISOString();
-    await this.redis.setJson(this.getKey(userId), store, this.getTTL());
+    await this.redis.setJson(this.keys(organizationId).userEntities(userId), store, this.getTTL());
   }
 
   /**
@@ -392,10 +394,11 @@ during요하지 않은 일반 단어는 제외please do. max 5개만 추출pleas
     userId: string,
     entities: ExtractedEntity[],
     context: string,
+    organizationId?: string,
   ): Promise<void> {
     if (entities.length === 0) return;
 
-    let store = await this.getStore(userId) || this.createEmptyStore();
+    let store = await this.getStore(userId, organizationId) || this.createEmptyStore();
     const now = new Date().toISOString();
 
     for (const extracted of entities) {
@@ -451,7 +454,7 @@ during요하지 않은 일반 단어는 제외please do. max 5개만 추출pleas
       store.entities = newEntities;
     }
 
-    await this.saveStore(userId, store);
+    await this.saveStore(userId, store, organizationId);
     this.logger.log(`💾 Updated entity store for user ${userId}: ${entities.length} entities`);
   }
 
@@ -462,8 +465,9 @@ during요하지 않은 일반 단어는 제외please do. max 5개만 추출pleas
     userId: string,
     limit: number = 10,
     type?: EntityType,
+    organizationId?: string,
   ): Promise<Entity[]> {
-    const store = await this.getStore(userId);
+    const store = await this.getStore(userId, organizationId);
     if (!store) return [];
 
     let entities = Object.values(store.entities);
@@ -482,8 +486,8 @@ during요하지 않은 일반 단어는 제외please do. max 5개만 추출pleas
   /**
    * Entity 기반 user profile Generate summary
    */
-  async getEntitySummary(userId: string): Promise<string | null> {
-    const store = await this.getStore(userId);
+  async getEntitySummary(userId: string, organizationId?: string): Promise<string | null> {
+    const store = await this.getStore(userId, organizationId);
     if (!store || Object.keys(store.entities).length === 0) return null;
 
     const parts: string[] = [];
@@ -526,9 +530,9 @@ during요하지 않은 일반 단어는 제외please do. max 5개만 추출pleas
   /**
    * Entity Store 삭제 (GDPR)
    */
-  async deleteStore(userId: string): Promise<void> {
+  async deleteStore(userId: string, organizationId?: string): Promise<void> {
     if (!this.redis.isReady()) return;
-    await this.redis.del(this.getKey(userId));
+    await this.redis.del(this.keys(organizationId).userEntities(userId));
     this.logger.log(`🗑️ Deleted entity store for user ${userId}`);
   }
 

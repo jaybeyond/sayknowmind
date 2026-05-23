@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from './redis.service';
 import { UserMemory, UserProfile } from './dto/memory.dto';
+import { MemoryKeysHelper } from './memory-keys.helper';
 
 interface ExtractedInfo {
   name?: string;
@@ -85,8 +86,8 @@ export class UserMemoryService {
     this.ENABLE_AI_EXTRACTION = this.configService.get('ENABLE_AI_MEMORY_EXTRACTION', 'true') === 'true';
   }
 
-  private getKey(userId: string): string {
-    return `user:${userId}:memory`;
+  private keys(organizationId?: string): MemoryKeysHelper {
+    return new MemoryKeysHelper(organizationId);
   }
 
   private getTTL(): number {
@@ -96,15 +97,16 @@ export class UserMemoryService {
   /**
    * Get user memory
    */
-  async getMemory(userId: string): Promise<UserMemory | null> {
+  async getMemory(userId: string, organizationId?: string): Promise<UserMemory | null> {
     if (!this.redis.isReady()) {
       this.logger.warn('Redis not ready, skipping memory retrieval');
       return null;
     }
 
-    const memory = await this.redis.getJson<UserMemory>(this.getKey(userId));
+    const key = this.keys(organizationId).userMemory(userId);
+    const memory = await this.redis.getJson<UserMemory>(key);
     if (memory) {
-      await this.redis.expire(this.getKey(userId), this.getTTL());
+      await this.redis.expire(key, this.getTTL());
     }
     return memory;
   }
@@ -112,33 +114,33 @@ export class UserMemoryService {
   /**
    * Save user memory
    */
-  async saveMemory(userId: string, memory: UserMemory): Promise<void> {
+  async saveMemory(userId: string, memory: UserMemory, organizationId?: string): Promise<void> {
     if (!this.redis.isReady()) return;
-    
+
     memory.profile.updatedAt = new Date().toISOString();
-    await this.redis.setJson(this.getKey(userId), memory, this.getTTL());
+    await this.redis.setJson(this.keys(organizationId).userMemory(userId), memory, this.getTTL());
     this.logger.log(`💾 Saved memory for user ${userId}`);
   }
 
   /**
    * 프로필 업데이트
    */
-  async updateProfile(userId: string, updates: Partial<UserProfile>): Promise<void> {
-    const memory = await this.getMemory(userId) || this.createEmptyMemory();
+  async updateProfile(userId: string, updates: Partial<UserProfile>, organizationId?: string): Promise<void> {
+    const memory = await this.getMemory(userId, organizationId) || this.createEmptyMemory();
     memory.profile = { ...memory.profile, ...updates, updatedAt: new Date().toISOString() };
-    await this.saveMemory(userId, memory);
+    await this.saveMemory(userId, memory, organizationId);
   }
 
   /**
    * 사실 추가
    */
-  async addFact(userId: string, fact: string, confidence: number, source: string): Promise<void> {
+  async addFact(userId: string, fact: string, confidence: number, source: string, organizationId?: string): Promise<void> {
     if (!fact || fact.trim().length < 3) return;
     
-    const memory = await this.getMemory(userId) || this.createEmptyMemory();
-    
+    const memory = await this.getMemory(userId, organizationId) || this.createEmptyMemory();
+
     // during복 체크 (유사도 기반)
-    const existingIndex = memory.facts.findIndex(f => 
+    const existingIndex = memory.facts.findIndex(f =>
       this.isSimilarFact(f.fact, fact)
     );
 
@@ -158,7 +160,7 @@ export class UserMemoryService {
         source,
         createdAt: new Date().toISOString(),
       });
-      
+
       // max 30개 유지 (during요도순)
       if (memory.facts.length > 30) {
         memory.facts.sort((a, b) => b.confidence - a.confidence);
@@ -166,7 +168,7 @@ export class UserMemoryService {
       }
     }
 
-    await this.saveMemory(userId, memory);
+    await this.saveMemory(userId, memory, organizationId);
     this.logger.log(`📝 Added fact for user ${userId}: ${fact}`);
   }
 
@@ -274,36 +276,37 @@ JSON format으로만 응답please do:`;
     assistantResponse: string,
     messageCount?: number,
     aiRouter?: any,
+    organizationId?: string,
   ): Promise<ExtractedInfo> {
     const extracted: ExtractedInfo = {};
     const source = `session:${sessionId}`;
-    
+
     // 0. 명시적 "기억해" 명령 처리 (최우선)
     const explicitMemory = this.extractExplicitMemory(userMessage);
     if (explicitMemory) {
-      await this.addFact(userId, explicitMemory, 1.0, source);
+      await this.addFact(userId, explicitMemory, 1.0, source, organizationId);
       this.logger.log(`💾 Explicit memory saved: ${explicitMemory}`);
       extracted.facts = [explicitMemory];
       return extracted;
     }
-    
+
     // 1. 향상된 Pattern matching (무료)
     const patternExtracted = this.extractByPatterns(userMessage, assistantResponse);
-    
+
     // 2. semantic 추출 (무료)
     const semanticExtracted = this.extractBySemantic(userMessage, assistantResponse);
-    
+
     // 3. Result 병합
     Object.assign(extracted, patternExtracted, semanticExtracted);
-    
+
     // 4. AI-based extraction (조건부 - 비용 최적화)
     const shouldUseAI = this.shouldUseAIExtraction(userMessage, messageCount || 0);
     const hasEnoughData = extracted.name || extracted.occupation || (extracted.interests && extracted.interests.length > 0);
-    
+
     if (shouldUseAI && !hasEnoughData && aiRouter) {
       this.logger.log(`🤖 Triggering AI extraction (messageCount: ${messageCount})`);
       const aiExtracted = await this.extractWithAI(userMessage, assistantResponse, aiRouter);
-      
+
       if (aiExtracted) {
         // AI Result 병합 (existing pattern Result보다 우선)
         if (aiExtracted.name && !extracted.name) extracted.name = aiExtracted.name;
@@ -317,47 +320,47 @@ JSON format으로만 응답please do:`;
         }
       }
     }
-    
+
     // name 저장
     if (extracted.name) {
-      await this.updateProfile(userId, { name: extracted.name });
+      await this.updateProfile(userId, { name: extracted.name }, organizationId);
       this.logger.log(`👤 Extracted name: ${extracted.name}`);
     }
-    
+
     // occupation 저장
     if (extracted.occupation) {
-      await this.updateProfile(userId, { occupation: extracted.occupation });
+      await this.updateProfile(userId, { occupation: extracted.occupation }, organizationId);
       this.logger.log(`💼 Extracted occupation: ${extracted.occupation}`);
     }
-    
+
     // location 저장
     if (extracted.location) {
-      await this.addFact(userId, `거주지: ${extracted.location}`, 0.85, source);
+      await this.addFact(userId, `거주지: ${extracted.location}`, 0.85, source, organizationId);
     }
-    
+
     // interests 저장
     if (extracted.interests && extracted.interests.length > 0) {
-      const memory = await this.getMemory(userId) || this.createEmptyMemory();
+      const memory = await this.getMemory(userId, organizationId) || this.createEmptyMemory();
       const existingInterests = memory.profile.interests || [];
       const newInterests = [...new Set([...existingInterests, ...extracted.interests])].slice(0, 15);
-      await this.updateProfile(userId, { interests: newInterests });
+      await this.updateProfile(userId, { interests: newInterests }, organizationId);
       this.logger.log(`🎯 Extracted interests: ${extracted.interests.join(', ')}`);
     }
-    
+
     // 기타 사실 저장
     if (extracted.facts && extracted.facts.length > 0) {
       for (const fact of extracted.facts) {
-        await this.addFact(userId, fact, 0.75, source);
+        await this.addFact(userId, fact, 0.75, source, organizationId);
       }
     }
-    
+
     // preference도 저장
     if (extracted.preferences) {
-      const memory = await this.getMemory(userId) || this.createEmptyMemory();
+      const memory = await this.getMemory(userId, organizationId) || this.createEmptyMemory();
       memory.preferences = { ...memory.preferences, ...extracted.preferences };
-      await this.saveMemory(userId, memory);
+      await this.saveMemory(userId, memory, organizationId);
     }
-    
+
     return extracted;
   }
 
@@ -515,17 +518,17 @@ JSON format으로만 응답please do:`;
   /**
    * delete memory (GDPR)
    */
-  async deleteMemory(userId: string): Promise<void> {
+  async deleteMemory(userId: string, organizationId?: string): Promise<void> {
     if (!this.redis.isReady()) return;
-    await this.redis.del(this.getKey(userId));
+    await this.redis.del(this.keys(organizationId).userMemory(userId));
     this.logger.log(`🗑️ Deleted memory for user ${userId}`);
   }
 
   /**
    * Generate memory summary (prompt용) - 개선된 버before
    */
-  async getMemorySummary(userId: string): Promise<string | null> {
-    const memory = await this.getMemory(userId);
+  async getMemorySummary(userId: string, organizationId?: string): Promise<string | null> {
+    const memory = await this.getMemory(userId, organizationId);
     if (!memory) return null;
 
     const parts: string[] = [];

@@ -30,6 +30,18 @@ export class ChatRequestDto {
   @IsString()
   sessionId?: string;
 
+  /**
+   * Team organization the caller is acting within.
+   * When present, memory keys are namespaced as
+   * org:{organizationId}:user:{userId}:* so that the same userId
+   * in different orgs maintains separate working memory.
+   * Callers that omit this field continue to use the legacy
+   * un-prefixed key scheme — fully backward-compatible.
+   */
+  @IsOptional()
+  @IsString()
+  organizationId?: string;
+
   @IsOptional()
   @IsString()
   message?: string; // Single message (memory system manages context)
