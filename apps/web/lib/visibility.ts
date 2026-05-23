@@ -47,8 +47,13 @@ export function writableClause(
   userParam: number,
   isAdmin: boolean,
 ): string {
+  // Both branches reference $userParam so callers can always pass userId in
+  // their params array regardless of role. Without this Postgres rejects
+  // the prepared statement with 42P18 (indeterminate_datatype) on the
+  // admin path, where the placeholder would otherwise appear in no
+  // expression that gives it a type.
   return isAdmin
-    ? `${alias}.organization_id = $${orgParam}`
+    ? `(${alias}.organization_id = $${orgParam} AND $${userParam}::text IS NOT NULL)`
     : `(${alias}.organization_id = $${orgParam} AND ${alias}.user_id = $${userParam})`;
 }
 
