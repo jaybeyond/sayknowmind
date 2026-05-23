@@ -191,7 +191,7 @@ export function NotificationBell() {
       </Button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full mt-2 w-80 max-h-96 flex flex-col rounded-xl border border-border bg-popover shadow-lg z-50">
+        <div className="absolute right-0 top-full mt-2 w-80 max-h-96 flex flex-col rounded-xl border border-border bg-popover shadow-lg z-50">
           {/* Sticky Header */}
           <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b border-border bg-popover rounded-t-xl z-10">
             <h3 className="text-sm font-semibold">{t("notifications.title")}</h3>
