@@ -23,6 +23,12 @@ export function ProfileTab() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
+  // useSession resolves from a client-side cache, so the first client render can
+  // differ from the server's (which has no session). Gate on `mounted` so the
+  // initial client render matches the server and React doesn't see a hydration
+  // mismatch; real content appears after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (session?.user?.name) setName(session.user.name);
@@ -81,7 +87,7 @@ export function ProfileTab() {
     }
   };
 
-  if (isPending) {
+  if (!mounted || isPending) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
