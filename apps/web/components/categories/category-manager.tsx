@@ -3,9 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { CategoryTree } from "./category-tree";
 import { CategoryGraph } from "./category-graph";
-import { FileText, ExternalLink, X, FolderOpen, Link2 } from "lucide-react";
+import { FileText, ExternalLink, X, FolderOpen } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
-import { ShareResourceDialog } from "@/components/share-resource-dialog";
 
 interface CategoryData {
   id: string;
@@ -50,8 +49,6 @@ export function CategoryManager() {
   const [createParentId, setCreateParentId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<CategoryDocument[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
-  const [shareCategoryId, setShareCategoryId] = useState<string | null>(null);
-  const [shareCategoryName, setShareCategoryName] = useState<string>("");
 
   const findNode = useCallback((node: CategoryNode | null, id: string): CategoryNode | null => {
     if (!node) return null;
@@ -308,16 +305,6 @@ export function CategoryManager() {
               </div>
               <button
                 onClick={() => {
-                  setShareCategoryId(selectedId);
-                  setShareCategoryName(selectedName);
-                }}
-                className="p-1 rounded hover:bg-muted"
-                title="Share with teammates"
-              >
-                <Link2 className="size-3.5 text-muted-foreground" />
-              </button>
-              <button
-                onClick={() => {
                   setSelectedId(null);
                   setDocuments([]);
                 }}
@@ -379,13 +366,6 @@ export function CategoryManager() {
           </div>
         )}
       </div>
-      <ShareResourceDialog
-        open={!!shareCategoryId}
-        onOpenChange={(open) => { if (!open) setShareCategoryId(null); }}
-        resourceType="category"
-        resourceId={shareCategoryId ?? ""}
-        resourceName={shareCategoryName}
-      />
     </div>
   );
 }
