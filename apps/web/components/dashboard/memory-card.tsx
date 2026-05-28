@@ -34,6 +34,7 @@ import {
   Share2,
   FolderOpen,
   Users,
+  Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
@@ -46,6 +47,7 @@ import { ShareToTeamsDialog } from "./share-to-teams-dialog";
 import { MemoryEditModal } from "./memory-edit-modal";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
 
 interface MemoryCardProps {
   memory: Memory;
@@ -72,7 +74,7 @@ const ProcessingBadge = ({ status }: { status?: Memory["jobStatus"] }) => {
   );
 };
 
-const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text" | "doc"; fileType?: string }) => {
+const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text" | "doc" | "mindmap"; fileType?: string }) => {
   if (type === "file") {
     switch (fileType) {
       case "image": return <ImageIcon className="size-3.5 text-muted-foreground" />;
@@ -82,6 +84,7 @@ const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text" | "doc
   }
   if (type === "text") return <AlignLeft className="size-3.5 text-muted-foreground" />;
   if (type === "doc") return <FileType className="size-3.5 text-muted-foreground" />;
+  if (type === "mindmap") return <Network className="size-3.5 text-muted-foreground" />;
   return <Globe className="size-3.5 text-muted-foreground" />;
 };
 
@@ -95,6 +98,7 @@ export function MemoryCard({
     useMemoryStore();
   const { t } = useTranslation();
   const { categories } = useCategoriesStore();
+  const router = useRouter();
   const [shareOpen, setShareOpen] = React.useState(false);
   const [teamShareOpen, setTeamShareOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
@@ -148,6 +152,8 @@ export function MemoryCard({
   const handleClick = () => {
     if (onSelect) {
       onSelect(memory);
+    } else if (memory.docType === "mindmap") {
+      router.push(`/mindmaps/${memory.id}`);
     } else if (fileUrl && (isImage || isVideo)) {
       void openExternal(fileUrl);
     } else if (memory.url) {
@@ -540,6 +546,8 @@ export function MemoryCard({
                 <ImageIcon className="size-8 text-muted-foreground" />
               ) : isVideo ? (
                 <Video className="size-8 text-muted-foreground" />
+              ) : memory.docType === "mindmap" ? (
+                <Network className="size-8 text-muted-foreground" />
               ) : memory.docType === "file" ? (
                 <FileText className="size-8 text-muted-foreground" />
               ) : memory.docType === "text" ? (

@@ -3,7 +3,7 @@ import { getOrgContext } from "@/lib/org-context";
 import { insertDocument } from "@/lib/ingest/document-store";
 import { ErrorCode } from "@/lib/types";
 
-/** POST /api/docs — create a new blank doc (source_type='doc') */
+/** POST /api/docs — create a new blank doc or mind map */
 export async function POST(request: NextRequest) {
   const ctx = await getOrgContext();
   if (!ctx) {
@@ -14,10 +14,27 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json().catch(() => ({})) as { title?: string };
+    const body = await request.json().catch(() => ({})) as { title?: string; type?: "doc" | "mindmap" };
     const title = typeof body.title === "string" && body.title.trim()
       ? body.title.trim()
       : "Untitled";
+    const docType = body.type === "mindmap" ? "mindmap" : "doc";
+
+    if (docType === "mindmap") {
+      const rootNode = { id: "root", topic: title };
+      const id = await insertDocument({
+        userId: ctx.userId,
+        organizationId: ctx.organizationId,
+        title,
+        content: title,
+        sourceType: "mindmap",
+        metadata: {
+          content_format: "mindmap",
+          mindmap: { nodeData: rootNode },
+        },
+      });
+      return NextResponse.json({ id }, { status: 201 });
+    }
 
     const id = await insertDocument({
       userId: ctx.userId,

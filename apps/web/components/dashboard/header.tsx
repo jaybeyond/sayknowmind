@@ -32,6 +32,7 @@ import {
   Check,
   Zap,
   FileText,
+  Network,
 } from "lucide-react";
 import {
   Tooltip,
@@ -62,6 +63,15 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
       if (!res.ok) return;
       const { id } = await res.json() as { id: string };
       router.push(`/docs/${id}`);
+    } catch { /* silent */ }
+  }, [router]);
+
+  const handleNewMindmap = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/docs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "mindmap" }) });
+      if (!res.ok) return;
+      const { id } = await res.json() as { id: string };
+      router.push(`/mindmaps/${id}`);
     } catch { /* silent */ }
   }, [router]);
 
@@ -289,6 +299,11 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
               <Button size="sm" variant="outline" className="hidden sm:flex" onClick={handleNewDoc}>
                 <FileText className="size-4" />
                 {t("header.newDoc") || "New doc"}
+              </Button>
+
+              <Button size="sm" variant="outline" className="hidden sm:flex" onClick={handleNewMindmap}>
+                <Network className="size-4" />
+                {t("header.newMindmap") || "New mind map"}
               </Button>
 
               <Button size="sm" className="hidden sm:flex" onClick={() => setAddOpen(true)}>
