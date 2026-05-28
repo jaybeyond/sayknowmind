@@ -31,6 +31,7 @@ import {
   ArrowUpDown,
   Check,
   Zap,
+  FileText,
 } from "lucide-react";
 import {
   Tooltip,
@@ -44,6 +45,7 @@ import { useTranslation } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { useRuntimeStore } from "@/store/runtime-store";
+import { useRouter } from "next/navigation";
 
 interface MemoryHeaderProps {
   title?: string;
@@ -52,6 +54,16 @@ interface MemoryHeaderProps {
 
 export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   const [addOpen, setAddOpen] = React.useState(false);
+  const router = useRouter();
+
+  const handleNewDoc = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/docs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      if (!res.ok) return;
+      const { id } = await res.json() as { id: string };
+      router.push(`/docs/${id}`);
+    } catch { /* silent */ }
+  }, [router]);
 
   // Listen for tray menu "add memory" event
   React.useEffect(() => {
@@ -273,6 +285,11 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              <Button size="sm" variant="outline" className="hidden sm:flex" onClick={handleNewDoc}>
+                <FileText className="size-4" />
+                {t("header.newDoc") || "New doc"}
+              </Button>
 
               <Button size="sm" className="hidden sm:flex" onClick={() => setAddOpen(true)}>
                 <Plus className="size-4" />

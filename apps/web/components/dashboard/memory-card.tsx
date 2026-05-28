@@ -72,7 +72,7 @@ const ProcessingBadge = ({ status }: { status?: Memory["jobStatus"] }) => {
   );
 };
 
-const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text"; fileType?: string }) => {
+const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text" | "doc"; fileType?: string }) => {
   if (type === "file") {
     switch (fileType) {
       case "image": return <ImageIcon className="size-3.5 text-muted-foreground" />;
@@ -81,6 +81,7 @@ const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text"; fileT
     }
   }
   if (type === "text") return <AlignLeft className="size-3.5 text-muted-foreground" />;
+  if (type === "doc") return <FileType className="size-3.5 text-muted-foreground" />;
   return <Globe className="size-3.5 text-muted-foreground" />;
 };
 

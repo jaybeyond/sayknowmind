@@ -97,9 +97,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   try {
     const body = await request.json();
-    const { title, summary, metadata, privacyLevel, categoryId } = body as {
+    const { title, summary, content, metadata, privacyLevel, categoryId } = body as {
       title?: string;
       summary?: string;
+      content?: string;
       metadata?: Record<string, unknown>;
       privacyLevel?: string;
       categoryId?: string | null;
@@ -114,6 +115,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (title !== undefined) {
       setClauses.push(`title = $${paramIdx}`);
       params.push(title);
+      paramIdx++;
+    }
+
+    if (content !== undefined) {
+      setClauses.push(`content = $${paramIdx}`);
+      params.push(content);
       paramIdx++;
     }
 
@@ -141,7 +148,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       paramIdx++;
     }
 
-    if (setClauses.length === 1 && categoryId === undefined) {
+    if (setClauses.length === 1 /* only updated_at */ && categoryId === undefined) {
       return NextResponse.json(
         { code: ErrorCode.SYSTEM_VALIDATION_ERROR, message: "No fields to update", timestamp: new Date().toISOString() },
         { status: 400 },

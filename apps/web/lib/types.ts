@@ -9,7 +9,7 @@
 
 export type QueryMode = 'local' | 'global' | 'hybrid' | 'drift' | 'mix' | 'naive';
 
-export type SourceType = 'web' | 'file' | 'text' | 'browser_extension';
+export type SourceType = 'web' | 'file' | 'text' | 'browser_extension' | 'doc';
 
 export type EntityType = 'person' | 'organization' | 'location' | 'concept' | 'keyword' | 'date' | 'other';
 

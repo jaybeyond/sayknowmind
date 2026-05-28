@@ -23,7 +23,7 @@ export type Memory = {
   whatItSolves?: string;
   keyPoints?: string[];
   readingTimeMinutes?: number;
-  docType?: "url" | "file" | "text";
+  docType?: "url" | "file" | "text" | "doc";
   fileType?: string; // image, video, pdf, docx, etc.
   fileName?: string;
   ogImage?: string;
@@ -58,8 +58,8 @@ function documentToMemory(row: Record<string, unknown>): Memory {
 
   // Use DB source_type column (reliable) over metadata.doc_type
   const sourceType = String(row.source_type ?? "");
-  const docType: "url" | "file" | "text" =
-    sourceType === "file" ? "file" : sourceType === "text" ? "text" : "url";
+  const docType: "url" | "file" | "text" | "doc" =
+    sourceType === "file" ? "file" : sourceType === "text" ? "text" : sourceType === "doc" ? "doc" : "url";
 
   const fileType = typeof metadata.fileType === "string" ? metadata.fileType : undefined;
   const hasFile = typeof metadata.filePath === "string";
