@@ -1,6 +1,7 @@
 import { pool } from "@/lib/db";
 import type { SourceType, EntityType } from "@/lib/types";
 import { recordSyncEvent } from "@/lib/relay/sync-service";
+import { resolveDefaultPrivacy } from "@/lib/org-context";
 
 export interface InsertDocumentParams {
   userId: string;
@@ -11,6 +12,9 @@ export interface InsertDocumentParams {
   url?: string;
   sourceType: SourceType;
   metadata: Record<string, unknown>;
+  /** Override the default visibility. When omitted, documents created in a
+   *  team org default to 'shared' (team-wide) and personal-org docs to 'private'. */
+  privacyLevel?: "private" | "shared";
 }
 
 export interface InsertEntityParams {
@@ -36,9 +40,11 @@ export interface DocumentRow {
 }
 
 export async function insertDocument(params: InsertDocumentParams): Promise<string> {
+  const privacyLevel =
+    params.privacyLevel ?? (await resolveDefaultPrivacy(params.organizationId, params.userId));
   const result = await pool.query(
-    `INSERT INTO documents (user_id, organization_id, title, content, summary, url, source_type, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO documents (user_id, organization_id, title, content, summary, url, source_type, metadata, privacy_level)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
     [
       params.userId,
@@ -49,6 +55,7 @@ export async function insertDocument(params: InsertDocumentParams): Promise<stri
       params.url ?? null,
       params.sourceType,
       JSON.stringify(params.metadata),
+      privacyLevel,
     ],
   );
   const documentId = result.rows[0].id;

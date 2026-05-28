@@ -26,6 +26,28 @@ export function isOrgAdmin(role: string): boolean {
 }
 
 /**
+ * Default visibility for a newly created resource, based on whether the active
+ * org is the caller's personal org or a real team.
+ *
+ * A user's personal org has the deterministic slug `personal-{userId}` (minted
+ * in migration 053). Anything created there stays `private` — it's a solo
+ * vault. Anything created inside a team org is `shared` by default, so every
+ * teammate sees it without an explicit per-person grant. A missing org id is
+ * treated as personal (private) to fail safe.
+ */
+export async function resolveDefaultPrivacy(
+  organizationId: string | null | undefined,
+  userId: string,
+): Promise<"private" | "shared"> {
+  if (!organizationId) return "private";
+  const res = await pool.query(
+    `SELECT 1 FROM organization WHERE id = $1 AND slug = $2 LIMIT 1`,
+    [organizationId, `personal-${userId}`],
+  );
+  return res.rows.length > 0 ? "private" : "shared";
+}
+
+/**
  * Resolve the caller's identity and active organization, verifying
  * membership in one query. Returns null when unauthenticated, or when the
  * user belongs to no organization (should not happen once 053 has run).

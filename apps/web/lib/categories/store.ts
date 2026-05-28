@@ -1,6 +1,6 @@
 import { pool } from "@/lib/db";
 import { readableClause, writableClause, editableViaShareClause } from "@/lib/visibility";
-import { isOrgAdmin, OrgContext } from "@/lib/org-context";
+import { isOrgAdmin, OrgContext, resolveDefaultPrivacy } from "@/lib/org-context";
 
 export interface CategoryRow {
   id: string;
@@ -63,7 +63,10 @@ export async function createCategory(params: {
   const { ctx } = params;
   let depth = 0;
   let path = params.name;
-  let privacyLevel = params.privacyLevel ?? "private";
+  // Top-level categories default to team-wide visibility inside a team org and
+  // stay private in a personal org. Child categories inherit the parent below.
+  let privacyLevel =
+    params.privacyLevel ?? (await resolveDefaultPrivacy(ctx.organizationId, ctx.userId));
 
   // If parent specified, compute depth, path, and inherit privacy
   if (params.parentId) {
