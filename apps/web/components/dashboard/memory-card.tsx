@@ -34,7 +34,6 @@ import {
   Share2,
   FolderOpen,
   Users,
-  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
@@ -43,6 +42,7 @@ import { useTranslation } from "@/lib/i18n";
 import { getVideoEmbedUrl } from "@/lib/video-embed";
 import { openExternal } from "@/lib/open-external";
 import { ShareDialog } from "./share-dialog";
+import { ShareToTeamsDialog } from "./share-to-teams-dialog";
 import { MemoryEditModal } from "./memory-edit-modal";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -90,11 +90,12 @@ export function MemoryCard({
   context = "default",
   onSelect,
 }: MemoryCardProps) {
-  const { toggleFavorite, toggleTeamShare, archiveMemory, trashMemory, restoreFromArchive, restoreFromTrash, permanentlyDelete, addUserTag, fetchMemories } =
+  const { toggleFavorite, archiveMemory, trashMemory, restoreFromArchive, restoreFromTrash, permanentlyDelete, addUserTag, fetchMemories } =
     useMemoryStore();
   const { t } = useTranslation();
   const { categories } = useCategoriesStore();
   const [shareOpen, setShareOpen] = React.useState(false);
+  const [teamShareOpen, setTeamShareOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [tagInputOpen, setTagInputOpen] = React.useState(false);
   const [tagValue, setTagValue] = React.useState("");
@@ -273,12 +274,9 @@ export function MemoryCard({
                 </DropdownMenuItem>
               )}
               {context === "default" && (
-                <DropdownMenuItem onClick={() => toggleTeamShare(memory.id)}>
-                  {memory.privacyLevel === "shared" ? (
-                    <><Lock className="size-4 mr-2" />{t("memory.makePrivate") ?? "Make private"}</>
-                  ) : (
-                    <><Users className="size-4 mr-2" />{t("memory.shareWithTeam") ?? "Share with team"}</>
-                  )}
+                <DropdownMenuItem onClick={() => setTeamShareOpen(true)}>
+                  <Users className="size-4 mr-2" />
+                  {t("memory.shareWithTeams") ?? "Share with teams"}
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
@@ -342,6 +340,7 @@ export function MemoryCard({
           </form>
         )}
         <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
+        <ShareToTeamsDialog open={teamShareOpen} onOpenChange={setTeamShareOpen} memoryId={memory.id} memoryName={memory.title} />
         <MemoryEditModal open={editOpen} onOpenChange={setEditOpen} memory={memory} onSaved={() => fetchMemories()} />
       </div>
     );
@@ -411,12 +410,9 @@ export function MemoryCard({
               </DropdownMenuItem>
             )}
             {context === "default" && (
-              <DropdownMenuItem onClick={() => toggleTeamShare(memory.id)}>
-                {memory.privacyLevel === "shared" ? (
-                  <><Lock className="size-4 mr-2" />{t("memory.makePrivate") ?? "Make private"}</>
-                ) : (
-                  <><Users className="size-4 mr-2" />{t("memory.shareWithTeam") ?? "Share with team"}</>
-                )}
+              <DropdownMenuItem onClick={() => setTeamShareOpen(true)}>
+                <Users className="size-4 mr-2" />
+                {t("memory.shareWithTeams") ?? "Share with teams"}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
@@ -621,6 +617,7 @@ export function MemoryCard({
         </div>
       </button>
       <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
+      <ShareToTeamsDialog open={teamShareOpen} onOpenChange={setTeamShareOpen} memoryId={memory.id} memoryName={memory.title} />
       <MemoryEditModal open={editOpen} onOpenChange={setEditOpen} memory={memory} onSaved={() => fetchMemories()} />
 
       {/* Video embed modal */}

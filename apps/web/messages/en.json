@@ -422,6 +422,7 @@
     "moreTags": "+{{count}} more",
     "share": "Share",
     "shareWithTeam": "Share with team",
+    "shareWithTeams": "Share with teams",
     "makePrivate": "Make private",
     "urlCopied": "URL copied",
     "tagAdded": "Tag added",
@@ -844,6 +845,14 @@
       "shareSuccess": "Shared with {email}",
       "revokeFailed": "Failed to revoke share",
       "revokeSuccess": "Share revoked"
+    },
+    "shareTeams": {
+      "title": "Share with teams",
+      "desc": "Choose which teams can see this memory.",
+      "noTeams": "You're not in any teams yet — create a team to share.",
+      "home": "home",
+      "loadFailed": "Failed to load teams",
+      "updateFailed": "Couldn't update sharing"
     },
     "accept": {
       "loading": "Loading invitation…",

@@ -140,7 +140,6 @@ interface MemoryState {
   removeUserTag: (memoryId: string, tag: string) => void;
   updateMemoryTitle: (memoryId: string, title: string) => void;
   toggleFavorite: (memoryId: string) => void;
-  toggleTeamShare: (memoryId: string) => void;
   archiveMemory: (memoryId: string) => void;
   restoreFromArchive: (memoryId: string) => void;
   trashMemory: (memoryId: string) => void;
@@ -321,35 +320,6 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       set((s) => ({
         memories: s.memories.map((m) =>
           m.id === memoryId ? { ...m, isFavorite: !newValue } : m
-        ),
-      }));
-    });
-  },
-
-  toggleTeamShare: (memoryId) => {
-    const state = get();
-    const memory = state.memories.find((m) => m.id === memoryId);
-    if (!memory) return;
-
-    const next = memory.privacyLevel === "shared" ? "private" : "shared";
-
-    // Optimistic update
-    set({
-      memories: state.memories.map((m) =>
-        m.id === memoryId ? { ...m, privacyLevel: next } : m
-      ),
-    });
-
-    // Persist via the documents PATCH endpoint (privacyLevel, not metadata)
-    fetch(`/api/documents/${memoryId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ privacyLevel: next }),
-    }).catch(() => {
-      // Revert on failure
-      set((s) => ({
-        memories: s.memories.map((m) =>
-          m.id === memoryId ? { ...m, privacyLevel: memory.privacyLevel } : m
         ),
       }));
     });

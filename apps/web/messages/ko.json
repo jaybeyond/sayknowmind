@@ -422,6 +422,7 @@
     "moreTags": "+{{count}}개 더",
     "share": "공유",
     "shareWithTeam": "팀과 공유",
+    "shareWithTeams": "팀에 공유",
     "makePrivate": "비공개로 전환",
     "urlCopied": "URL 복사됨",
     "tagAdded": "태그 추가됨",
@@ -844,6 +845,14 @@
       "shareSuccess": "{email}에게 공유되었습니다",
       "revokeFailed": "공유를 취소하지 못했습니다",
       "revokeSuccess": "공유가 취소되었습니다"
+    },
+    "shareTeams": {
+      "title": "팀에 공유",
+      "desc": "이 메모리를 볼 수 있는 팀을 선택하세요.",
+      "noTeams": "아직 속한 팀이 없어요 — 팀을 만들어 공유하세요.",
+      "home": "홈",
+      "loadFailed": "팀을 불러오지 못했어요",
+      "updateFailed": "공유 설정을 변경하지 못했어요"
     },
     "accept": {
       "loading": "초대 불러오는 중…",

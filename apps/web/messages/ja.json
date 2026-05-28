@@ -422,6 +422,7 @@
     "moreTags": "+{{count}} 件",
     "share": "共有",
     "shareWithTeam": "チームと共有",
+    "shareWithTeams": "チームに共有",
     "makePrivate": "非公開にする",
     "urlCopied": "URLをコピーしました",
     "tagAdded": "タグを追加しました",
@@ -844,6 +845,14 @@
       "shareSuccess": "{email}に共有しました",
       "revokeFailed": "共有の取り消しに失敗しました",
       "revokeSuccess": "共有を取り消しました"
+    },
+    "shareTeams": {
+      "title": "チームに共有",
+      "desc": "このメモリを見られるチームを選択します。",
+      "noTeams": "まだチームに参加していません — チームを作成して共有しましょう。",
+      "home": "ホーム",
+      "loadFailed": "チームの読み込みに失敗しました",
+      "updateFailed": "共有設定を更新できませんでした"
     },
     "accept": {
       "loading": "招待を読み込み中…",

@@ -422,6 +422,7 @@
     "moreTags": "+{{count}} 个更多",
     "share": "分享",
     "shareWithTeam": "与团队共享",
+    "shareWithTeams": "共享给团队",
     "makePrivate": "设为私有",
     "urlCopied": "URL已复制",
     "tagAdded": "标签已添加",
@@ -844,6 +845,14 @@
       "shareSuccess": "已与 {email} 共享",
       "revokeFailed": "撤销共享失败",
       "revokeSuccess": "共享已撤销"
+    },
+    "shareTeams": {
+      "title": "共享给团队",
+      "desc": "选择哪些团队可以看到此记忆。",
+      "noTeams": "你还没有加入任何团队 — 创建一个团队来共享。",
+      "home": "主",
+      "loadFailed": "加载团队失败",
+      "updateFailed": "无法更新共享设置"
     },
     "accept": {
       "loading": "加载邀请中…",
