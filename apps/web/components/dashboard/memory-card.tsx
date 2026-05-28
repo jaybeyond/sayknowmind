@@ -33,6 +33,8 @@ import {
   File,
   Share2,
   FolderOpen,
+  Users,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
@@ -88,7 +90,7 @@ export function MemoryCard({
   context = "default",
   onSelect,
 }: MemoryCardProps) {
-  const { toggleFavorite, archiveMemory, trashMemory, restoreFromArchive, restoreFromTrash, permanentlyDelete, addUserTag, fetchMemories } =
+  const { toggleFavorite, toggleTeamShare, archiveMemory, trashMemory, restoreFromArchive, restoreFromTrash, permanentlyDelete, addUserTag, fetchMemories } =
     useMemoryStore();
   const { t } = useTranslation();
   const { categories } = useCategoriesStore();
@@ -270,6 +272,15 @@ export function MemoryCard({
                   {t("memory.share")}
                 </DropdownMenuItem>
               )}
+              {context === "default" && (
+                <DropdownMenuItem onClick={() => toggleTeamShare(memory.id)}>
+                  {memory.privacyLevel === "shared" ? (
+                    <><Lock className="size-4 mr-2" />{t("memory.makePrivate") ?? "Make private"}</>
+                  ) : (
+                    <><Users className="size-4 mr-2" />{t("memory.shareWithTeam") ?? "Share with team"}</>
+                  )}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               {context === "trash" ? (
                 <>
@@ -397,6 +408,15 @@ export function MemoryCard({
               <DropdownMenuItem onClick={() => setShareOpen(true)}>
                 <Share2 className="size-4 mr-2" />
                 {t("memory.share")}
+              </DropdownMenuItem>
+            )}
+            {context === "default" && (
+              <DropdownMenuItem onClick={() => toggleTeamShare(memory.id)}>
+                {memory.privacyLevel === "shared" ? (
+                  <><Lock className="size-4 mr-2" />{t("memory.makePrivate") ?? "Make private"}</>
+                ) : (
+                  <><Users className="size-4 mr-2" />{t("memory.shareWithTeam") ?? "Share with team"}</>
+                )}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
