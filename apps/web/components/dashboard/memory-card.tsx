@@ -33,6 +33,7 @@ import {
   File,
   Share2,
   FolderOpen,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
@@ -41,6 +42,7 @@ import { useTranslation } from "@/lib/i18n";
 import { getVideoEmbedUrl } from "@/lib/video-embed";
 import { openExternal } from "@/lib/open-external";
 import { ShareDialog } from "./share-dialog";
+import { ShareResourceDialog } from "@/components/share-resource-dialog";
 import { MemoryEditModal } from "./memory-edit-modal";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -93,6 +95,7 @@ export function MemoryCard({
   const { t } = useTranslation();
   const { categories } = useCategoriesStore();
   const [shareOpen, setShareOpen] = React.useState(false);
+  const [teamShareOpen, setTeamShareOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [tagInputOpen, setTagInputOpen] = React.useState(false);
   const [tagValue, setTagValue] = React.useState("");
@@ -270,6 +273,12 @@ export function MemoryCard({
                   {t("memory.share")}
                 </DropdownMenuItem>
               )}
+              {context === "default" && (
+                <DropdownMenuItem onClick={() => setTeamShareOpen(true)}>
+                  <Link2 className="size-4 mr-2" />
+                  Share with teammates
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               {context === "trash" ? (
                 <>
@@ -331,6 +340,13 @@ export function MemoryCard({
           </form>
         )}
         <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
+        <ShareResourceDialog
+          open={teamShareOpen}
+          onOpenChange={setTeamShareOpen}
+          resourceType="document"
+          resourceId={memory.id}
+          resourceName={memory.title}
+        />
         <MemoryEditModal open={editOpen} onOpenChange={setEditOpen} memory={memory} onSaved={() => fetchMemories()} />
       </div>
     );
@@ -397,6 +413,12 @@ export function MemoryCard({
               <DropdownMenuItem onClick={() => setShareOpen(true)}>
                 <Share2 className="size-4 mr-2" />
                 {t("memory.share")}
+              </DropdownMenuItem>
+            )}
+            {context === "default" && (
+              <DropdownMenuItem onClick={() => setTeamShareOpen(true)}>
+                <Link2 className="size-4 mr-2" />
+                Share with teammates
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
@@ -601,6 +623,13 @@ export function MemoryCard({
         </div>
       </button>
       <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={memory} />
+      <ShareResourceDialog
+        open={teamShareOpen}
+        onOpenChange={setTeamShareOpen}
+        resourceType="document"
+        resourceId={memory.id}
+        resourceName={memory.title}
+      />
       <MemoryEditModal open={editOpen} onOpenChange={setEditOpen} memory={memory} onSaved={() => fetchMemories()} />
 
       {/* Video embed modal */}
