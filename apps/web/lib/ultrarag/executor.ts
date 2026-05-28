@@ -102,6 +102,7 @@ async function executeStep(
   context: Record<string, unknown>,
 ): Promise<unknown> {
   const userId = getUserIdFromContext(context);
+  const organizationId = getOrganizationIdFromContext(context);
 
   switch (step.type) {
     case "crawl":
@@ -179,6 +180,12 @@ async function executeStep(
 function getUserIdFromContext(context: Record<string, unknown>): string | undefined {
   return typeof context.userId === "string" && context.userId.length > 0
     ? context.userId
+    : undefined;
+}
+
+function getOrganizationIdFromContext(context: Record<string, unknown>): string | undefined {
+  return typeof context.organizationId === "string" && context.organizationId.length > 0
+    ? context.organizationId
     : undefined;
 }
 

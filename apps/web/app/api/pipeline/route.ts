@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
 import { checkAntiBot } from "@/lib/antibot";
 import { parsePipeline } from "@/lib/ultrarag/parser";
 import { executePipeline } from "@/lib/ultrarag/executor";
@@ -8,13 +8,14 @@ import { ErrorCode } from "@/lib/types";
 
 /** POST /api/pipeline — Execute or validate an UltraRAG pipeline */
 export async function POST(request: NextRequest) {
-  const userId = await getUserIdFromRequest();
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
     );
   }
+  const { userId, organizationId } = ctx;
 
   const blocked = checkAntiBot(request, userId);
   if (blocked) return blocked;
@@ -41,8 +42,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(validation);
     }
 
-    // Execute pipeline
-    const result = await executePipeline(pipeline, { userId });
+    // Execute pipeline with org context so executor can scope document queries.
+    const result = await executePipeline(pipeline, { userId, organizationId });
     return NextResponse.json(result);
   } catch (err) {
     console.error("[pipeline] Error:", err);

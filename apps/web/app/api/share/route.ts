@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext, isOrgAdmin } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { shareDocument, SharedModeError, ensureSharedColumns } from "@/lib/shared-mode";
+import { writableClause, editableViaShareClause } from "@/lib/visibility";
 import type { ShareOptions } from "@/lib/shared-mode";
 
 export const dynamic = "force-dynamic";
 
 /** POST /api/share — create a new share link */
 export async function POST(request: NextRequest) {
-  let userId: string | null = null;
-  try { userId = await getUserIdFromRequest(); } catch { /* auth error */ }
-  if (!userId) {
+  const ctx = await getOrgContext();
+  if (!ctx) {
     return NextResponse.json(
       { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
       { status: 401 },
     );
   }
+  const { userId, organizationId, role } = ctx;
 
   try {
     const body = await request.json() as {
@@ -40,14 +42,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify document ownership and get content + metadata
+    // Verify write access (owner, org admin, or edit-share grantee) and fetch content + metadata.
+    // $1 = documentId, $2 = organizationId, $3 = userId
+    const admin = isOrgAdmin(role);
+    const writeCheck = `(${writableClause("d", 2, 3, admin)} OR ${editableViaShareClause("d", 3, "document")})`;
     const docResult = await pool.query(
       `SELECT d.id, d.content, d.title, d.summary, d.url, d.source_type, d.metadata, d.privacy_level,
               (SELECT c.privacy_level FROM categories c
                JOIN document_categories dc ON dc.category_id = c.id
                WHERE dc.document_id = d.id LIMIT 1) as category_privacy
-       FROM documents d WHERE d.id = $1 AND d.user_id = $2`,
-      [body.documentId, userId],
+       FROM documents d WHERE d.id = $1 AND ${writeCheck}`,
+      [body.documentId, organizationId, userId],
     );
 
     if (docResult.rows.length === 0) {

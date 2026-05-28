@@ -223,6 +223,21 @@ export async function pullFromRelay(
 // Apply operations
 // ---------------------------------------------------------------------------
 
+async function resolvePersonalOrgId(pool: Pool, userId: string): Promise<string | null> {
+  // Prefer the personal org (slug = 'personal-' || userId); fall back to the
+  // user's first membership if the personal org is not found.
+  const result = await pool.query(
+    `SELECT m."organizationId"
+       FROM member m
+       JOIN organization o ON o.id = m."organizationId"
+      WHERE m."userId" = $1
+      ORDER BY (o.slug = $2) DESC NULLS LAST, m."createdAt" ASC
+      LIMIT 1`,
+    [userId, `personal-${userId}`],
+  );
+  return (result.rows[0]?.organizationId as string | undefined) ?? null;
+}
+
 async function applyCreate(pool: Pool, userId: string, payload: SyncPayload): Promise<void> {
   const data = payload.data as {
     id?: string;
@@ -235,13 +250,16 @@ async function applyCreate(pool: Pool, userId: string, payload: SyncPayload): Pr
     privacy_level?: string;
   };
 
+  const organizationId = await resolvePersonalOrgId(pool, userId);
+
   await pool.query(
-    `INSERT INTO documents (id, user_id, title, content, summary, url, source_type, metadata, privacy_level)
-     VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8::jsonb, COALESCE($9, 'private'))
+    `INSERT INTO documents (id, user_id, organization_id, title, content, summary, url, source_type, metadata, privacy_level)
+     VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9::jsonb, COALESCE($10, 'private'))
      ON CONFLICT (id) DO NOTHING`,
     [
       data.id ?? null,
       userId,
+      organizationId,
       data.title ?? "Untitled",
       data.content ?? "",
       data.summary ?? null,
