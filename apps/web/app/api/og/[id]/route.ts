@@ -24,6 +24,15 @@ export async function GET(
     return servePlaceholder();
   }
 
+  // OG images are fetched unauthenticated by crawlers/unfurlers, so only expose
+  // them for documents the owner explicitly shared. Private documents return a
+  // placeholder — this also avoids using the endpoint as a document-existence oracle.
+  if ((doc as { privacy_level?: string }).privacy_level !== "shared") {
+    trace.error = "document not shared";
+    if (debug) return NextResponse.json(trace);
+    return servePlaceholder();
+  }
+
   const meta = (doc.metadata ?? {}) as Record<string, unknown>;
   trace.docUrl = doc.url;
   trace.ogImage = meta.ogImage;

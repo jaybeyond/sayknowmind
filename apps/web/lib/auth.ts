@@ -3,7 +3,22 @@ import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { pool } from "@/lib/db";
 
-const AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "build-placeholder";
+function resolveAuthSecret(): string {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (secret) return secret;
+  // A placeholder is only acceptable during `next build` or in development.
+  // At production runtime a missing secret means every session token would be
+  // signed with a publicly-known string and could be forged, so fail fast.
+  const isBuild = process.env.NEXT_PHASE === "phase-production-build";
+  if (process.env.NODE_ENV === "production" && !isBuild) {
+    throw new Error(
+      "BETTER_AUTH_SECRET is required in production — refusing to start with a placeholder signing key",
+    );
+  }
+  return "build-placeholder";
+}
+
+const AUTH_SECRET = resolveAuthSecret();
 
 // Team feature, Phase 1 — every user owns a "personal" organization, so the
 // team model always has an org context to fall back to. These hooks keep that
