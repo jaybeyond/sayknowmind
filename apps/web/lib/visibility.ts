@@ -88,7 +88,21 @@ export function readableClause(
   userParam: number,
   resourceType: ShareableResource,
 ): string {
-  return `(${visibilityClause(alias, orgParam, userParam)} OR ${sharedWithClause(alias, userParam, resourceType)})`;
+  return `(${visibilityClause(alias, orgParam, userParam)} OR ${sharedWithClause(alias, userParam, resourceType)} OR ${teamSharedClause(alias, orgParam, resourceType)})`;
+}
+
+/**
+ * Read access granted because the resource was shared into the caller's active
+ * team (`resource_team_shares`). Lets one memory live in several teams at once,
+ * beyond its single home `organization_id`. Reuses `orgParam` — adds no new
+ * placeholder, so every existing `readableClause` caller picks this up for free.
+ */
+export function teamSharedClause(
+  alias: string,
+  orgParam: number,
+  resourceType: ShareableResource,
+): string {
+  return `EXISTS (SELECT 1 FROM resource_team_shares rts WHERE rts.resource_type = '${resourceType}' AND rts.resource_id = ${alias}.id AND rts.organization_id = $${orgParam})`;
 }
 
 /**
