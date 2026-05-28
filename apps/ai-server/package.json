@@ -10,7 +10,10 @@
     "start:prod": "node dist/main",
     "start:local": "bash scripts/start-local.sh",
     "generate-keys": "node scripts/generate-keys.js",
-    "chat": "node scripts/chat-cli.js"
+    "chat": "node scripts/chat-cli.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.18.0",
@@ -36,8 +39,11 @@
     "@nestjs/cli": "^10.0.0",
     "@nestjs/schematics": "^10.0.0",
     "@types/express": "^4.17.17",
+    "@types/jest": "^30.0.0",
     "@types/multer": "^1.4.7",
     "@types/node": "^20.3.1",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
     "typescript": "^5.1.3"
   }
 }
