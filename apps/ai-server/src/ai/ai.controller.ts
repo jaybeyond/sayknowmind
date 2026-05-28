@@ -1155,8 +1155,9 @@ ${dto.systemPrompt || ''}`;
         dto.isNewSession,  // Whether this is the first conversation
       );
 
-      // 4. LLM response (with cascade fallback)
-      const result = await this.aiRouterService.chatWithCascade(enhancedMessages, dto.aiModel);
+      // 4. LLM response (with cascade fallback). Pass userLanguage so the sync
+      // path gets the same Korean/Japanese handling as the streaming path.
+      const result = await this.aiRouterService.chatWithCascade(enhancedMessages, dto.aiModel, dto.userLanguage);
 
       // End span with success (Requirements 7.3)
       await this.tracer.endSpan(span.id, {
