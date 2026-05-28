@@ -4,12 +4,26 @@
 -- The EdgeQuake version uses conversation_id/message_id + tenant/workspace refs
 -- which don't match the web app's simple id + user_id TEXT pattern.
 
--- Drop old EdgeQuake versions if they exist (messages first due to FK)
-DROP TABLE IF EXISTS messages CASCADE;
-DROP TABLE IF EXISTS conversations CASCADE;
-DROP TABLE IF EXISTS folders CASCADE;
+-- Drop the old EdgeQuake multi-tenant versions ONLY if they are still present in
+-- their original shape (detected by the EdgeQuake-only columns conversation_id /
+-- tenant_id). Guarding the DROP keeps this migration from destroying live web-app
+-- conversation history if it is ever re-applied to a database that already has the
+-- simple schema — the previous unguarded `DROP TABLE ... CASCADE` would silently
+-- wipe all conversations and messages.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'conversations'
+          AND column_name IN ('conversation_id', 'tenant_id')
+    ) THEN
+        DROP TABLE IF EXISTS messages CASCADE;
+        DROP TABLE IF EXISTS conversations CASCADE;
+        DROP TABLE IF EXISTS folders CASCADE;
+    END IF;
+END $$;
 
-CREATE TABLE conversations (
+CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
     title VARCHAR(500) NOT NULL DEFAULT 'New Conversation',
@@ -20,7 +34,7 @@ CREATE TABLE conversations (
 CREATE INDEX IF NOT EXISTS idx_conversations_user
     ON conversations(user_id, updated_at DESC);
 
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system')),

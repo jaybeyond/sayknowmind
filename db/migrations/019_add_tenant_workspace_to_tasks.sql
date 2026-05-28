@@ -19,19 +19,37 @@ ADD COLUMN IF NOT EXISTS workspace_id UUID;
 -- STEP 2: Migrate existing data
 -- ============================================================================
 
--- For existing tasks, try to extract tenant_id/workspace_id from payload JSON
--- If not available, use a default tenant (adjust as needed for your data)
-UPDATE tasks 
-SET 
-    tenant_id = COALESCE(
-        (payload->>'tenant_id')::UUID,
-        '00000000-0000-0000-0000-000000000000'::UUID
-    ),
-    workspace_id = COALESCE(
-        (payload->>'workspace_id')::UUID,
-        '00000000-0000-0000-0000-000000000000'::UUID
-    )
-WHERE tenant_id IS NULL OR workspace_id IS NULL;
+-- For existing tasks, try to extract tenant_id/workspace_id from the task's JSON
+-- column. The tasks table ships with two possible schemas on a fresh DB: the
+-- EdgeQuake init schema uses `task_data`, while migration 001 uses `payload`.
+-- Detect whichever exists so this migration succeeds on either schema instead of
+-- erroring on a missing column and stranding the migration runner.
+DO $$
+DECLARE
+    json_col text;
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'tasks' AND column_name = 'task_data') THEN
+        json_col := 'task_data';
+    ELSIF EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_name = 'tasks' AND column_name = 'payload') THEN
+        json_col := 'payload';
+    END IF;
+
+    IF json_col IS NOT NULL THEN
+        EXECUTE format($f$
+            UPDATE tasks
+            SET tenant_id = COALESCE((%1$I->>'tenant_id')::UUID, '00000000-0000-0000-0000-000000000000'::UUID),
+                workspace_id = COALESCE((%1$I->>'workspace_id')::UUID, '00000000-0000-0000-0000-000000000000'::UUID)
+            WHERE tenant_id IS NULL OR workspace_id IS NULL
+        $f$, json_col);
+    ELSE
+        UPDATE tasks
+        SET tenant_id = '00000000-0000-0000-0000-000000000000'::UUID,
+            workspace_id = '00000000-0000-0000-0000-000000000000'::UUID
+        WHERE tenant_id IS NULL OR workspace_id IS NULL;
+    END IF;
+END $$;
 
 -- ============================================================================
 -- STEP 3: Add constraints
@@ -101,5 +119,5 @@ END $$;
 
 -- Success message
 DO $$ BEGIN
-    RAISE NOTICE 'Migration 018 completed: Added tenant_id and workspace_id to tasks table with indexes and RLS policies!';
+    RAISE NOTICE 'Migration 019 completed: Added tenant_id and workspace_id to tasks table with indexes and RLS policies!';
 END $$;
