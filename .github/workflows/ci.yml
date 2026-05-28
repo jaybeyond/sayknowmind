@@ -43,12 +43,50 @@ jobs:
         working-directory: apps/web
         run: pnpm build
 
+  # ── Stage 1b: Build checks for other TypeScript packages ───
+  build-ai-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install and build
+        working-directory: apps/ai-server
+        run: npm ci && npm run build
+
+  build-mcp-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install and build
+        working-directory: packages/mcp-server
+        run: npm ci && npm run build
+
+  build-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/dashboard/pnpm-lock.yaml
+      - name: Install and build
+        working-directory: apps/dashboard
+        run: pnpm install --frozen-lockfile && pnpm build
+
   # ── Stage 2: Docker Build + Push ───────────────────────────
   docker-images:
     runs-on: ubuntu-latest
-    needs: lint-test-build
+    needs: [lint-test-build, build-ai-server, build-mcp-server, build-dashboard]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    continue-on-error: true
     permissions:
       contents: read
       packages: write
