@@ -13,7 +13,7 @@ let _initialized = false;
 
 const BOOTSTRAP_TIMEOUT_MS = 3000;
 
-async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+export async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     p,
     new Promise<never>((_, reject) =>

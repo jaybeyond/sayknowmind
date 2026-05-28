@@ -4,8 +4,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { rejectUserScopedEdgeQuakeTool } from "../auth-context.js";
-import { getClient } from "../client.js";
+import { getClient, withTimeout } from "../client.js";
 import { formatError } from "../errors.js";
+
+const QUERY_TIMEOUT_MS = 30_000;
 
 export function registerQueryTools(server: McpServer): void {
   server.tool(
@@ -43,13 +45,17 @@ export function registerQueryTools(server: McpServer): void {
         if (isolationError) return isolationError;
 
         const client = await getClient();
-        const result = await client.query.execute({
-          query: params.query,
-          mode: params.mode,
-          max_results: params.max_results,
-          include_references: params.include_references ?? true,
-          conversation_history: params.conversation_history,
-        });
+        const result = await withTimeout(
+          client.query.execute({
+            query: params.query,
+            mode: params.mode,
+            max_results: params.max_results,
+            include_references: params.include_references ?? true,
+            conversation_history: params.conversation_history,
+          }),
+          QUERY_TIMEOUT_MS,
+          "query.execute",
+        );
 
         return {
           content: [

@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SpanService } from './span.service';
 import { FeedbackService } from './feedback.service';
 import { AdapterService } from './adapter.service';
+import { RedisService } from '../memory/redis.service';
+import { UserMemoryService } from '../memory/user-memory.service';
+import { SemanticMemoryService } from '../memory/semantic-memory.service';
+import { EntityStoreService } from '../memory/entity-store.service';
 
 /**
  * GDPR deletion result interface
@@ -11,6 +15,7 @@ export interface GdprDeletionResult {
   spansDeleted: number;
   feedbacksDeleted: number;
   aggregationsDeleted: number;
+  memoriesDeleted: number;
   totalDeleted: number;
   success: boolean;
   deletedAt: string;
@@ -33,6 +38,10 @@ export class GdprService {
     private readonly spanService: SpanService,
     private readonly feedbackService: FeedbackService,
     private readonly adapterService: AdapterService,
+    private readonly redisService: RedisService,
+    private readonly userMemoryService: UserMemoryService,
+    private readonly semanticMemoryService: SemanticMemoryService,
+    private readonly entityStoreService: EntityStoreService,
   ) {}
 
   /**
@@ -60,6 +69,7 @@ export class GdprService {
       spansDeleted: 0,
       feedbacksDeleted: 0,
       aggregationsDeleted: 0,
+      memoriesDeleted: 0,
       totalDeleted: 0,
       success: false,
       deletedAt: new Date().toISOString(),
@@ -78,14 +88,19 @@ export class GdprService {
       result.aggregationsDeleted = await this.adapterService.deleteUserAggregations(userId);
       this.logger.debug(`Deleted ${result.aggregationsDeleted} aggregation keys for user: ${userId}`);
 
+      // 4. Delete all memory keys across every org prefix and the legacy un-prefixed keys
+      result.memoriesDeleted = await this.deleteUserMemory(userId);
+      this.logger.debug(`Deleted ${result.memoriesDeleted} memory keys for user: ${userId}`);
+
       // Calculate total deletions
-      result.totalDeleted = result.spansDeleted + result.feedbacksDeleted + result.aggregationsDeleted;
+      result.totalDeleted = result.spansDeleted + result.feedbacksDeleted + result.aggregationsDeleted + result.memoriesDeleted;
       result.success = true;
 
       this.logger.log(
         `GDPR deletion completed for user ${userId}: ` +
         `${result.spansDeleted} spans, ${result.feedbacksDeleted} feedbacks, ` +
-        `${result.aggregationsDeleted} aggregations (total: ${result.totalDeleted})`
+        `${result.aggregationsDeleted} aggregations, ${result.memoriesDeleted} memory keys ` +
+        `(total: ${result.totalDeleted})`
       );
 
     } catch (error) {
@@ -96,6 +111,47 @@ export class GdprService {
     }
 
     return result;
+  }
+
+  /**
+   * Delete all Redis memory keys for a user across every org prefix and legacy un-prefixed keys.
+   *
+   * Key patterns deleted:
+   *   org:*:user:{userId}:memory
+   *   org:*:user:{userId}:entities
+   *   org:*:semantic:{userId}
+   *   org:*:semantic:index:{userId}
+   *   user:{userId}:memory         (legacy)
+   *   user:{userId}:entities       (legacy)
+   *   semantic:{userId}            (legacy)
+   *   semantic:index:{userId}      (legacy)
+   *
+   * Idempotent — safe to call when keys are absent.
+   */
+  private async deleteUserMemory(userId: string): Promise<number> {
+    if (!this.redisService.isReady()) return 0;
+
+    const patterns = [
+      `org:*:user:${userId}:memory`,
+      `org:*:user:${userId}:entities`,
+      `org:*:semantic:${userId}`,
+      `org:*:semantic:index:${userId}`,
+      `user:${userId}:memory`,
+      `user:${userId}:entities`,
+      `semantic:${userId}`,
+      `semantic:index:${userId}`,
+    ];
+
+    const allKeys: string[] = [];
+    for (const pattern of patterns) {
+      const found = await this.redisService.scanKeys(pattern);
+      allKeys.push(...found);
+    }
+
+    if (allKeys.length === 0) return 0;
+
+    await this.redisService.delMultiple(allKeys);
+    return allKeys.length;
   }
 
   /**

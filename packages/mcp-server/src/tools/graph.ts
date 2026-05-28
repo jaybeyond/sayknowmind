@@ -4,8 +4,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { rejectUserScopedEdgeQuakeTool } from "../auth-context.js";
-import { getClient } from "../client.js";
+import { getClient, withTimeout } from "../client.js";
 import { formatError } from "../errors.js";
+
+const GRAPH_TIMEOUT_MS = 30_000;
 
 export function registerGraphTools(server: McpServer): void {
   // graph_search_entities
@@ -31,11 +33,15 @@ export function registerGraphTools(server: McpServer): void {
         if (isolationError) return isolationError;
 
         const client = await getClient();
-        const entities = await client.graph.entities.list({
-          search: params.search,
-          label: params.label,
-          per_page: params.limit ?? 20,
-        });
+        const entities = await withTimeout(
+          client.graph.entities.list({
+            search: params.search,
+            label: params.label,
+            per_page: params.limit ?? 20,
+          }),
+          GRAPH_TIMEOUT_MS,
+          "graph.entities.list",
+        );
 
         return {
           content: [
@@ -74,7 +80,11 @@ export function registerGraphTools(server: McpServer): void {
         if (isolationError) return isolationError;
 
         const client = await getClient();
-        const entity = await client.graph.entities.get(params.entity_name);
+        const entity = await withTimeout(
+          client.graph.entities.get(params.entity_name),
+          GRAPH_TIMEOUT_MS,
+          "graph.entities.get",
+        );
 
         return {
           content: [
@@ -103,8 +113,10 @@ export function registerGraphTools(server: McpServer): void {
         if (isolationError) return isolationError;
 
         const client = await getClient();
-        const neighborhood = await client.graph.entities.neighborhood(
-          params.entity_name,
+        const neighborhood = await withTimeout(
+          client.graph.entities.neighborhood(params.entity_name),
+          GRAPH_TIMEOUT_MS,
+          "graph.entities.neighborhood",
         );
 
         return {
@@ -156,12 +168,16 @@ export function registerGraphTools(server: McpServer): void {
         if (isolationError) return isolationError;
 
         const client = await getClient();
-        const relationships = await client.graph.relationships.list({
-          source: params.source,
-          target: params.target,
-          label: params.label,
-          per_page: params.limit ?? 20,
-        });
+        const relationships = await withTimeout(
+          client.graph.relationships.list({
+            source: params.source,
+            target: params.target,
+            label: params.label,
+            per_page: params.limit ?? 20,
+          }),
+          GRAPH_TIMEOUT_MS,
+          "graph.relationships.list",
+        );
 
         return {
           content: [

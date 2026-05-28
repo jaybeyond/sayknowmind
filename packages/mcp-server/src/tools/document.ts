@@ -6,8 +6,11 @@ import { readFile } from "fs/promises";
 import { basename, extname } from "path";
 import { z } from "zod";
 import { rejectUserScopedEdgeQuakeTool } from "../auth-context.js";
-import { getClient } from "../client.js";
+import { getClient, withTimeout } from "../client.js";
 import { formatError } from "../errors.js";
+
+const UPLOAD_TIMEOUT_MS = 60_000;
+const READ_TIMEOUT_MS = 30_000;
 
 export function registerDocumentTools(server: McpServer): void {
   // document_upload
@@ -34,13 +37,17 @@ export function registerDocumentTools(server: McpServer): void {
         if (isolationError) return isolationError;
 
         const client = await getClient();
-        const result = await client.documents.upload({
-          content: params.content,
-          title: params.title,
-          metadata: params.metadata,
-          enable_gleaning: params.enable_gleaning,
-          async_processing: true,
-        });
+        const result = await withTimeout(
+          client.documents.upload({
+            content: params.content,
+            title: params.title,
+            metadata: params.metadata,
+            enable_gleaning: params.enable_gleaning,
+            async_processing: true,
+          }),
+          UPLOAD_TIMEOUT_MS,
+          "documents.upload",
+        );
 
         return {
           content: [
@@ -112,9 +119,13 @@ export function registerDocumentTools(server: McpServer): void {
             lastModified: Date.now(),
           }) as File;
 
-          const result = await client.documents.pdf.upload(
-            file,
-            params.metadata as Record<string, string> | undefined,
+          const result = await withTimeout(
+            client.documents.pdf.upload(
+              file,
+              params.metadata as Record<string, string> | undefined,
+            ),
+            UPLOAD_TIMEOUT_MS,
+            "documents.pdf.upload",
           );
 
           return {
@@ -151,7 +162,11 @@ export function registerDocumentTools(server: McpServer): void {
             lastModified: Date.now(),
           }) as File;
 
-          const result = await client.documents.uploadFile(file);
+          const result = await withTimeout(
+            client.documents.uploadFile(file),
+            UPLOAD_TIMEOUT_MS,
+            "documents.uploadFile",
+          );
 
           return {
             content: [
@@ -246,12 +261,16 @@ export function registerDocumentTools(server: McpServer): void {
         if (isolationError) return isolationError;
 
         const client = await getClient();
-        const result = await client.documents.list({
-          page: params.page,
-          page_size: params.page_size,
-          status: params.status,
-          search: params.search,
-        });
+        const result = await withTimeout(
+          client.documents.list({
+            page: params.page,
+            page_size: params.page_size,
+            status: params.status,
+            search: params.search,
+          }),
+          READ_TIMEOUT_MS,
+          "documents.list",
+        );
 
         return {
           content: [
@@ -299,7 +318,11 @@ export function registerDocumentTools(server: McpServer): void {
         if (isolationError) return isolationError;
 
         const client = await getClient();
-        const doc = await client.documents.get(params.document_id);
+        const doc = await withTimeout(
+          client.documents.get(params.document_id),
+          READ_TIMEOUT_MS,
+          "documents.get",
+        );
 
         return {
           content: [
@@ -345,7 +368,11 @@ export function registerDocumentTools(server: McpServer): void {
         if (isolationError) return isolationError;
 
         const client = await getClient();
-        await client.documents.delete(params.document_id);
+        await withTimeout(
+          client.documents.delete(params.document_id),
+          READ_TIMEOUT_MS,
+          "documents.delete",
+        );
 
         return {
           content: [
@@ -377,7 +404,11 @@ export function registerDocumentTools(server: McpServer): void {
         if (isolationError) return isolationError;
 
         const client = await getClient();
-        const doc = await client.documents.get(params.document_id);
+        const doc = await withTimeout(
+          client.documents.get(params.document_id),
+          READ_TIMEOUT_MS,
+          "documents.get (status)",
+        );
 
         return {
           content: [
