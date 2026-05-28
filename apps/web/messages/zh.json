@@ -421,6 +421,8 @@
     "addTags": "添加标签",
     "moreTags": "+{{count}} 个更多",
     "share": "分享",
+    "shareWithTeam": "与团队共享",
+    "makePrivate": "设为私有",
     "urlCopied": "URL已复制",
     "tagAdded": "标签已添加",
     "tagPlaceholder": "标签名称",

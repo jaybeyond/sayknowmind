@@ -421,6 +421,8 @@
     "addTags": "태그 추가",
     "moreTags": "+{{count}}개 더",
     "share": "공유",
+    "shareWithTeam": "팀과 공유",
+    "makePrivate": "비공개로 전환",
     "urlCopied": "URL 복사됨",
     "tagAdded": "태그 추가됨",
     "tagPlaceholder": "태그 이름",

@@ -421,6 +421,8 @@
     "addTags": "Add Tags",
     "moreTags": "+{{count}} more",
     "share": "Share",
+    "shareWithTeam": "Share with team",
+    "makePrivate": "Make private",
     "urlCopied": "URL copied",
     "tagAdded": "Tag added",
     "tagPlaceholder": "Tag name",

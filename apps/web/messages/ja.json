@@ -421,6 +421,8 @@
     "addTags": "タグを追加",
     "moreTags": "+{{count}} 件",
     "share": "共有",
+    "shareWithTeam": "チームと共有",
+    "makePrivate": "非公開にする",
     "urlCopied": "URLをコピーしました",
     "tagAdded": "タグを追加しました",
     "tagPlaceholder": "タグ名",
