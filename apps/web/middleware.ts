@@ -36,7 +36,7 @@ const protectedPaths = [
 // Routes that should redirect to home if already authenticated
 const authPaths = ["/login", "/signup"];
 
-const DASHBOARD_ORIGIN = "http://localhost:3001";
+const DASHBOARD_ORIGIN = process.env.DASHBOARD_ORIGIN ?? "http://localhost:3001";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": DASHBOARD_ORIGIN,
