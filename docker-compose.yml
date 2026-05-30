@@ -135,6 +135,10 @@ services:
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXT_PUBLIC_DEPLOY_MODE: ${NEXT_PUBLIC_DEPLOY_MODE:-cloud}
+      # Real-time doc collaboration: web signs doc-scoped tokens with the same
+      # secret the relay verifies; the browser connects to the relay WS URL.
+      RELAY_SHARED_SECRET: ${RELAY_SHARED_SECRET}
+      NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       EDGEQUAKE_URL: http://edgequake:8080
       EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}
