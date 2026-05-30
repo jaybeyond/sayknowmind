@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+export type CategoryKind = "collection" | "doc" | "mindmap";
+
 export interface CategoryItem {
   id: string;
   name: string;
@@ -7,6 +9,7 @@ export interface CategoryItem {
   depth: number;
   path: string;
   parent_id: string | null;
+  kind: CategoryKind;
 }
 
 interface CategoriesState {
@@ -16,13 +19,14 @@ interface CategoriesState {
 
   // Actions
   fetchCategories: () => Promise<void>;
-  addCategory: (name: string, parentId?: string) => Promise<string | null>;
+  addCategory: (name: string, parentId?: string, kind?: CategoryKind) => Promise<string | null>;
   renameCategory: (id: string, name: string) => Promise<boolean>;
   deleteCategory: (id: string) => Promise<boolean>;
   toggleFolder: (id: string) => void;
 
   // Computed helpers
   getRootCategories: () => CategoryItem[];
+  getRootCategoriesByKind: (kind: CategoryKind) => CategoryItem[];
   getChildren: (parentId: string) => CategoryItem[];
   getDescendantIds: (parentId: string) => string[];
   hasChildren: (categoryId: string) => boolean;
@@ -43,6 +47,9 @@ export const useCategoriesStore = create<CategoriesState>((set, get) => ({
 
   getRootCategories: () =>
     get().categories.filter((c) => !c.parent_id),
+
+  getRootCategoriesByKind: (kind) =>
+    get().categories.filter((c) => !c.parent_id && (c.kind ?? "collection") === kind),
 
   getChildren: (parentId) =>
     get().categories.filter((c) => c.parent_id === parentId),
@@ -84,12 +91,12 @@ export const useCategoriesStore = create<CategoriesState>((set, get) => ({
     }
   },
 
-  addCategory: async (name: string, parentId?: string) => {
+  addCategory: async (name: string, parentId?: string, kind?: CategoryKind) => {
     try {
       const res = await fetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, parentId }),
+        body: JSON.stringify({ name, parentId, kind }),
       });
       if (res.ok) {
         const data = await res.json();

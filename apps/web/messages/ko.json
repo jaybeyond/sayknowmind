@@ -35,7 +35,13 @@
     "tools": "도구",
     "published": "퍼블리시",
     "addSubfolder": "하위 폴더 추가",
-    "folder": "폴더"
+    "folder": "폴더",
+    "newDocument": "새 문서",
+    "newMindmap": "새 마인드맵",
+    "newSubfolder": "새 하위폴더",
+    "documents": "문서",
+    "mindmaps": "마인드맵",
+    "emptyList": "아직 없음"
   },
   "tabs": {
     "all": "전체",
@@ -48,7 +54,10 @@
     "addMemory": "메모리 추가",
     "sortBy": "정렬",
     "filterBy": "필터",
-    "clearFilter": "필터 해제"
+    "clearFilter": "필터 해제",
+    "newDoc": "새 문서",
+    "newMindmap": "새 마인드맵",
+    "createNew": "새로 만들기"
   },
   "sort": {
     "dateNewest": "최신순",
@@ -337,7 +346,8 @@
         "done": "설치 완료",
         "failed": "설치 실패"
       },
-      "toggleFailed": "토글 실패"
+      "toggleFailed": "토글 실패",
+      "modelLabel": "모델"
     },
     "preflight": {
       "title": "사전 조건",
@@ -363,7 +373,8 @@
       "fixInstalling": "설치 중…",
       "fixError": "실패 — 터미널에서 수동 실행해주세요",
       "claudeInstalled": "Claude CLI 설치 완료 — 새로고침을 눌러주세요"
-    }
+    },
+    "saveFailed": "저장 실패"
   },
   "profile": {
     "displayName": "표시 이름",
@@ -659,7 +670,9 @@
     "ccRoot": "루트",
     "ccClose": "닫기",
     "ccSelect": "선택",
-    "ccDeselect": "선택 해제"
+    "ccDeselect": "선택 해제",
+    "ccConnecting": "브라우저 여는 중…",
+    "ccTimeout": "브라우저 승인 대기 시간이 초과되었습니다."
   },
   "ollama": {
     "checking": "Ollama 확인 중...",
@@ -873,5 +886,45 @@
       "declineFailed": "초대 거절에 실패했습니다",
       "genericError": "문제가 발생했습니다. 다시 시도해 주세요."
     }
+  },
+  "docs": {
+    "untitled": "제목 없음",
+    "saving": "저장 중…",
+    "unsaved": "저장 안 됨",
+    "saved": "저장됨",
+    "connecting": "연결 중…",
+    "online": "{count}명 접속 중",
+    "offline": "오프라인",
+    "live": "실시간",
+    "readOnly": "읽기 전용",
+    "backToList": "목록으로",
+    "summary": "요약",
+    "summaryGenerate": "생성",
+    "summaryRegenerate": "다시 생성",
+    "summaryGenerating": "생성 중…",
+    "summaryEmpty": "아직 요약이 없습니다",
+    "summaryFailed": "요약 생성 실패"
+  },
+  "mindmap": {
+    "theme": "테마",
+    "layout": "레이아웃",
+    "layoutSide": "양쪽",
+    "layoutRight": "오른쪽",
+    "layoutLeft": "왼쪽",
+    "nodeColor": "노드",
+    "nodeColorHint": "선택한 노드 색상",
+    "nodeColorClear": "색상 지우기",
+    "emoji": "이모지",
+    "image": "이미지",
+    "imageUrl": "이미지 URL",
+    "imageInsert": "삽입",
+    "imageRemove": "이미지 제거",
+    "imageError": "이미지를 불러올 수 없습니다",
+    "selectNodeFirst": "먼저 노드를 선택하세요",
+    "selectNodeHint": "선택한 노드에 적용됩니다",
+    "imageUpload": "기기에서 업로드",
+    "or": "또는",
+    "moveUp": "위로 이동",
+    "moveDown": "아래로 이동"
   }
 }

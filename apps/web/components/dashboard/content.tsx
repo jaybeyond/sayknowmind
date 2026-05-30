@@ -5,6 +5,7 @@ import { useMemoryStore, type Memory } from "@/store/memory-store";
 import { useCategoriesStore } from "@/store/categories-store";
 import { MemoryCard } from "./memory-card";
 import { MemoryDetailPanel } from "./memory-detail-panel";
+import { InlineEditor } from "@/components/docs/inline-editor";
 import { AddMemoryDialog } from "./add-memory-dialog";
 import { StatsCards } from "./stats-cards";
 import { GalleryCard, type GalleryItem } from "@/components/gallery/gallery-card";
@@ -218,6 +219,8 @@ export function MemoryContent() {
   const {
     selectedCollection,
     selectedTab,
+    openEditor,
+    setOpenEditor,
     setSelectedTab,
     getFilteredMemories,
     viewMode,
@@ -239,6 +242,19 @@ export function MemoryContent() {
   const [globalDragOver, setGlobalDragOver] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+
+  // Docs and mind maps open in the in-place editor; everything else opens the
+  // detail panel.
+  const handleCardSelect = useCallback(
+    (memory: Memory) => {
+      if (memory.docType === "doc" || memory.docType === "mindmap") {
+        setOpenEditor({ type: memory.docType, id: memory.id });
+      } else {
+        setSelectedMemory(memory);
+      }
+    },
+    [setOpenEditor],
+  );
   const [reprocessing, setReprocessing] = useState(false);
   const [addingTab, setAddingTab] = useState(false);
   const [newTabName, setNewTabName] = useState("");
@@ -305,6 +321,15 @@ export function MemoryContent() {
     displayCount === 1
       ? t("content.memoryCountOne").replace("{{count}}", String(displayCount))
       : t("content.memoryCountMany").replace("{{count}}", String(displayCount));
+
+  // In-place doc / mind-map editor takes over the content area when open.
+  if (openEditor) {
+    return (
+      <div className="flex-1 w-full overflow-hidden">
+        <InlineEditor type={openEditor.type} id={openEditor.id} />
+      </div>
+    );
+  }
 
   // Show gallery view when "gallery" collection is selected
   if (selectedCollection === "gallery") {
@@ -556,7 +581,7 @@ export function MemoryContent() {
             ) : viewMode === "grid" ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
                 {filteredMemories.map((memory) => (
-                  <MemoryCard key={memory.id} memory={memory} onSelect={setSelectedMemory} />
+                  <MemoryCard key={memory.id} memory={memory} onSelect={handleCardSelect} />
                 ))}
               </div>
             ) : (
@@ -566,7 +591,7 @@ export function MemoryContent() {
                     key={memory.id}
                     memory={memory}
                     variant="list"
-                    onSelect={setSelectedMemory}
+                    onSelect={handleCardSelect}
                   />
                 ))}
               </div>

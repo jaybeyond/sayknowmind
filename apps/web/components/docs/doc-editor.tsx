@@ -6,6 +6,7 @@ import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import type { Block } from "@blocknote/core";
+import { useTranslation } from "@/lib/i18n";
 
 interface DocEditorProps {
   docId: string;
@@ -18,6 +19,7 @@ type SaveStatus = "saved" | "saving" | "unsaved";
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
 export function DocEditor({ docId, initialTitle, initialBlocks }: DocEditorProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = React.useState(initialTitle);
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("saved");
   const saveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,11 +97,11 @@ export function DocEditor({ docId, initialTitle, initialBlocks }: DocEditorProps
           type="text"
           value={title}
           onChange={handleTitleChange}
-          placeholder="Untitled"
+          placeholder={t("docs.untitled")}
           className="flex-1 text-3xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground"
         />
         <span className="text-xs text-muted-foreground shrink-0">
-          {saveStatus === "saving" ? "Saving…" : saveStatus === "unsaved" ? "Unsaved" : "Saved"}
+          {saveStatus === "saving" ? t("docs.saving") : saveStatus === "unsaved" ? t("docs.unsaved") : t("docs.saved")}
         </span>
       </div>
 

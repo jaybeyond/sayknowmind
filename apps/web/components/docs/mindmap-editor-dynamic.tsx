@@ -7,6 +7,8 @@ interface MindmapEditorProps {
   docId: string;
   initialTitle: string;
   initialData: MindElixirData | null;
+  collab?: boolean;
+  onBack?: () => void;
 }
 
 const MindmapEditorInner = dynamic<MindmapEditorProps>(

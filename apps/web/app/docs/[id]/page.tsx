@@ -40,6 +40,7 @@ export default async function DocPage({ params }: PageProps) {
         docId={doc.id}
         initialTitle={doc.title}
         initialBlocks={blocks}
+        collab={!!process.env.NEXT_PUBLIC_COLLAB_WS_URL}
       />
     </main>
   );

@@ -30,6 +30,9 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.4.4
         version: 0.4.4
+      '@hocuspocus/provider':
+        specifier: ^2.15.0
+        version: 2.15.3(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
@@ -135,6 +138,9 @@ importers:
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
+      yjs:
+        specifier: ^13.6.0
+        version: 13.6.30
       zustand:
         specifier: ^5.0.9
         version: 5.0.9(@types/react@19.2.7)(react@19.2.1)(use-sync-external-store@1.6.0(react@19.2.1))
@@ -752,6 +758,15 @@ packages:
       prosemirror-state: ^1.0.0
       prosemirror-view: ^1.0.0
 
+  '@hocuspocus/common@2.15.3':
+    resolution: {integrity: sha512-Rzh1HF0a2o/tf90A3w2XNdXd9Ym3aQzMDfD3lAUONCX9B9QOdqdyiORrj6M25QEaJrEIbXFy8LtAFcL0wRdWzA==}
+
+  '@hocuspocus/provider@2.15.3':
+    resolution: {integrity: sha512-oadN05m+KL4ylNKVo5YspNG4MXkT2Y+FUFzrgigpQeTjQibkPUwCNmUnkUxMgrGRgxb+O0lJCfirFIJMxedctA==}
+    peerDependencies:
+      y-protocols: ^1.0.6
+      yjs: ^13.6.8
+
   '@hono/node-server@1.19.9':
     resolution: {integrity: sha512-vHL6w3ecZsky+8P5MD+eFfaGTyCeOHUIFYMGpQGbrBTSmNNoxv0if69rEZ5giu36weC5saFuznL411gRX7bJDw==}
     engines: {node: '>=18.14.1'}
@@ -926,6 +941,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@lifeomic/attempt@3.1.0':
+    resolution: {integrity: sha512-QZqem4QuAnAyzfz+Gj5/+SLxqwCAw2qmt7732ZXodr6VDWGeYLG6w1i/vYLa55JQM9wRuBKLmXmiZ2P0LtE5rw==}
 
   '@mantine/core@9.2.2':
     resolution: {integrity: sha512-j4d7dwKkrYPP9Lb7ut1u0OodwmosIaKK4azK4GMoTKq1+7TKRrJPxB1vkDjkbOcd+jbUt0qn6EkJdsSMKVcIIw==}
@@ -5461,6 +5479,22 @@ snapshots:
       prosemirror-transform: 1.12.0
       prosemirror-view: 1.41.8
 
+  '@hocuspocus/common@2.15.3':
+    dependencies:
+      lib0: 0.2.117
+
+  '@hocuspocus/provider@2.15.3(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)':
+    dependencies:
+      '@hocuspocus/common': 2.15.3
+      '@lifeomic/attempt': 3.1.0
+      lib0: 0.2.117
+      ws: 8.20.0
+      y-protocols: 1.0.7(yjs@13.6.30)
+      yjs: 13.6.30
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   '@hono/node-server@1.19.9(hono@4.11.4)':
     dependencies:
       hono: 4.11.4
@@ -5592,6 +5626,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@lifeomic/attempt@3.1.0': {}
 
   '@mantine/core@9.2.2(@mantine/hooks@9.2.2(react@19.2.1))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
     dependencies:

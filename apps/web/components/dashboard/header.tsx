@@ -56,24 +56,29 @@ interface MemoryHeaderProps {
 export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   const [addOpen, setAddOpen] = React.useState(false);
   const router = useRouter();
+  const setOpenEditor = useMemoryStore((s) => s.setOpenEditor);
 
-  const handleNewDoc = React.useCallback(async () => {
-    try {
-      const res = await fetch("/api/docs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
-      if (!res.ok) return;
-      const { id } = await res.json() as { id: string };
-      router.push(`/docs/${id}`);
-    } catch { /* silent */ }
-  }, [router]);
-
-  const handleNewMindmap = React.useCallback(async () => {
-    try {
-      const res = await fetch("/api/docs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "mindmap" }) });
-      if (!res.ok) return;
-      const { id } = await res.json() as { id: string };
-      router.push(`/mindmaps/${id}`);
-    } catch { /* silent */ }
-  }, [router]);
+  // Create + open in place (the header only renders on the dashboard home,
+  // where the content area can host the editor).
+  const handleCreate = React.useCallback(
+    async (type: "doc" | "mindmap") => {
+      try {
+        const res = await fetch("/api/docs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type }),
+        });
+        if (!res.ok) return;
+        const { id } = (await res.json()) as { id: string };
+        setOpenEditor({ type, id });
+      } catch {
+        /* silent */
+      }
+    },
+    [setOpenEditor],
+  );
+  const handleNewDoc = React.useCallback(() => handleCreate("doc"), [handleCreate]);
+  const handleNewMindmap = React.useCallback(() => handleCreate("mindmap"), [handleCreate]);
 
   // Listen for tray menu "add memory" event
   React.useEffect(() => {
@@ -296,15 +301,24 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button size="sm" variant="outline" className="hidden sm:flex" onClick={handleNewDoc}>
-                <FileText className="size-4" />
-                {t("header.newDoc") || "New doc"}
-              </Button>
-
-              <Button size="sm" variant="outline" className="hidden sm:flex" onClick={handleNewMindmap}>
-                <Network className="size-4" />
-                {t("header.newMindmap") || "New mind map"}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="hidden sm:flex">
+                    <Plus className="size-4" />
+                    {t("header.createNew")}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onClick={handleNewDoc}>
+                    <FileText className="size-4 mr-2" />
+                    {t("header.newDoc")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleNewMindmap}>
+                    <Network className="size-4 mr-2" />
+                    {t("header.newMindmap")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <Button size="sm" className="hidden sm:flex" onClick={() => setAddOpen(true)}>
                 <Plus className="size-4" />

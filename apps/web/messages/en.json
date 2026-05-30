@@ -35,7 +35,13 @@
     "tools": "TOOLS",
     "published": "Published",
     "addSubfolder": "Add subfolder",
-    "folder": "Folder"
+    "folder": "Folder",
+    "newDocument": "New document",
+    "newMindmap": "New mind map",
+    "newSubfolder": "New subfolder",
+    "documents": "DOCUMENTS",
+    "mindmaps": "MIND MAPS",
+    "emptyList": "Nothing yet"
   },
   "tabs": {
     "all": "All",
@@ -48,7 +54,10 @@
     "addMemory": "Add Memory",
     "sortBy": "Sort by",
     "filterBy": "Filter by",
-    "clearFilter": "Clear filter"
+    "clearFilter": "Clear filter",
+    "newDoc": "New doc",
+    "newMindmap": "New mind map",
+    "createNew": "New"
   },
   "sort": {
     "dateNewest": "Date Added (Newest)",
@@ -337,7 +346,8 @@
         "done": "Install complete",
         "failed": "Install failed"
       },
-      "toggleFailed": "Toggle failed"
+      "toggleFailed": "Toggle failed",
+      "modelLabel": "Model"
     },
     "preflight": {
       "title": "Prerequisites",
@@ -363,7 +373,8 @@
       "fixInstalling": "Installing…",
       "fixError": "Failed — please run manually in a terminal",
       "claudeInstalled": "Claude CLI installed — hit refresh"
-    }
+    },
+    "saveFailed": "Failed to save"
   },
   "profile": {
     "displayName": "Display name",
@@ -659,7 +670,9 @@
     "ccRoot": "Root",
     "ccClose": "Close",
     "ccSelect": "Select",
-    "ccDeselect": "Deselect"
+    "ccDeselect": "Deselect",
+    "ccConnecting": "Opening browser…",
+    "ccTimeout": "Timed out waiting for browser approval."
   },
   "ollama": {
     "checking": "Checking Ollama...",
@@ -873,5 +886,45 @@
       "declineFailed": "Failed to reject invitation",
       "genericError": "Something went wrong. Please try again."
     }
+  },
+  "docs": {
+    "untitled": "Untitled",
+    "saving": "Saving…",
+    "unsaved": "Unsaved",
+    "saved": "Saved",
+    "connecting": "Connecting…",
+    "online": "{count} online",
+    "offline": "offline",
+    "live": "Live",
+    "readOnly": "Read-only",
+    "backToList": "Back",
+    "summary": "Summary",
+    "summaryGenerate": "Generate",
+    "summaryRegenerate": "Regenerate",
+    "summaryGenerating": "Generating…",
+    "summaryEmpty": "No summary yet",
+    "summaryFailed": "Failed to generate summary"
+  },
+  "mindmap": {
+    "theme": "Theme",
+    "layout": "Layout",
+    "layoutSide": "Both",
+    "layoutRight": "Right",
+    "layoutLeft": "Left",
+    "nodeColor": "Node",
+    "nodeColorHint": "Color selected node",
+    "nodeColorClear": "Clear color",
+    "emoji": "Emoji",
+    "image": "Image",
+    "imageUrl": "Image URL",
+    "imageInsert": "Insert",
+    "imageRemove": "Remove image",
+    "imageError": "Could not load image",
+    "selectNodeFirst": "Select a node first",
+    "selectNodeHint": "Applies to the selected node",
+    "imageUpload": "Upload from device",
+    "or": "or",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
   }
 }

@@ -64,11 +64,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, parentId, description, color } = body as {
+    const { name, parentId, description, color, kind } = body as {
       name?: string;
       parentId?: string;
       description?: string;
       color?: string;
+      kind?: string;
     };
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest) {
       parentId,
       description,
       color,
+      kind,
     });
 
     return NextResponse.json({

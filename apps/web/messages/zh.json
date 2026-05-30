@@ -35,7 +35,13 @@
     "tools": "工具",
     "published": "已发布",
     "addSubfolder": "添加子文件夹",
-    "folder": "文件夹"
+    "folder": "文件夹",
+    "newDocument": "新建文档",
+    "newMindmap": "新建思维导图",
+    "newSubfolder": "新建子文件夹",
+    "documents": "文档",
+    "mindmaps": "思维导图",
+    "emptyList": "暂无"
   },
   "tabs": {
     "all": "全部",
@@ -48,7 +54,10 @@
     "addMemory": "添加记忆",
     "sortBy": "排序",
     "filterBy": "筛选",
-    "clearFilter": "清除筛选"
+    "clearFilter": "清除筛选",
+    "newDoc": "新建文档",
+    "newMindmap": "新建思维导图",
+    "createNew": "新建"
   },
   "sort": {
     "dateNewest": "最新添加",
@@ -337,7 +346,8 @@
         "done": "安装完成",
         "failed": "安装失败"
       },
-      "toggleFailed": "切换失败"
+      "toggleFailed": "切换失败",
+      "modelLabel": "模型"
     },
     "preflight": {
       "title": "前提条件",
@@ -363,7 +373,8 @@
       "fixInstalling": "正在安装…",
       "fixError": "失败 — 请在终端中手动运行",
       "claudeInstalled": "Claude CLI 安装完成 — 请点击刷新"
-    }
+    },
+    "saveFailed": "保存失败"
   },
   "profile": {
     "displayName": "显示名称",
@@ -659,7 +670,9 @@
     "ccRoot": "根目录",
     "ccClose": "关闭",
     "ccSelect": "选择",
-    "ccDeselect": "取消选择"
+    "ccDeselect": "取消选择",
+    "ccConnecting": "正在打开浏览器…",
+    "ccTimeout": "等待浏览器授权超时。"
   },
   "ollama": {
     "checking": "检查 Ollama 中...",
@@ -873,5 +886,45 @@
       "declineFailed": "拒绝邀请失败",
       "genericError": "出现了问题，请重试。"
     }
+  },
+  "docs": {
+    "untitled": "无标题",
+    "saving": "保存中…",
+    "unsaved": "未保存",
+    "saved": "已保存",
+    "connecting": "正在连接…",
+    "online": "{count} 人在线",
+    "offline": "离线",
+    "live": "实时",
+    "readOnly": "只读",
+    "backToList": "返回",
+    "summary": "摘要",
+    "summaryGenerate": "生成",
+    "summaryRegenerate": "重新生成",
+    "summaryGenerating": "生成中…",
+    "summaryEmpty": "暂无摘要",
+    "summaryFailed": "生成摘要失败"
+  },
+  "mindmap": {
+    "theme": "主题",
+    "layout": "布局",
+    "layoutSide": "两侧",
+    "layoutRight": "向右",
+    "layoutLeft": "向左",
+    "nodeColor": "节点",
+    "nodeColorHint": "设置所选节点颜色",
+    "nodeColorClear": "清除颜色",
+    "emoji": "表情",
+    "image": "图片",
+    "imageUrl": "图片网址",
+    "imageInsert": "插入",
+    "imageRemove": "移除图片",
+    "imageError": "无法加载图片",
+    "selectNodeFirst": "请先选择一个节点",
+    "selectNodeHint": "应用于所选节点",
+    "imageUpload": "从设备上传",
+    "or": "或",
+    "moveUp": "上移",
+    "moveDown": "下移"
   }
 }

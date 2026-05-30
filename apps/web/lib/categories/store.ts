@@ -13,6 +13,7 @@ export interface CategoryRow {
   depth: number;
   path: string;
   privacy_level: string;
+  kind: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -59,6 +60,7 @@ export async function createCategory(params: {
   description?: string;
   color?: string;
   privacyLevel?: string;
+  kind?: string;
 }): Promise<CategoryRow> {
   const { ctx } = params;
   let depth = 0;
@@ -67,8 +69,11 @@ export async function createCategory(params: {
   // stay private in a personal org. Child categories inherit the parent below.
   let privacyLevel =
     params.privacyLevel ?? (await resolveDefaultPrivacy(ctx.organizationId, ctx.userId));
+  // Folder kind: collection (default) | doc | mindmap. Children inherit the
+  // parent's kind so a tree never mixes namespaces.
+  let kind = params.kind === "doc" || params.kind === "mindmap" ? params.kind : "collection";
 
-  // If parent specified, compute depth, path, and inherit privacy
+  // If parent specified, compute depth, path, and inherit privacy + kind
   if (params.parentId) {
     const parent = await getOwnedCategory(params.parentId, ctx);
     if (!parent) {
@@ -80,18 +85,21 @@ export async function createCategory(params: {
     if (!params.privacyLevel) {
       privacyLevel = parent.privacy_level;
     }
+    kind = parent.kind;
   }
 
-  // Check for duplicate name under same parent (org-scoped)
+  // Check for duplicate name under same parent AND kind (org-scoped). A "Work"
+  // collection and a "Work" doc folder are distinct.
   const existing = await pool.query(
     `SELECT * FROM categories
-     WHERE organization_id = $1 AND user_id = $2 AND name = $3
+     WHERE organization_id = $1 AND user_id = $2 AND name = $3 AND kind = $5
        AND COALESCE(parent_id, '00000000-0000-0000-0000-000000000000') = $4`,
     [
       ctx.organizationId,
       ctx.userId,
       params.name,
       params.parentId ?? "00000000-0000-0000-0000-000000000000",
+      kind,
     ],
   );
   if (existing.rows.length > 0) {
@@ -99,8 +107,8 @@ export async function createCategory(params: {
   }
 
   const result = await pool.query(
-    `INSERT INTO categories (user_id, organization_id, parent_id, name, description, color, depth, path, privacy_level)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO categories (user_id, organization_id, parent_id, name, description, color, depth, path, privacy_level, kind)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
     [
       ctx.userId,
@@ -112,6 +120,7 @@ export async function createCategory(params: {
       depth,
       path,
       privacyLevel,
+      kind,
     ],
   );
   return result.rows[0];

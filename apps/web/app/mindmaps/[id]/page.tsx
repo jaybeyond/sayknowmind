@@ -43,6 +43,7 @@ export default async function MindmapPage({ params }: PageProps) {
         docId={doc.id}
         initialTitle={doc.title}
         initialData={mindmapData}
+        collab={!!process.env.NEXT_PUBLIC_COLLAB_WS_URL}
       />
     </main>
   );

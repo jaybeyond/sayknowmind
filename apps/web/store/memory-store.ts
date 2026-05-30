@@ -122,6 +122,12 @@ interface MemoryState {
   // UI state
   selectedCollection: string;
   selectedTab: string | null;
+  /** When set, the content area shows an in-place doc/mind-map editor
+   *  instead of the memory list. Cleared by returning to a collection. */
+  openEditor: { type: "doc" | "mindmap"; id: string } | null;
+  /** Restricts the list to one document type — set when a Documents or
+   *  Mind maps folder is selected; null for general collections. */
+  sourceTypeFilter: "doc" | "mindmap" | null;
   selectedTags: string[];
   searchQuery: string;
   viewMode: ViewMode;
@@ -134,6 +140,10 @@ interface MemoryState {
   // Actions
   setSelectedCollection: (collectionId: string) => void;
   setSelectedTab: (tabId: string | null) => void;
+  setOpenEditor: (editor: { type: "doc" | "mindmap"; id: string } | null) => void;
+  /** Select a folder and scope the list to a document type in one step
+   *  (used by the Documents / Mind maps sidebar sections). */
+  selectFolder: (collectionId: string, sourceType: "doc" | "mindmap" | null) => void;
   toggleTag: (tagId: string) => void;
   clearTags: () => void;
   setSearchQuery: (query: string) => void;
@@ -192,6 +202,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
 
   selectedCollection: "all",
   selectedTab: null,
+  openEditor: null,
+  sourceTypeFilter: null,
   selectedTags: [],
   searchQuery: "",
   viewMode: "grid",
@@ -201,8 +213,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   isLoadingMore: false,
   error: null,
 
-  setSelectedCollection: (collectionId) => set({ selectedCollection: collectionId, selectedTab: null }),
+  setSelectedCollection: (collectionId) => set({ selectedCollection: collectionId, selectedTab: null, openEditor: null, sourceTypeFilter: null }),
   setSelectedTab: (tabId) => set({ selectedTab: tabId }),
+  setOpenEditor: (editor) => set({ openEditor: editor }),
+  selectFolder: (collectionId, sourceType) => set({ selectedCollection: collectionId, selectedTab: null, openEditor: null, sourceTypeFilter: sourceType }),
 
   toggleTag: (tagId) =>
     set((state) => ({
@@ -558,6 +572,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   getFilteredMemories: () => {
     const state = get();
     let filtered = [...state.memories];
+
+    if (state.sourceTypeFilter) {
+      filtered = filtered.filter((m) => m.docType === state.sourceTypeFilter);
+    }
 
     if (state.selectedCollection !== "all") {
       if (state.selectedTab) {

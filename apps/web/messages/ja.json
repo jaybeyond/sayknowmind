@@ -35,7 +35,13 @@
     "tools": "ツール",
     "published": "公開済み",
     "addSubfolder": "サブフォルダを追加",
-    "folder": "フォルダ"
+    "folder": "フォルダ",
+    "newDocument": "新規ドキュメント",
+    "newMindmap": "新規マインドマップ",
+    "newSubfolder": "新規サブフォルダ",
+    "documents": "ドキュメント",
+    "mindmaps": "マインドマップ",
+    "emptyList": "まだありません"
   },
   "tabs": {
     "all": "すべて",
@@ -48,7 +54,10 @@
     "addMemory": "メモリを追加",
     "sortBy": "並び替え",
     "filterBy": "フィルター",
-    "clearFilter": "フィルターをクリア"
+    "clearFilter": "フィルターをクリア",
+    "newDoc": "新規ドキュメント",
+    "newMindmap": "新規マインドマップ",
+    "createNew": "新規作成"
   },
   "sort": {
     "dateNewest": "追加日時（新しい順）",
@@ -337,7 +346,8 @@
         "done": "インストール完了",
         "failed": "インストール失敗"
       },
-      "toggleFailed": "切り替えに失敗"
+      "toggleFailed": "切り替えに失敗",
+      "modelLabel": "モデル"
     },
     "preflight": {
       "title": "前提条件",
@@ -363,7 +373,8 @@
       "fixInstalling": "インストール中…",
       "fixError": "失敗 — ターミナルで手動実行してください",
       "claudeInstalled": "Claude CLI インストール完了 — 更新を押してください"
-    }
+    },
+    "saveFailed": "保存に失敗しました"
   },
   "profile": {
     "displayName": "表示名",
@@ -659,7 +670,9 @@
     "ccRoot": "ルート",
     "ccClose": "閉じる",
     "ccSelect": "選択",
-    "ccDeselect": "選択解除"
+    "ccDeselect": "選択解除",
+    "ccConnecting": "ブラウザを開いています…",
+    "ccTimeout": "ブラウザでの承認待ちがタイムアウトしました。"
   },
   "ollama": {
     "checking": "Ollama を確認中...",
@@ -873,5 +886,45 @@
       "declineFailed": "招待の拒否に失敗しました",
       "genericError": "問題が発生しました。もう一度お試しください。"
     }
+  },
+  "docs": {
+    "untitled": "無題",
+    "saving": "保存中…",
+    "unsaved": "未保存",
+    "saved": "保存済み",
+    "connecting": "接続中…",
+    "online": "{count} 人がオンライン",
+    "offline": "オフライン",
+    "live": "ライブ",
+    "readOnly": "読み取り専用",
+    "backToList": "戻る",
+    "summary": "要約",
+    "summaryGenerate": "生成",
+    "summaryRegenerate": "再生成",
+    "summaryGenerating": "生成中…",
+    "summaryEmpty": "まだ要約がありません",
+    "summaryFailed": "要約の生成に失敗しました"
+  },
+  "mindmap": {
+    "theme": "テーマ",
+    "layout": "レイアウト",
+    "layoutSide": "両側",
+    "layoutRight": "右",
+    "layoutLeft": "左",
+    "nodeColor": "ノード",
+    "nodeColorHint": "選択ノードの色",
+    "nodeColorClear": "色をクリア",
+    "emoji": "絵文字",
+    "image": "画像",
+    "imageUrl": "画像URL",
+    "imageInsert": "挿入",
+    "imageRemove": "画像を削除",
+    "imageError": "画像を読み込めません",
+    "selectNodeFirst": "先にノードを選択してください",
+    "selectNodeHint": "選択中のノードに適用",
+    "imageUpload": "デバイスからアップロード",
+    "or": "または",
+    "moveUp": "上へ移動",
+    "moveDown": "下へ移動"
   }
 }
