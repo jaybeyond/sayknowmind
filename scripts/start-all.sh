@@ -93,14 +93,17 @@ fi
 
 echo ""
 
-# ── EdgeQuake (8080) ──
-start_service "edgequake" 8080 \
-  "DATABASE_URL=$DATABASE_URL RUST_LOG=$RUST_LOG ./target/release/edgequake" \
+# ── EdgeQuake (5403) ──
+# edgequake reads PORT (default 8080), but 8080 is taken locally by
+# SayKnowLite.app — so default to 5403 (matches .env EDGEQUAKE_PORT / URL).
+EDGEQUAKE_PORT="${EDGEQUAKE_PORT:-5403}"
+start_service "edgequake" "$EDGEQUAKE_PORT" \
+  "DATABASE_URL=$DATABASE_URL RUST_LOG=$RUST_LOG PORT=$EDGEQUAKE_PORT ./target/release/edgequake" \
   "$ROOT_DIR/packages/edgequake"
 
 # ── MCP Server (8082) ──
 start_service "mcp-server" 8082 \
-  "EDGEQUAKE_URL=http://localhost:8080 PORT=8082 node ./dist/index.js" \
+  "EDGEQUAKE_URL=http://localhost:$EDGEQUAKE_PORT PORT=8082 node ./dist/index.js" \
   "$ROOT_DIR/packages/mcp-server"
 
 # ── AI Server (4000) ──
@@ -115,9 +118,12 @@ else
   warn "IPFS (Kubo) not installed — shared mode will be unavailable"
 fi
 
-# ── Web App (3000) ──
-start_service "web" 3000 \
-  "pnpm dev" \
+# ── Web App (5400) ──
+# `next dev` only honors PORT (not WEB_PORT), so pass it explicitly. Default
+# 5400 matches .env (WEB_PORT / NEXT_PUBLIC_APP_URL / BETTER_AUTH_URL).
+WEB_PORT="${WEB_PORT:-5400}"
+start_service "web" "$WEB_PORT" \
+  "PORT=$WEB_PORT pnpm dev" \
   "$ROOT_DIR/apps/web"
 
 # ── Telegram Polling Bridge (no port — outbound only) ──
@@ -141,7 +147,7 @@ echo " Service Status"
 echo "============================================"
 echo ""
 
-for svc in "Web:3000" "AI-Server:4000" "EdgeQuake:8080" "MCP-Server:8082" "IPFS:5001" "Ollama:11434"; do
+for svc in "Web:$WEB_PORT" "AI-Server:4000" "EdgeQuake:$EDGEQUAKE_PORT" "MCP-Server:8082" "IPFS:5001" "Ollama:11434"; do
   name="${svc%%:*}"
   port="${svc#*:}"
   if check_port "$port"; then

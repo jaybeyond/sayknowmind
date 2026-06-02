@@ -49,7 +49,7 @@ export async function GET() {
   }
 
   const services = await Promise.all([
-    checkService("edgequake", "EdgeQuake RAG", process.env.EDGEQUAKE_URL ?? "http://localhost:8080", "/health"),
+    checkService("edgequake", "EdgeQuake RAG", process.env.EDGEQUAKE_URL ?? "http://localhost:5403", "/health"),
     checkService("ai-server", "AI Server", process.env.AI_SERVER_URL ?? "http://localhost:4000", "/health"),
     checkService("ipfs", "IPFS Kubo", process.env.IPFS_KUBO_API ?? "http://localhost:5001", "/api/v0/version"),
     checkService("mcp", "MCP Server", process.env.MCP_SERVER_URL ?? "http://localhost:8082", "/health"),

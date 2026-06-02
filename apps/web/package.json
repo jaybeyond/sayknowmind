@@ -4,9 +4,9 @@
   "private": true,
   "packageManager": "pnpm@9.15.6",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p ${PORT:-5400}",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p ${PORT:-5400}",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest"

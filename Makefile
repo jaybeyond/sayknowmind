@@ -15,7 +15,7 @@ install: ## Install all dependencies
 	cd packages/mcp-server && npm install
 
 # --- Development ---
-dev-web: ## Run frontend dev server (port 3000)
+dev-web: ## Run frontend dev server (port 5400)
 	cd apps/web && pnpm dev
 
 dev-dashboard: ## Run RAG dashboard dev server (port 3001)
@@ -31,7 +31,7 @@ dev-stop: ## Stop all services started by dev-all
 	./scripts/stop-all.sh
 
 dev-status: ## Show status of all services
-	@for svc in "Web:3000" "AI-Server:4000" "EdgeQuake:8080" "MCP-Server:8082" "IPFS:5001" "Ollama:11434" "PostgreSQL:5433"; do \
+	@for svc in "Web:5400" "AI-Server:4000" "EdgeQuake:5403" "MCP-Server:8082" "IPFS:5001" "Ollama:11434" "PostgreSQL:5433"; do \
 		name=$${svc%%:*}; port=$${svc#*:}; \
 		if lsof -i :$$port -sTCP:LISTEN >/dev/null 2>&1; then \
 			printf "  ✅ %-14s port %s\n" "$$name" "$$port"; \

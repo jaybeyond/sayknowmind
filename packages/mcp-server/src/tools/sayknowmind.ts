@@ -13,7 +13,7 @@ import { z } from "zod";
 import { getRequestContext } from "../auth-context.js";
 import { formatError } from "../errors.js";
 
-const WEB_APP_URL = process.env.SAYKNOWMIND_URL ?? "http://localhost:3000";
+const WEB_APP_URL = process.env.SAYKNOWMIND_URL ?? "http://localhost:5400";
 const AUTH_SECRET = process.env.AUTH_SECRET ?? "";
 
 function apiHeaders(): Record<string, string> {

@@ -218,8 +218,8 @@ fi
 # ─── Verify ─────────────────────────────────────────────────────────
 log "STEP 6: VERIFY"
 sleep 3
-LOCAL_CODE=$(curl -sS -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/auth/get-session 2>/dev/null || echo "ERR")
-echo "local 127.0.0.1:3000  → HTTP $LOCAL_CODE"
+LOCAL_CODE=$(curl -sS -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1:5400/api/auth/get-session 2>/dev/null || echo "ERR")
+echo "local 127.0.0.1:5400  → HTTP $LOCAL_CODE"
 EXT_CODE=$(curl -sS -m 10 -o /dev/null -w "%{http_code}" https://sayknowmind.ypai.click/api/auth/get-session 2>/dev/null || echo "ERR")
 echo "external (ypai.click) → HTTP $EXT_CODE"
 

@@ -151,7 +151,7 @@ export async function POST(
       // (without this, the user must click "Setup webhook" separately)
       let webhookRegistered = false;
       if (channel === "telegram") {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5400";
         const botId = token.split(":")[0];
         const webhookUrl = `${appUrl}/api/integrations/telegram/webhook/${botId}`;
         webhookRegistered = await setupTelegramWebhook(token, webhookUrl).catch(() => false);
@@ -234,7 +234,7 @@ export async function POST(
     }
 
     if (channel === "telegram") {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5400";
       const botId = token.split(":")[0];
       const webhookUrl = `${appUrl}/api/integrations/telegram/webhook/${botId}`;
       const ok = await setupTelegramWebhook(token, webhookUrl);

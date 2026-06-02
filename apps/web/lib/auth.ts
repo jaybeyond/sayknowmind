@@ -58,7 +58,7 @@ async function resolveActiveOrg(userId: string): Promise<string | null> {
 export const auth = betterAuth({
   database: pool,
   secret: AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:5400",
 
   emailAndPassword: {
     enabled: true,
@@ -133,8 +133,8 @@ export const auth = betterAuth({
   trustedOrigins: process.env.TRUSTED_ORIGINS
     ? process.env.TRUSTED_ORIGINS.split(",").map((o) => o.trim())
     : [
-        "http://localhost:3000",
-        "http://localhost:3001",
+        "http://localhost:5400",
+        "http://localhost:5401",
         "http://127.0.0.1:3457",
         "http://localhost:3457",
         "tauri://localhost",

@@ -17,7 +17,7 @@ export function resolveConfig(): McpConfig {
     baseUrl:
       process.env.EDGEQUAKE_URL ??
       process.env.EDGEQUAKE_BASE_URL ??
-      "http://localhost:8080",
+      "http://localhost:5403",
     apiKey: process.env.EDGEQUAKE_API_KEY,
     defaultTenant: process.env.EDGEQUAKE_DEFAULT_TENANT,
     defaultWorkspace: process.env.EDGEQUAKE_DEFAULT_WORKSPACE,

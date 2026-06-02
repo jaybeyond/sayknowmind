@@ -598,7 +598,7 @@ async function listCategoriesForUser(userId: string) {
 // ── Search Knowledge Base ────────────────────────────────────
 
 async function searchKnowledge(userId: string, query: string): Promise<string> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5400";
 
   try {
     const res = await fetch(`${appUrl}/api/search`, {
@@ -716,7 +716,7 @@ export async function GET(request: NextRequest) {
     const webhookUrl = data.ok ? data.result.url : "";
 
     // Auto-register webhook if missing or pointing to wrong URL
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5400";
     const expectedUrl = `${appUrl}/api/integrations/telegram/webhook`;
     let autoRegistered = false;
 

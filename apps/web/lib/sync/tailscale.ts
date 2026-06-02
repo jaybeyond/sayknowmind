@@ -82,7 +82,7 @@ export async function discoverSayknowmindPeers(): Promise<TailscalePeer[]> {
 
   const probes = onlinePeers.map(async (peer) => {
     // Try common SayknowMind ports
-    for (const port of [3000, 8080]) {
+    for (const port of [5400, 5403]) {
       try {
         const res = await fetch(`http://${peer.ipv4}:${port}/api/health`, {
           signal: AbortSignal.timeout(3_000),

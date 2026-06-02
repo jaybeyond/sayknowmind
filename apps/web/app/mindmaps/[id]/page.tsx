@@ -5,7 +5,7 @@ import type { MindElixirData } from "mind-elixir";
 
 async function fetchDoc(id: string) {
   const hdrs = await headers();
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5400";
   const res = await fetch(`${baseUrl}/api/documents/${id}`, {
     headers: Object.fromEntries(hdrs.entries()),
     cache: "no-store",

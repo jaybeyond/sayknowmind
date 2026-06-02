@@ -1,9 +1,9 @@
 /**
  * Lightweight EdgeQuake API client for the web app.
- * Calls the EdgeQuake Rust service (port 8080) directly via fetch.
+ * Calls the EdgeQuake Rust service (port 5403) directly via fetch.
  */
 
-const EDGEQUAKE_URL = process.env.EDGEQUAKE_URL ?? "http://localhost:8080";
+const EDGEQUAKE_URL = process.env.EDGEQUAKE_URL ?? "http://localhost:5403";
 const EDGEQUAKE_API_KEY = process.env.EDGEQUAKE_API_KEY ?? "";
 const EDGEQUAKE_TIMEOUT = 30_000;
 

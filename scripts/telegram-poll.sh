@@ -21,7 +21,7 @@ if [ -f "$ROOT_DIR/.env" ]; then
 fi
 
 TOKEN="${TELEGRAM_BOT_TOKEN:-}"
-WEBHOOK_URL="${TELEGRAM_POLL_TARGET:-http://localhost:3000/api/integrations/telegram/webhook}"
+WEBHOOK_URL="${TELEGRAM_POLL_TARGET:-http://localhost:5400/api/integrations/telegram/webhook}"
 SECRET="${TELEGRAM_WEBHOOK_SECRET:-}"
 POLL_TIMEOUT=30
 

@@ -8,7 +8,7 @@
  */
 import type { Context } from "hono";
 
-const WEB_APP_URL = process.env.WEB_APP_URL ?? "http://localhost:3000";
+const WEB_APP_URL = process.env.WEB_APP_URL ?? "http://localhost:5400";
 const FORWARD_TIMEOUT = 30_000;
 
 export async function telegramProxyRoute(c: Context): Promise<Response> {
