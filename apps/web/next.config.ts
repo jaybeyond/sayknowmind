@@ -1,8 +1,19 @@
 import type { NextConfig } from "next";
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
 
 const isDesktopBuild = process.env.NEXT_PUBLIC_DEPLOY_MODE === "desktop";
 
+// This file's directory (apps/web). Used to pin the Turbopack/file-watcher root.
+const appDir = dirname(fileURLToPath(import.meta.url));
+
 const nextConfig: NextConfig = {
+  // Pin the workspace root to apps/web. Two pnpm lockfiles exist (repo root +
+  // apps/web), so Next 16 would otherwise infer the monorepo root and make the
+  // dev file-watcher scan every apps/* and packages/* tree (+ their
+  // node_modules and .next) → idle CPU/memory runaway. It also broke CSS module
+  // resolution (tw-animate-css resolved from /apps instead of apps/web).
+  turbopack: { root: appDir },
   output: "standalone",
   // jsdom + @mozilla/readability are externalized so Turbopack doesn't try to
   // bundle them at build time. jsdom transitively pulls @exodus/bytes (ESM-only)
@@ -46,7 +57,7 @@ const nextConfig: NextConfig = {
             "style-src 'self' 'unsafe-inline' https://api.fontshare.com",
             "img-src 'self' data: https://api.dicebear.com https://www.google.com https:",
             "font-src 'self' https://cdn.fontshare.com",
-            `connect-src 'self' http://127.0.0.1:* http://localhost:* https://cloudflareinsights.com ${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"} ${process.env.NEXT_PUBLIC_EDGEQUAKE_URL ?? ""} ${process.env.NEXT_PUBLIC_AI_SERVER_URL ?? ""}`.trim(),
+            `connect-src 'self' http://127.0.0.1:* http://localhost:* https://cloudflareinsights.com ${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5400"} ${process.env.NEXT_PUBLIC_EDGEQUAKE_URL ?? ""} ${process.env.NEXT_PUBLIC_AI_SERVER_URL ?? ""}`.trim(),
             "frame-src 'self' https://www.instagram.com https://www.youtube.com https://www.tiktok.com https://player.vimeo.com",
             "frame-ancestors 'none'",
           ].join("; "),
