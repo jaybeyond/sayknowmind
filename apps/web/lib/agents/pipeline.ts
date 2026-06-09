@@ -400,21 +400,29 @@ async function handleShare(
   let docId: string | null = null;
   let docTitle = "";
 
-  if (titleQuery.length >= 1) {
-    try {
-      const result = await pool.query(
-        `SELECT id, title FROM documents
-         WHERE user_id = $1 AND title ILIKE $2
-         ORDER BY updated_at DESC LIMIT 1`,
-        [userId, `%${titleQuery}%`],
-      );
-      if (result.rows.length > 0) {
-        docId = result.rows[0].id as string;
-        docTitle = result.rows[0].title as string;
-      }
-    } catch (err) {
-      writer.log(`Document lookup failed: ${(err as Error).message}`);
+  try {
+    // Primary, language-agnostic match: find a document whose TITLE appears
+    // inside the user's message ("把회의록 공유" / "把会议记录分享出去" all contain
+    // the real title). Prefer the most specific (longest) title. This sidesteps
+    // brittle per-language keyword stripping. Fall back to a fuzzy ILIKE on the
+    // stripped query, then to most-recently-updated.
+    const result = await pool.query(
+      `SELECT id, title,
+              ($3::text ILIKE '%' || title || '%' AND char_length(title) >= 2) AS in_message
+         FROM documents
+        WHERE user_id = $1
+          AND ( ($3::text ILIKE '%' || title || '%' AND char_length(title) >= 2)
+                OR ($2 <> '' AND title ILIKE $2) )
+        ORDER BY in_message DESC, char_length(title) DESC, updated_at DESC
+        LIMIT 1`,
+      [userId, titleQuery ? `%${titleQuery}%` : "", message],
+    );
+    if (result.rows.length > 0) {
+      docId = result.rows[0].id as string;
+      docTitle = result.rows[0].title as string;
     }
+  } catch (err) {
+    writer.log(`Document lookup failed: ${(err as Error).message}`);
   }
 
   if (!docId) {
