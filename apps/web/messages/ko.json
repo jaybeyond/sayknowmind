@@ -60,7 +60,10 @@
     },
     "new": {
       "sheet": "스프레드시트"
-    }
+    },
+    "export": "내보내기",
+    "exportCsv": "CSV (.csv)",
+    "exportXlsx": "엑셀 (.xlsx)"
   },
   "html": {
     "blockTitle": "HTML",

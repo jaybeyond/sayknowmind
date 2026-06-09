@@ -60,7 +60,10 @@
     },
     "new": {
       "sheet": "Spreadsheet"
-    }
+    },
+    "export": "Export",
+    "exportCsv": "CSV (.csv)",
+    "exportXlsx": "Excel (.xlsx)"
   },
   "html": {
     "blockTitle": "HTML",

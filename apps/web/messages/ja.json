@@ -60,7 +60,10 @@
     },
     "new": {
       "sheet": "スプレッドシート"
-    }
+    },
+    "export": "エクスポート",
+    "exportCsv": "CSV (.csv)",
+    "exportXlsx": "Excel (.xlsx)"
   },
   "html": {
     "blockTitle": "HTML",

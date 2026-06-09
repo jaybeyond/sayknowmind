@@ -13,7 +13,7 @@ import {
 import { BlockNoteView } from "@blocknote/mantine";
 import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from "@blocknote/core/extensions";
 import { en as bnEn, ko as bnKo, ja as bnJa, zh as bnZh } from "@blocknote/core/locales";
-import { Network, Code2, Plus, ChevronLeft, X, FileText, FileSpreadsheet } from "lucide-react";
+import { Network, Code2, Plus, ChevronLeft, X, FileText, FileSpreadsheet, Download } from "lucide-react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import { useTranslation, useI18nStore } from "@/lib/i18n";
@@ -492,8 +492,23 @@ function DocTabsSingle({
   const blocksByTab = React.useRef<Record<string, DocBlock[]>>(derived.blocks);
   // In-memory Univer snapshots per office tab.
   const univerByTab = React.useRef<Record<string, unknown>>(derived.univer ?? {});
+  // Synchronous live-snapshot getter for the active office tab (set by OfficeTab).
+  const liveSheetSnapshotRef = React.useRef<(() => unknown) | null>(null);
   const dirtyRef = React.useRef(false);
   const saveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleExport = React.useCallback(
+    async (format: "csv" | "xlsx") => {
+      const snap = liveSheetSnapshotRef.current?.() ?? univerByTab.current[activeTabId] ?? null;
+      if (!snap) return;
+      const tab = tabs.find((tb) => tb.id === activeTabId);
+      const base = title.trim() || tab?.name?.trim() || "spreadsheet";
+      const { exportCsv, exportXlsx } = await import("@/lib/office/sheet-export");
+      if (format === "csv") exportCsv(snap, base, tab?.name);
+      else await exportXlsx(snap, base);
+    },
+    [activeTabId, tabs, title],
+  );
 
   const persist = React.useCallback(
     async (titleValue: string, currentTabs: DocTab[], blocks: Record<string, DocBlock[]>) => {
@@ -656,6 +671,8 @@ function DocTabsSingle({
       onInsertHtmlFile={(html) => setActiveHtml(html)}
       onClearHtml={() => setActiveHtml(undefined)}
       fullBleed={isOfficeKind(tabs.find((tb) => tb.id === activeTabId)?.kind)}
+      canExport={isOfficeKind(tabs.find((tb) => tb.id === activeTabId)?.kind)}
+      onExport={handleExport}
     >
       {isOfficeKind(tabs.find((tb) => tb.id === activeTabId)?.kind) ? (
         <OfficeTab
@@ -665,6 +682,7 @@ function DocTabsSingle({
           initialSnapshot={univerByTab.current[activeTabId] ?? null}
           editable={true}
           onSnapshotChange={handleOfficeChange}
+          onRegisterSnapshotGetter={(g) => { liveSheetSnapshotRef.current = g; }}
         />
       ) : (
         <TabEditor
@@ -714,6 +732,7 @@ function DocTabsCollab({
 
   const blocksByTab = React.useRef<Record<string, DocBlock[]>>(derived.blocks);
   const univerByTab = React.useRef<Record<string, unknown>>(derived.univer ?? {});
+  const liveSheetSnapshotRef = React.useRef<(() => unknown) | null>(null);
   const dirtyRef = React.useRef(false);
   const saveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const tabsSeeded = React.useRef(false);
@@ -982,6 +1001,19 @@ function DocTabsCollab({
     [activeTabId, scheduleAutosave, tabs, title],
   );
 
+  const handleExport = React.useCallback(
+    async (format: "csv" | "xlsx") => {
+      const snap = liveSheetSnapshotRef.current?.() ?? univerByTab.current[activeTabId] ?? null;
+      if (!snap) return;
+      const tab = tabs.find((tb) => tb.id === activeTabId);
+      const base = title.trim() || tab?.name?.trim() || "spreadsheet";
+      const { exportCsv, exportXlsx } = await import("@/lib/office/sheet-export");
+      if (format === "csv") exportCsv(snap, base, tab?.name);
+      else await exportXlsx(snap, base);
+    },
+    [activeTabId, tabs, title],
+  );
+
   // Turn the active tab into a full-page HTML view (or clear it). The html lives
   // on the shared Yjs tab item so peers see the change live.
   const setActiveHtml = (html: string | undefined) => {
@@ -1067,6 +1099,8 @@ function DocTabsCollab({
       onInsertHtmlFile={(html) => setActiveHtml(html)}
       onClearHtml={() => setActiveHtml(undefined)}
       fullBleed={isOfficeKind(tabs.find((tb) => tb.id === activeTabId)?.kind)}
+      canExport={isOfficeKind(tabs.find((tb) => tb.id === activeTabId)?.kind)}
+      onExport={handleExport}
     >
       {isOfficeKind(tabs.find((tb) => tb.id === activeTabId)?.kind) ? (
         <OfficeTab
@@ -1077,6 +1111,7 @@ function DocTabsCollab({
           editable={session.canWrite}
           onSnapshotChange={handleOfficeChange}
           collabDoc={ydoc}
+          onRegisterSnapshotGetter={(g) => { liveSheetSnapshotRef.current = g; }}
         />
       ) : (
         <TabEditor
@@ -1126,6 +1161,10 @@ interface DocTabsLayoutProps {
   onClearHtml?: () => void;
   /** When true, the active tab is an office editor — render children full-height, no title chrome. */
   fullBleed?: boolean;
+  /** When true, the active tab is a spreadsheet → show the Export (CSV / XLSX) action. */
+  canExport?: boolean;
+  /** Export the active spreadsheet in the chosen format. */
+  onExport?: (format: "csv" | "xlsx") => void;
   children: React.ReactNode;
 }
 
@@ -1152,10 +1191,13 @@ function DocTabsLayout({
   onInsertHtmlFile,
   onClearHtml,
   fullBleed,
+  canExport,
+  onExport,
   children,
 }: DocTabsLayoutProps) {
   const { t } = useTranslation();
   const htmlFileInputRef = React.useRef<HTMLInputElement>(null);
+  const [exportMenuOpen, setExportMenuOpen] = React.useState(false);
   const [addMenuOpen, setAddMenuOpen] = React.useState(false);
 
   // New-tab kinds offered in the add menu (icon + i18n label + tab kind).
@@ -1332,6 +1374,44 @@ function DocTabsLayout({
                   <span className="hidden sm:inline">{t("html.insertFile")}</span>
                 </button>
               </>
+            )}
+            {canExport && onExport && (
+              <div className="relative">
+                <button
+                  onClick={() => setExportMenuOpen((o) => !o)}
+                  title={t("office.export")}
+                  aria-label={t("office.export")}
+                  aria-haspopup="menu"
+                  aria-expanded={exportMenuOpen}
+                  className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Download className="size-4" />
+                  <span className="hidden sm:inline">{t("office.export")}</span>
+                </button>
+                {exportMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setExportMenuOpen(false)} />
+                    <div role="menu" className="absolute right-0 top-7 z-50 w-44 rounded-md border bg-popover shadow-md p-1">
+                      <button
+                        role="menuitem"
+                        onClick={() => { setExportMenuOpen(false); onExport("csv"); }}
+                        className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-sm rounded-md text-foreground hover:bg-muted transition-colors"
+                      >
+                        <FileText className="size-4 text-muted-foreground" />
+                        {t("office.exportCsv")}
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={() => { setExportMenuOpen(false); onExport("xlsx"); }}
+                        className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-sm rounded-md text-foreground hover:bg-muted transition-colors"
+                      >
+                        <FileSpreadsheet className="size-4 text-emerald-600" />
+                        {t("office.exportXlsx")}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
             <SummaryButton docId={docId} />
           </div>

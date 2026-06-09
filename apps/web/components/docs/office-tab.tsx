@@ -77,6 +77,13 @@ export interface OfficeTabProps {
    * (onSnapshotChange) remains the durable source of truth.
    */
   collabDoc?: Y.Doc | null;
+  /**
+   * Registers a getter that returns the editor's LIVE snapshot synchronously
+   * (used by the toolbar's export action so it captures the latest edits, not
+   * the debounced-to-state copy). Called with the getter on mount and `null`
+   * on unmount / remount.
+   */
+  onRegisterSnapshotGetter?: (getter: (() => unknown) | null) => void;
 }
 
 /**
@@ -85,7 +92,7 @@ export interface OfficeTabProps {
  * on unmount (React 19 StrictMode-safe). The debounce + try/guard mirror
  * mindmap-block so editor churn never floods the autosave.
  */
-export default function OfficeTab({ tabId, kind, initialSnapshot, onSnapshotChange, collabDoc }: OfficeTabProps) {
+export default function OfficeTab({ tabId, kind, initialSnapshot, onSnapshotChange, collabDoc, onRegisterSnapshotGetter }: OfficeTabProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const { resolvedTheme } = useTheme();
 
@@ -94,6 +101,12 @@ export default function OfficeTab({ tabId, kind, initialSnapshot, onSnapshotChan
   React.useEffect(() => {
     onChangeRef.current = onSnapshotChange;
   }, [onSnapshotChange]);
+
+  // Keep the latest register callback without re-running the mount effect.
+  const registerRef = React.useRef(onRegisterSnapshotGetter);
+  React.useEffect(() => {
+    registerRef.current = onRegisterSnapshotGetter;
+  }, [onRegisterSnapshotGetter]);
 
   // collabDoc is stable for the doc's lifetime; read via ref so it isn't an effect dep.
   const collabRef = React.useRef(collabDoc);
@@ -165,6 +178,14 @@ export default function OfficeTab({ tabId, kind, initialSnapshot, onSnapshotChan
       // Re-affirm the theme on the DOM side (createUniver's darkMode handled the
       // canvas). Keeps chrome + canvas consistent and ready for live toggles.
       apiRef.current = univerAPI;
+      // Expose a synchronous live-snapshot getter for the export action.
+      registerRef.current?.(() => {
+        try {
+          return getSnapshot();
+        } catch {
+          return null;
+        }
+      });
       try {
         univerAPI.toggleDarkMode?.(resolvedTheme === "dark");
       } catch {
@@ -264,6 +285,7 @@ export default function OfficeTab({ tabId, kind, initialSnapshot, onSnapshotChan
     return () => {
       disposed = true;
       apiRef.current = null;
+      registerRef.current?.(null);
       if (saveTimer) clearTimeout(saveTimer);
       if (readyTimer) clearTimeout(readyTimer);
       try {

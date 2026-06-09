@@ -60,7 +60,10 @@
     },
     "new": {
       "sheet": "电子表格"
-    }
+    },
+    "export": "导出",
+    "exportCsv": "CSV (.csv)",
+    "exportXlsx": "Excel (.xlsx)"
   },
   "html": {
     "blockTitle": "HTML",
