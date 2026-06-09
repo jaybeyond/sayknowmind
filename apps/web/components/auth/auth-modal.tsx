@@ -77,17 +77,32 @@ export function AuthModal({
 }
 
 const REMEMBER_ME_STORAGE_KEY = "sayknowmind.auth.rememberMe";
+// We remember only the email address (non-sensitive) so the form can pre-fill it
+// on the next visit. The PASSWORD is intentionally never stored by the app:
+// anything kept client-side is recoverable client-side, so it would be security
+// theater. The password field uses autoComplete="current-password", which lets
+// the browser's / OS's password manager save and autofill it securely instead.
+const SAVED_EMAIL_STORAGE_KEY = "sayknowmind.auth.savedEmail";
+// Legacy key from an earlier build that stored the plaintext password — purge it
+// on load so no old plaintext credential lingers in localStorage.
+const LEGACY_CREDENTIALS_STORAGE_KEY = "sayknowmind.auth.savedCredentials";
 
 function LoginForm() {
   const { t } = useTranslation();
-  const [email, setEmail] = React.useState("");
+  const savedEmail = React.useMemo(() => {
+    if (typeof window === "undefined") return null;
+    window.localStorage.removeItem(LEGACY_CREDENTIALS_STORAGE_KEY);
+    return window.localStorage.getItem(SAVED_EMAIL_STORAGE_KEY);
+  }, []);
+  const [email, setEmail] = React.useState(() => savedEmail ?? "");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  // Default to "remember me" since the only thing it changes for the user is
-  // session lifetime — unchecking it makes the cookie session-only (cleared
-  // when the window closes).
+  // Single "keep me signed in" toggle. It does two things at once: keeps the
+  // session cookie persistent (vs session-only when unchecked) AND pre-fills the
+  // email on the next visit. Default on. The password is never stored by us —
+  // the browser's password manager handles that via autoComplete.
   const [rememberMe, setRememberMe] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     const stored = window.localStorage.getItem(REMEMBER_ME_STORAGE_KEY);
@@ -97,7 +112,13 @@ function LoginForm() {
   React.useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(REMEMBER_ME_STORAGE_KEY, rememberMe ? "1" : "0");
-  }, [rememberMe]);
+    // Tie email persistence to the same toggle.
+    if (rememberMe && email) {
+      window.localStorage.setItem(SAVED_EMAIL_STORAGE_KEY, email);
+    } else if (!rememberMe) {
+      window.localStorage.removeItem(SAVED_EMAIL_STORAGE_KEY);
+    }
+  }, [rememberMe, email]);
 
   function translateAuthError(code?: string, fallback?: string): string {
     if (code) {

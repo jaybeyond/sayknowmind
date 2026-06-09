@@ -243,12 +243,15 @@ export function MemoryContent() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
 
-  // Docs and mind maps open in the in-place editor; everything else opens the
-  // detail panel.
+  // Docs, spreadsheets and mind maps open in the in-place editor; everything else
+  // opens the detail panel. Spreadsheets open the doc editor (their seeded sheet
+  // tab lives in metadata.docTabs).
   const handleCardSelect = useCallback(
     (memory: Memory) => {
-      if (memory.docType === "doc" || memory.docType === "mindmap") {
-        setOpenEditor({ type: memory.docType, id: memory.id });
+      if (memory.docType === "mindmap") {
+        setOpenEditor({ type: "mindmap", id: memory.id });
+      } else if (memory.docType === "doc" || memory.docType === "sheet") {
+        setOpenEditor({ type: "doc", id: memory.id });
       } else {
         setSelectedMemory(memory);
       }

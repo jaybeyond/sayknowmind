@@ -46,7 +46,31 @@
   "tabs": {
     "all": "すべて",
     "addTab": "タブを追加",
-    "deleteConfirm": "を削除しますか？"
+    "deleteConfirm": "を削除しますか？",
+    "defaultName": "タブ 1",
+    "newTabName": "新しいタブ",
+    "rename": "ダブルクリックで名前を変更",
+    "delete": "タブを削除",
+    "title": "タブ"
+  },
+  "office": {
+    "kind": {
+      "blocknote": "ドキュメント",
+      "sheet": "スプレッドシート"
+    },
+    "new": {
+      "sheet": "スプレッドシート"
+    }
+  },
+  "html": {
+    "blockTitle": "HTML",
+    "blockSubtext": "HTMLを埋め込んでインライン表示",
+    "placeholder": "ここにHTMLを貼り付け…",
+    "render": "表示",
+    "edit": "HTMLを編集",
+    "empty": "空のHTMLブロック",
+    "insertFile": "HTMLファイルを挿入",
+    "removePage": "HTMLページを削除"
   },
   "header": {
     "memory": "メモリ",
@@ -925,6 +949,10 @@
     "imageUpload": "デバイスからアップロード",
     "or": "または",
     "moveUp": "上へ移動",
-    "moveDown": "下へ移動"
+    "moveDown": "下へ移動",
+    "blockTitle": "マインドマップ",
+    "blockSubtext": "編集可能なマインドマップを挿入",
+    "blockGroup": "埋め込み",
+    "blockDefaultTopic": "中心テーマ"
   }
 }

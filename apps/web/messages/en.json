@@ -46,7 +46,31 @@
   "tabs": {
     "all": "All",
     "addTab": "Add tab",
-    "deleteConfirm": "will be deleted. Are you sure?"
+    "deleteConfirm": " will be deleted. Are you sure?",
+    "defaultName": "Tab 1",
+    "newTabName": "New tab",
+    "rename": "Double-click to rename",
+    "delete": "Delete tab",
+    "title": "Tabs"
+  },
+  "office": {
+    "kind": {
+      "blocknote": "Document",
+      "sheet": "Spreadsheet"
+    },
+    "new": {
+      "sheet": "Spreadsheet"
+    }
+  },
+  "html": {
+    "blockTitle": "HTML",
+    "blockSubtext": "Embed raw HTML, rendered inline",
+    "placeholder": "Paste HTML here…",
+    "render": "Render",
+    "edit": "Edit HTML",
+    "empty": "Empty HTML block",
+    "insertFile": "Insert HTML file",
+    "removePage": "Remove HTML page"
   },
   "header": {
     "memory": "Memory",
@@ -925,6 +949,10 @@
     "imageUpload": "Upload from device",
     "or": "or",
     "moveUp": "Move up",
-    "moveDown": "Move down"
+    "moveDown": "Move down",
+    "blockTitle": "Mind map",
+    "blockSubtext": "Insert an editable mind map",
+    "blockGroup": "Embeds",
+    "blockDefaultTopic": "Central idea"
   }
 }

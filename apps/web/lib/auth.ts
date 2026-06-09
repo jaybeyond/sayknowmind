@@ -69,8 +69,12 @@ export const auth = betterAuth({
   },
 
   session: {
-    expiresIn: 60 * 60 * 24,
-    updateAge: 60 * 60 * 12,
+    // 30-day session so "keep me signed in" (rememberMe) actually keeps the user
+    // logged in long-term — they rarely need to re-enter their password. When
+    // rememberMe is unchecked the cookie is session-only regardless of this.
+    expiresIn: 60 * 60 * 24 * 30,
+    // Refresh the expiry once a day of activity, sliding the 30-day window.
+    updateAge: 60 * 60 * 24,
     cookieCache: {
       enabled: true,
       maxAge: 5 * 60,

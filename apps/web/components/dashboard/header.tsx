@@ -33,6 +33,7 @@ import {
   Zap,
   FileText,
   Network,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   Tooltip,
@@ -61,7 +62,7 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   // Create + open in place (the header only renders on the dashboard home,
   // where the content area can host the editor).
   const handleCreate = React.useCallback(
-    async (type: "doc" | "mindmap") => {
+    async (type: "doc" | "mindmap" | "sheet") => {
       try {
         const res = await fetch("/api/docs", {
           method: "POST",
@@ -70,7 +71,9 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
         });
         if (!res.ok) return;
         const { id } = (await res.json()) as { id: string };
-        setOpenEditor({ type, id });
+        // Spreadsheets open in the doc editor (which renders their seeded sheet tab);
+        // only mindmaps use the mindmap editor.
+        setOpenEditor({ type: type === "mindmap" ? "mindmap" : "doc", id });
       } catch {
         /* silent */
       }
@@ -79,6 +82,7 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   );
   const handleNewDoc = React.useCallback(() => handleCreate("doc"), [handleCreate]);
   const handleNewMindmap = React.useCallback(() => handleCreate("mindmap"), [handleCreate]);
+  const handleNewSheet = React.useCallback(() => handleCreate("sheet"), [handleCreate]);
 
   // Listen for tray menu "add memory" event
   React.useEffect(() => {
@@ -316,6 +320,11 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
                   <DropdownMenuItem onClick={handleNewMindmap}>
                     <Network className="size-4 mr-2" />
                     {t("header.newMindmap")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleNewSheet}>
+                    <FileSpreadsheet className="size-4 mr-2 text-emerald-600" />
+                    {t("office.new.sheet")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

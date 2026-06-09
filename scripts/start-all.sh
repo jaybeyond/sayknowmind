@@ -97,8 +97,12 @@ echo ""
 # edgequake reads PORT (default 8080), but 8080 is taken locally by
 # SayKnowLite.app — so default to 5403 (matches .env EDGEQUAKE_PORT / URL).
 EDGEQUAKE_PORT="${EDGEQUAKE_PORT:-5403}"
+# EdgeQuake uses its OWN database, not the web app's `sayknowmind`. Sharing it
+# collides on public.entities and panics EdgeQuake's migrations. Falls back to
+# DATABASE_URL only if EDGEQUAKE_DATABASE_URL is unset.
+EDGEQUAKE_DB="${EDGEQUAKE_DATABASE_URL:-$DATABASE_URL}"
 start_service "edgequake" "$EDGEQUAKE_PORT" \
-  "DATABASE_URL=$DATABASE_URL RUST_LOG=$RUST_LOG PORT=$EDGEQUAKE_PORT ./target/release/edgequake" \
+  "DATABASE_URL=$EDGEQUAKE_DB RUST_LOG=$RUST_LOG PORT=$EDGEQUAKE_PORT ./target/release/edgequake" \
   "$ROOT_DIR/packages/edgequake"
 
 # ── MCP Server (8082) ──

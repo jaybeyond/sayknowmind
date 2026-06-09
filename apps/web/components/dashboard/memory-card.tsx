@@ -35,6 +35,7 @@ import {
   FolderOpen,
   Users,
   Network,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryStore, type Memory } from "@/store/memory-store";
@@ -74,7 +75,7 @@ const ProcessingBadge = ({ status }: { status?: Memory["jobStatus"] }) => {
   );
 };
 
-const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text" | "doc" | "mindmap"; fileType?: string }) => {
+const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text" | "doc" | "mindmap" | "sheet"; fileType?: string }) => {
   if (type === "file") {
     switch (fileType) {
       case "image": return <ImageIcon className="size-3.5 text-muted-foreground" />;
@@ -85,6 +86,7 @@ const DocTypeIcon = ({ type, fileType }: { type?: "url" | "file" | "text" | "doc
   if (type === "text") return <AlignLeft className="size-3.5 text-muted-foreground" />;
   if (type === "doc") return <FileType className="size-3.5 text-muted-foreground" />;
   if (type === "mindmap") return <Network className="size-3.5 text-muted-foreground" />;
+  if (type === "sheet") return <FileSpreadsheet className="size-3.5 text-emerald-600" />;
   return <Globe className="size-3.5 text-muted-foreground" />;
 };
 
@@ -154,6 +156,8 @@ export function MemoryCard({
       onSelect(memory);
     } else if (memory.docType === "mindmap") {
       router.push(`/mindmaps/${memory.id}`);
+    } else if (memory.docType === "doc" || memory.docType === "sheet") {
+      router.push(`/docs/${memory.id}`);
     } else if (fileUrl && (isImage || isVideo)) {
       void openExternal(fileUrl);
     } else if (memory.url) {

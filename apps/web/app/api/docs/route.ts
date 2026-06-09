@@ -18,12 +18,13 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => ({}))) as {
       title?: string;
-      type?: "doc" | "mindmap";
+      type?: "doc" | "mindmap" | "sheet";
       categoryId?: string | null;
     };
     const title =
       typeof body.title === "string" && body.title.trim() ? body.title.trim() : "Untitled";
-    const docType = body.type === "mindmap" ? "mindmap" : "doc";
+    const docType: "doc" | "mindmap" | "sheet" =
+      body.type === "mindmap" ? "mindmap" : body.type === "sheet" ? "sheet" : "doc";
     const categoryId = typeof body.categoryId === "string" && body.categoryId ? body.categoryId : null;
 
     // If a target collection is given, verify the caller may write to it BEFORE
@@ -42,24 +43,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const id =
-      docType === "mindmap"
-        ? await insertDocument({
-            userId: ctx.userId,
-            organizationId: ctx.organizationId,
-            title,
-            content: title,
-            sourceType: "mindmap",
-            metadata: { content_format: "mindmap", mindmap: { nodeData: { id: "root", topic: title } } },
-          })
-        : await insertDocument({
-            userId: ctx.userId,
-            organizationId: ctx.organizationId,
-            title,
-            content: "",
-            sourceType: "doc",
-            metadata: { content_format: "blocknote" },
-          });
+    let id: string;
+    if (docType === "mindmap") {
+      id = await insertDocument({
+        userId: ctx.userId,
+        organizationId: ctx.organizationId,
+        title,
+        content: title,
+        sourceType: "mindmap",
+        metadata: { content_format: "mindmap", mindmap: { nodeData: { id: "root", topic: title } } },
+      });
+    } else if (docType === "sheet") {
+      // Spreadsheet (Excel-like) — a first-class item whose single tab is a Univer
+      // sheet editor. source_type="sheet" so the list shows the spreadsheet icon and
+      // opens the doc editor (which renders the seeded office tab).
+      const tabId = crypto.randomUUID();
+      id = await insertDocument({
+        userId: ctx.userId,
+        organizationId: ctx.organizationId,
+        title,
+        content: "",
+        sourceType: "sheet",
+        metadata: {
+          content_format: "blocknote",
+          docTabs: {
+            tabs: [{ id: tabId, name: title, kind: "sheet" }],
+            blocks: {},
+            univer: { [tabId]: null },
+          },
+        },
+      });
+    } else {
+      id = await insertDocument({
+        userId: ctx.userId,
+        organizationId: ctx.organizationId,
+        title,
+        content: "",
+        sourceType: "doc",
+        metadata: { content_format: "blocknote" },
+      });
+    }
 
     if (categoryId) {
       await pool.query(

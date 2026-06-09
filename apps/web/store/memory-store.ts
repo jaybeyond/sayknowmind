@@ -23,7 +23,7 @@ export type Memory = {
   whatItSolves?: string;
   keyPoints?: string[];
   readingTimeMinutes?: number;
-  docType?: "url" | "file" | "text" | "doc" | "mindmap";
+  docType?: "url" | "file" | "text" | "doc" | "mindmap" | "sheet";
   fileType?: string; // image, video, pdf, docx, etc.
   fileName?: string;
   ogImage?: string;
@@ -38,6 +38,10 @@ const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
 let fetchMemoriesRequestId = 0;
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+function isDocumentLikeType(type: Memory["docType"]): boolean {
+  return type === "doc" || type === "sheet";
+}
 
 /** Map a DB document row to the Memory shape used by the UI */
 function documentToMemory(row: Record<string, unknown>): Memory {
@@ -58,11 +62,12 @@ function documentToMemory(row: Record<string, unknown>): Memory {
 
   // Use DB source_type column (reliable) over metadata.doc_type
   const sourceType = String(row.source_type ?? "");
-  const docType: "url" | "file" | "text" | "doc" | "mindmap" =
+  const docType: "url" | "file" | "text" | "doc" | "mindmap" | "sheet" =
     sourceType === "file" ? "file"
     : sourceType === "text" ? "text"
     : sourceType === "doc" ? "doc"
     : sourceType === "mindmap" ? "mindmap"
+    : sourceType === "sheet" ? "sheet"
     : "url";
 
   const fileType = typeof metadata.fileType === "string" ? metadata.fileType : undefined;
@@ -573,8 +578,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     const state = get();
     let filtered = [...state.memories];
 
-    if (state.sourceTypeFilter) {
-      filtered = filtered.filter((m) => m.docType === state.sourceTypeFilter);
+    if (state.sourceTypeFilter === "doc") {
+      filtered = filtered.filter((m) => isDocumentLikeType(m.docType));
+    } else if (state.sourceTypeFilter === "mindmap") {
+      filtered = filtered.filter((m) => m.docType === "mindmap");
     }
 
     if (state.selectedCollection !== "all") {

@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { DocEditorDynamic } from "@/components/docs/doc-editor-dynamic";
-import type { Block } from "@blocknote/core";
 
 async function fetchDoc(id: string) {
   const hdrs = await headers();
@@ -30,16 +29,14 @@ export default async function DocPage({ params }: PageProps) {
 
   if (!doc) notFound();
 
-  const blocks: Block[] | null = Array.isArray(doc.metadata?.blocknote)
-    ? (doc.metadata.blocknote as Block[])
-    : null;
-
   return (
-    <main className="min-h-screen bg-background">
+    // h-screen (a definite height) so DocTabs' h-full / flex-1 chain resolves —
+    // otherwise the editor and full-page HTML iframe collapse to zero height.
+    <main className="h-screen overflow-hidden bg-background">
       <DocEditorDynamic
         docId={doc.id}
         initialTitle={doc.title}
-        initialBlocks={blocks}
+        initialMetadata={doc.metadata}
         collab={!!process.env.NEXT_PUBLIC_COLLAB_WS_URL}
       />
     </main>

@@ -4,6 +4,19 @@ import { dirname } from "node:path";
 
 const isDesktopBuild = process.env.NEXT_PUBLIC_DEPLOY_MODE === "desktop";
 
+// Origin (scheme://host:port) of the realtime collab WebSocket, for CSP
+// connect-src. WS uses the ws:/wss: scheme, which is NOT covered by the
+// http(s) localhost sources — so it must be allowed explicitly.
+const collabWsOrigin = (() => {
+  const url = process.env.NEXT_PUBLIC_COLLAB_WS_URL;
+  if (!url) return "";
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "";
+  }
+})();
+
 // This file's directory (apps/web). Used to pin the Turbopack/file-watcher root.
 const appDir = dirname(fileURLToPath(import.meta.url));
 
@@ -57,7 +70,7 @@ const nextConfig: NextConfig = {
             "style-src 'self' 'unsafe-inline' https://api.fontshare.com",
             "img-src 'self' data: https://api.dicebear.com https://www.google.com https:",
             "font-src 'self' https://cdn.fontshare.com",
-            `connect-src 'self' http://127.0.0.1:* http://localhost:* https://cloudflareinsights.com ${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5400"} ${process.env.NEXT_PUBLIC_EDGEQUAKE_URL ?? ""} ${process.env.NEXT_PUBLIC_AI_SERVER_URL ?? ""}`.trim(),
+            `connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* wss://localhost:* https://cloudflareinsights.com ${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5400"} ${process.env.NEXT_PUBLIC_EDGEQUAKE_URL ?? ""} ${process.env.NEXT_PUBLIC_AI_SERVER_URL ?? ""} ${collabWsOrigin}`.trim(),
             "frame-src 'self' https://www.instagram.com https://www.youtube.com https://www.tiktok.com https://player.vimeo.com",
             "frame-ancestors 'none'",
           ].join("; "),

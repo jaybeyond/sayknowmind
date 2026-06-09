@@ -46,7 +46,31 @@
   "tabs": {
     "all": "전체",
     "addTab": "탭 추가",
-    "deleteConfirm": "을(를) 삭제하시겠습니까?"
+    "deleteConfirm": "을(를) 삭제하시겠습니까?",
+    "defaultName": "탭 1",
+    "newTabName": "새 탭",
+    "rename": "더블클릭하여 이름 변경",
+    "delete": "탭 삭제",
+    "title": "탭"
+  },
+  "office": {
+    "kind": {
+      "blocknote": "문서",
+      "sheet": "스프레드시트"
+    },
+    "new": {
+      "sheet": "스프레드시트"
+    }
+  },
+  "html": {
+    "blockTitle": "HTML",
+    "blockSubtext": "HTML을 임베드해 바로 렌더링",
+    "placeholder": "여기에 HTML 붙여넣기…",
+    "render": "렌더링",
+    "edit": "HTML 편집",
+    "empty": "빈 HTML 블록",
+    "insertFile": "HTML 파일 삽입",
+    "removePage": "HTML 페이지 제거"
   },
   "header": {
     "memory": "메모리",
@@ -925,6 +949,10 @@
     "imageUpload": "기기에서 업로드",
     "or": "또는",
     "moveUp": "위로 이동",
-    "moveDown": "아래로 이동"
+    "moveDown": "아래로 이동",
+    "blockTitle": "마인드맵",
+    "blockSubtext": "편집 가능한 마인드맵 삽입",
+    "blockGroup": "임베드",
+    "blockDefaultTopic": "중심 주제"
   }
 }

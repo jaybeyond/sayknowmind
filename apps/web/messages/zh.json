@@ -46,7 +46,31 @@
   "tabs": {
     "all": "全部",
     "addTab": "添加标签页",
-    "deleteConfirm": "将被删除，确定吗？"
+    "deleteConfirm": "将被删除，确定吗？",
+    "defaultName": "标签页 1",
+    "newTabName": "新标签页",
+    "rename": "双击重命名",
+    "delete": "删除标签页",
+    "title": "标签页"
+  },
+  "office": {
+    "kind": {
+      "blocknote": "文档",
+      "sheet": "电子表格"
+    },
+    "new": {
+      "sheet": "电子表格"
+    }
+  },
+  "html": {
+    "blockTitle": "HTML",
+    "blockSubtext": "嵌入 HTML 并内联渲染",
+    "placeholder": "在此粘贴 HTML…",
+    "render": "渲染",
+    "edit": "编辑 HTML",
+    "empty": "空 HTML 块",
+    "insertFile": "插入 HTML 文件",
+    "removePage": "移除 HTML 页面"
   },
   "header": {
     "memory": "记忆",
@@ -925,6 +949,10 @@
     "imageUpload": "从设备上传",
     "or": "或",
     "moveUp": "上移",
-    "moveDown": "下移"
+    "moveDown": "下移",
+    "blockTitle": "思维导图",
+    "blockSubtext": "插入可编辑的思维导图",
+    "blockGroup": "嵌入",
+    "blockDefaultTopic": "中心主题"
   }
 }

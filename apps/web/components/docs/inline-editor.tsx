@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import { ChevronLeft } from "lucide-react";
-import type { Block } from "@blocknote/core";
 import type { MindElixirData } from "mind-elixir";
 import { useMemoryStore } from "@/store/memory-store";
 import { useTranslation } from "@/lib/i18n";
+import type { DocEditorDynamicProps } from "./doc-editor-dynamic";
 import { DocEditorDynamic } from "./doc-editor-dynamic";
 import { MindmapEditorDynamic } from "./mindmap-editor-dynamic";
 
@@ -101,24 +101,24 @@ export function InlineEditor({ type, id }: InlineEditorProps) {
       </div>
     );
   } else {
-    const blocks: Block[] | null = Array.isArray(doc.metadata?.blocknote)
-      ? (doc.metadata.blocknote as Block[])
-      : null;
+    const editorProps: DocEditorDynamicProps = {
+      docId: doc.id,
+      initialTitle: doc.title,
+      initialMetadata: doc.metadata,
+      collab: !!process.env.NEXT_PUBLIC_COLLAB_WS_URL,
+      onBack: () => setOpenEditor(null),
+    };
     body = (
-      <div className="flex-1 overflow-auto">
-        <DocEditorDynamic
-          docId={doc.id}
-          initialTitle={doc.title}
-          initialBlocks={blocks}
-          collab={!!process.env.NEXT_PUBLIC_COLLAB_WS_URL}
-        />
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <DocEditorDynamic {...editorProps} />
       </div>
     );
   }
 
-  // The mind-map editor renders its own header (with a back button), so skip
-  // the standalone back bar there to avoid stacking headers.
-  const hideBackBar = status === "ready" && type === "mindmap";
+  // The mind-map and document editors render their own header (with a back
+  // button), so skip the standalone back bar there to avoid stacking headers.
+  const hideBackBar =
+    status === "ready" && (type === "mindmap" || type === "doc");
 
   return (
     <div className="flex flex-col h-full w-full">

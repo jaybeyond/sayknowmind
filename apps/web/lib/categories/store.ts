@@ -202,8 +202,8 @@ export async function updateCategory(
       if (admin) {
         await client.query(
           `UPDATE categories
-           SET path = $1 || substring(path from $2),
-               depth = depth + ($3 - $4),
+           SET path = $1 || substring(path from $2::int),
+               depth = depth + ($3::int - $4::int),
                updated_at = NOW()
            WHERE organization_id = $5 AND path LIKE $6 AND id != $7`,
           [path, current.path.length + 1, depth, current.depth, ctx.organizationId, `${current.path}/%`, id],
@@ -211,8 +211,8 @@ export async function updateCategory(
       } else {
         await client.query(
           `UPDATE categories
-           SET path = $1 || substring(path from $2),
-               depth = depth + ($3 - $4),
+           SET path = $1 || substring(path from $2::int),
+               depth = depth + ($3::int - $4::int),
                updated_at = NOW()
            WHERE organization_id = $5 AND user_id = $6 AND path LIKE $7 AND id != $8`,
           [path, current.path.length + 1, depth, current.depth, ctx.organizationId, ctx.userId, `${current.path}/%`, id],

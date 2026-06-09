@@ -1,29 +1,28 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { Block } from "@blocknote/core";
+import type { DocTabsProps } from "./doc-tabs";
 
-interface DocEditorProps {
+/**
+ * Dynamically imports DocTabs (no SSR) so BlockNote + Yjs are only bundled
+ * client-side. All doc render paths go through this component.
+ */
+const DocTabsInner = dynamic<DocTabsProps>(
+  () => import("./doc-tabs").then((m) => m.DocTabs),
+  { ssr: false },
+);
+
+export interface DocEditorDynamicProps {
   docId: string;
   initialTitle: string;
-  initialBlocks: Block[] | null;
-  /** When true, mount the real-time collaborative editor (which falls back to
-   *  the single-user editor internally if collab is unavailable). */
+  initialMetadata: Record<string, unknown>;
+  /** When true, mount the real-time collaborative editor (falls back to
+   *  single-user internally if collab is unavailable). */
   collab?: boolean;
+  /** When provided, a back affordance is shown in the doc header. */
+  onBack?: () => void;
 }
 
-type InnerProps = Omit<DocEditorProps, "collab">;
-
-const DocEditorInner = dynamic<InnerProps>(
-  () => import("./doc-editor").then((m) => m.DocEditor),
-  { ssr: false },
-);
-
-const DocEditorCollabInner = dynamic<InnerProps>(
-  () => import("./doc-editor-collab").then((m) => m.DocEditorCollab),
-  { ssr: false },
-);
-
-export function DocEditorDynamic({ collab, ...props }: DocEditorProps) {
-  return collab ? <DocEditorCollabInner {...props} /> : <DocEditorInner {...props} />;
+export function DocEditorDynamic({ collab, ...props }: DocEditorDynamicProps) {
+  return <DocTabsInner collab={collab ?? false} {...props} />;
 }

@@ -128,3 +128,30 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Univer office editor — keep dark-mode integration scoped to editor chrome.
+   Do not override `--univer-white`: Univer uses it for dark-mode text/icons. */
+.dark .univer-office-host,
+.univer-office-host.univer-dark {
+  --office-doc-canvas-bg: #101010;
+  color-scheme: dark;
+  background-color: var(--office-doc-canvas-bg);
+}
+
+/* Docs canvas ships with an inline white/#fafafa workspace background. In app
+   dark mode, tone only the canvas "desk"; document/page content stays owned by
+   Univer so imported office files keep their original formatting. */
+.dark .univer-office-host [data-range-selector="true"],
+.univer-office-host.univer-dark [data-range-selector="true"],
+.dark .univer-office-host #univer-doc-main-canvas,
+.univer-office-host.univer-dark #univer-doc-main-canvas {
+  background-color: var(--office-doc-canvas-bg) !important;
+}
+
+/* Univer can create the doc canvas narrower than the visible editor viewport.
+   Center that canvas so the document area does not look pinned to the left. */
+.dark .univer-office-host #univer-doc-main-canvas,
+.univer-office-host.univer-dark #univer-doc-main-canvas {
+  display: block;
+  margin-inline: auto;
+}

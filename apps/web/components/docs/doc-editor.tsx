@@ -6,7 +6,13 @@ import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import type { Block } from "@blocknote/core";
-import { useTranslation } from "@/lib/i18n";
+import { en as bnEn, ko as bnKo, ja as bnJa, zh as bnZh } from "@blocknote/core/locales";
+import { useTheme } from "next-themes";
+import { useTranslation, useI18nStore } from "@/lib/i18n";
+
+// Built-in BlockNote UI dictionaries (slash menu, placeholders, formatting
+// toolbar, etc.), keyed by our app locales. Falls back to English.
+const BN_LOCALE = { en: bnEn, ko: bnKo, ja: bnJa, zh: bnZh } as const;
 
 interface DocEditorProps {
   docId: string;
@@ -20,12 +26,14 @@ const AUTOSAVE_DEBOUNCE_MS = 800;
 
 export function DocEditor({ docId, initialTitle, initialBlocks }: DocEditorProps) {
   const { t } = useTranslation();
+  const { resolvedTheme } = useTheme();
   const [title, setTitle] = React.useState(initialTitle);
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("saved");
   const saveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor = useCreateBlockNote({
     initialContent: initialBlocks ?? undefined,
+    dictionary: BN_LOCALE[useI18nStore.getState().locale] ?? bnEn,
   });
 
   const persist = React.useCallback(
@@ -108,7 +116,7 @@ export function DocEditor({ docId, initialTitle, initialBlocks }: DocEditorProps
       <BlockNoteView
         editor={editor}
         onChange={handleEditorChange}
-        theme="light"
+        theme={resolvedTheme === "dark" ? "dark" : "light"}
       />
     </div>
   );

@@ -8,9 +8,15 @@ import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import type { Block } from "@blocknote/core";
+import { en as bnEn, ko as bnKo, ja as bnJa, zh as bnZh } from "@blocknote/core/locales";
+import { useTheme } from "next-themes";
 import { DocEditor } from "./doc-editor";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, useI18nStore } from "@/lib/i18n";
 import { SummaryButton } from "./summary-button";
+
+// Built-in BlockNote UI dictionaries (slash menu, placeholders, formatting
+// toolbar, etc.), keyed by our app locales. Falls back to English.
+const BN_LOCALE = { en: bnEn, ko: bnKo, ja: bnJa, zh: bnZh } as const;
 
 interface DocEditorCollabProps {
   docId: string;
@@ -108,6 +114,7 @@ function CollabEditorInner({
   session,
 }: DocEditorCollabProps & { session: CollabSession }) {
   const { t } = useTranslation();
+  const { resolvedTheme } = useTheme();
   const [title, setTitle] = React.useState(initialTitle);
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("saved");
   const [connected, setConnected] = React.useState(false);
@@ -135,6 +142,7 @@ function CollabEditorInner({
   }, [docId, session.wsUrl, session.token]);
 
   const editor = useCreateBlockNote({
+    dictionary: BN_LOCALE[useI18nStore.getState().locale] ?? bnEn,
     collaboration: {
       fragment: ydoc.getXmlFragment("document"),
       user: session.user,
@@ -273,7 +281,7 @@ function CollabEditorInner({
         editor={editor}
         editable={session.canWrite}
         onChange={() => scheduleAutosave(title, editor.document)}
-        theme="light"
+        theme={resolvedTheme === "dark" ? "dark" : "light"}
       />
     </div>
   );
