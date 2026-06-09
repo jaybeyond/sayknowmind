@@ -158,9 +158,7 @@ export default function OfficeTab({ tabId, kind, initialSnapshot, editable, onSn
           // Set dark at creation so the canvas desk paints dark from frame 1.
           darkMode: resolvedTheme === "dark",
           locales: { [univerLocale]: mergeLocales(sheetLocale) },
-          // Hide Univer's built-in ribbon/menu — the app's own header owns the
-          // chrome (doc title, export). Keep the formula bar + sheet-tab footer.
-          presets: [UniverSheetsCorePreset({ container: el, toolbar: false })],
+          presets: [UniverSheetsCorePreset({ container: el })],
         });
         univerAPI = api;
         const fWorkbook = univerAPI.createWorkbook((initialSnapshot as any) ?? {});
