@@ -27,6 +27,11 @@ interface PipelineInput {
 
 type Lang = "en" | "ko" | "zh" | "ja";
 
+/** Pick a string for the detected language (falls back to English). */
+function L(lang: Lang, s: { en: string; ko: string; zh: string; ja: string }): string {
+  return s[lang] ?? s.en;
+}
+
 function detectLanguage(text: string): Lang {
   // Check for Korean characters (Hangul)
   if (/[\uAC00-\uD7AF\u1100-\u11FF]/.test(text)) return "ko";
@@ -53,12 +58,22 @@ const INTENT_PATTERNS: [RegExp, MessageIntent][] = [
   [/노션\s*(문서|페이지|노트)?\s*(만들어|작성|생성)/i,                                    "create"],
   [/\b(create|make|write)\s+(a\s+)?(new\s+)?(doc(ument)?|note|sheet|spreadsheet|mindmap|mind\s+map|page)\b/i, "create"],
   [/\bnew\s+(doc(ument)?|note|sheet|spreadsheet|mindmap|mind\s+map)\b/i,                  "create"],
+  // ── CREATE (ZH) ──
+  [/(创建|新建|生成|做一?个|写一?个|帮我(创建|新建|做|写|建|生成))\s*(新的)?\s*(文档|文件|表格|电子表格|笔记|思维导图|脑图|页面)?/, "create"],
+  [/(文档|表格|电子表格|笔记|思维导图|脑图)\s*.{0,4}(创建|新建|生成|做|写|整理)/,           "create"],
+  // ── CREATE (JA) ──
+  [/(ドキュメント|シート|スプレッドシート|マインドマップ|ノート|文書|表)\s*(を)?\s*(作って|作成|つくって|書いて|生成)/, "create"],
+  [/(作成して|作って|つくって|書いて|生成して)/,                                          "create"],
 
-  // ── SHARE (KO → EN) ────────────────────────────────────────
+  // ── SHARE (KO → EN → ZH → JA) ────────────────────────────────
   [/공유\s*(해\s*줘|해\s*주세요|해\s*봐|해\s*드려)/i,                                    "share"],
   [/(문서|파일|노트|시트|마인드맵)를?\s*공유/i,                                          "share"],
   [/\b(share|publish)\b.{0,30}(doc(ument)?|sheet|spreadsheet|mindmap|mind\s*map|note|file)/i, "share"],
   [/(doc(ument)?|sheet|spreadsheet|mindmap|note|file).{0,20}\b(share|publish)\b/i,         "share"],
+  [/(分享|共享|公开)\s*.{0,8}(文档|文件|表格|笔记|思维导图|链接|出去)?/,                   "share"],
+  [/(文档|表格|笔记|思维导图|文件)\s*.{0,6}(分享|共享|公开)/,                             "share"],
+  [/(共有|シェア|公開)\s*(して|してください|したい)/,                                     "share"],
+  [/(ドキュメント|シート|マインドマップ|ノート|ファイル)\s*(を)?\s*.{0,6}(共有|シェア)/,  "share"],
 
   // ── RECOMMEND (KO → EN → ZH → JA) ─────────────────────────
   [/추천\s*(해\s*줘|해\s*주세요|드려|좀)/i,              "recommend"],
@@ -188,6 +203,11 @@ const SHARE_STRIP_PATTERNS: RegExp[] = [
   /^(share|publish|공유)\s+(the\s+)?(doc(ument)?|sheet|spreadsheet|mindmap|mind\s*map|note|file)?\s*(called|named|titled)?\s*/i,
   /\s*(문서|파일|노트|시트|마인드맵|note|doc(ument)?|sheet)\s*/i,
   /\s*좀\s*$/i,
+  // ZH / JA share verbs + document nouns
+  /(分享|共享|公开|帮我)\s*/g,
+  /(文档|文件|表格|笔记|思维导图)\s*/g,
+  /(共有|シェア|公開)\s*(して|してください|したい)?/g,
+  /(ドキュメント|シート|マインドマップ|ノート|ファイル)\s*(を)?\s*/g,
 ];
 
 function extractShareTarget(message: string): string {
@@ -213,7 +233,7 @@ async function handleCreate(
   providers: ProviderInput[],
 ): Promise<string> {
   const lang = detectLanguage(message);
-  writer.status("thinking", lang === "ko" ? "문서를 생성하는 중..." : "Creating document...");
+  writer.status("thinking", L(lang, { en: "Creating document...", ko: "문서를 생성하는 중...", zh: "正在创建文档...", ja: "ドキュメントを作成中..." }));
   writer.log("Create intent detected — extracting document parameters via LLM");
 
   const extractionSystem = `You are a structured data extraction assistant.
@@ -305,7 +325,12 @@ Include only the field that matches the type. Return ONLY the raw JSON object �
 
   writer.status(
     "thinking",
-    lang === "ko" ? `'${docParams.title}' 생성 중...` : `Creating '${docParams.title}'...`,
+    L(lang, {
+      en: `Creating '${docParams.title}'...`,
+      ko: `'${docParams.title}' 생성 중...`,
+      zh: `正在创建『${docParams.title}』...`,
+      ja: `『${docParams.title}』を作成中...`,
+    }),
   );
 
   let docResult: { id: string; url: string };
@@ -324,25 +349,30 @@ Include only the field that matches the type. Return ONLY the raw JSON object �
   } catch (err) {
     const errMsg = (err as Error).message;
     writer.log(`Document creation failed: ${errMsg}`);
-    const errorAnswer =
-      lang === "ko"
-        ? `문서 생성에 실패했습니다: ${errMsg}`
-        : `Failed to create document: ${errMsg}`;
+    const errorAnswer = L(lang, {
+      en: `Failed to create document: ${errMsg}`,
+      ko: `문서 생성에 실패했습니다: ${errMsg}`,
+      zh: `创建文档失败：${errMsg}`,
+      ja: `ドキュメントの作成に失敗しました: ${errMsg}`,
+    });
     writer.token(errorAnswer);
     return errorAnswer;
   }
 
-  const typeLabel =
-    lang === "ko"
-      ? docParams.type === "mindmap" ? "마인드맵" : docParams.type === "sheet" ? "스프레드시트" : "문서"
-      : docParams.type === "mindmap" ? "mind map" : docParams.type === "sheet" ? "spreadsheet" : "document";
-
+  const labels: Record<"doc" | "sheet" | "mindmap", Record<Lang, string>> = {
+    doc: { en: "document", ko: "문서", zh: "文档", ja: "ドキュメント" },
+    sheet: { en: "spreadsheet", ko: "스프레드시트", zh: "表格", ja: "スプレッドシート" },
+    mindmap: { en: "mind map", ko: "마인드맵", zh: "思维导图", ja: "マインドマップ" },
+  };
+  const typeLabel = labels[docParams.type][lang];
   // Korean object particle: 마인드맵 ends in a consonant (을); 문서/스프레드시트 in a vowel (를).
   const particle = docParams.type === "mindmap" ? "을" : "를";
-  const answer =
-    lang === "ko"
-      ? `**${docParams.title}** ${typeLabel}${particle} 만들었습니다. [열기](${docResult.url})`
-      : `Created **${docParams.title}** ${typeLabel}. [Open it](${docResult.url})`;
+  const answer = L(lang, {
+    en: `Created **${docParams.title}** ${typeLabel}. [Open it](${docResult.url})`,
+    ko: `**${docParams.title}** ${typeLabel}${particle} 만들었습니다. [열기](${docResult.url})`,
+    zh: `已创建 **${docParams.title}** ${typeLabel}。[打开](${docResult.url})`,
+    ja: `**${docParams.title}** ${typeLabel}を作成しました。[開く](${docResult.url})`,
+  });
 
   writer.token(answer);
   return answer;
@@ -362,7 +392,7 @@ async function handleShare(
   writer: StreamWriter,
 ): Promise<string> {
   const lang = detectLanguage(message);
-  writer.status("thinking", lang === "ko" ? "문서를 공유하는 중..." : "Sharing document...");
+  writer.status("thinking", L(lang, { en: "Sharing document...", ko: "문서를 공유하는 중...", zh: "正在分享文档...", ja: "ドキュメントを共有中..." }));
 
   const titleQuery = extractShareTarget(message);
   writer.log(`Share intent — title query: "${titleQuery}"`);
@@ -388,10 +418,12 @@ async function handleShare(
   }
 
   if (!docId) {
-    const ask =
-      lang === "ko"
-        ? "어떤 문서를 공유할까요? 문서 제목을 알려주세요."
-        : "Which document would you like to share? Please tell me the document title.";
+    const ask = L(lang, {
+      en: "Which document would you like to share? Please tell me the document title.",
+      ko: "어떤 문서를 공유할까요? 문서 제목을 알려주세요.",
+      zh: "您想分享哪个文档？请告诉我文档标题。",
+      ja: "どのドキュメントを共有しますか？タイトルを教えてください。",
+    });
     writer.token(ask);
     return ask;
   }
@@ -405,18 +437,22 @@ async function handleShare(
   } catch (err) {
     const errMsg = (err as Error).message;
     writer.log(`Share failed: ${errMsg}`);
-    const errorAnswer =
-      lang === "ko"
-        ? `문서 공유에 실패했습니다: ${errMsg}`
-        : `Failed to share document: ${errMsg}`;
+    const errorAnswer = L(lang, {
+      en: `Failed to share document: ${errMsg}`,
+      ko: `문서 공유에 실패했습니다: ${errMsg}`,
+      zh: `分享文档失败：${errMsg}`,
+      ja: `ドキュメントの共有に失敗しました: ${errMsg}`,
+    });
     writer.token(errorAnswer);
     return errorAnswer;
   }
 
-  const answer =
-    lang === "ko"
-      ? `**${docTitle}** 문서를 공유했습니다. [공유 링크](${shareResult.url})`
-      : `Shared **${docTitle}**. [Share link](${shareResult.url})`;
+  const answer = L(lang, {
+    en: `Shared **${docTitle}**. [Share link](${shareResult.url})`,
+    ko: `**${docTitle}** 문서를 공유했습니다. [공유 링크](${shareResult.url})`,
+    zh: `已分享 **${docTitle}**。[分享链接](${shareResult.url})`,
+    ja: `**${docTitle}** を共有しました。[共有リンク](${shareResult.url})`,
+  });
 
   writer.token(answer);
   return answer;
