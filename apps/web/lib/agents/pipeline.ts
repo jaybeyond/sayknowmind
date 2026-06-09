@@ -7,6 +7,7 @@
 
 import { routeChat, type ProviderInput } from "./chat-router";
 import { StreamWriter, type StreamSource } from "./stream-writer";
+import { createEditorDocument, shareEditorDocument, type MindInput, type CellValue } from "./doc-actions";
 import { queryEdgeQuake } from "@/lib/edgequake/client";
 import { pool } from "@/lib/db";
 import { loadPrompts } from "@/app/api/settings/prompts/route";
@@ -38,9 +39,27 @@ function detectLanguage(text: string): Lang {
 
 // ── Intent Detection (no LLM — fast regex) ────────────────────
 
-type MessageIntent = "recommend" | "search" | "explain" | "general";
+type MessageIntent = "create" | "share" | "recommend" | "search" | "explain" | "general";
 
 const INTENT_PATTERNS: [RegExp, MessageIntent][] = [
+  // ── CREATE (KO → EN) — checked first so "만들어줘" doesn't fall to search ──
+  [/만들어\s*(줘|주세요|봐|봐\s*줘|드려)/i,                                              "create"],
+  [/생성\s*(해\s*줘|해\s*주세요|해\s*봐|해\s*드려)/i,                                    "create"],
+  [/그려\s*(줘|주세요|봐|봐\s*줘|드려)/i,                                                "create"],
+  [/작성\s*(해\s*줘|해\s*주세요|해\s*봐|해\s*드려)/i,                                    "create"],
+  [/표로\s*(만들어|정리|작성)/i,                                                          "create"],
+  [/마인드맵\s*(만들어|그려|생성)/i,                                                      "create"],
+  [/문서\s*(만들어|작성|생성)/i,                                                          "create"],
+  [/노션\s*(문서|페이지|노트)?\s*(만들어|작성|생성)/i,                                    "create"],
+  [/\b(create|make|write)\s+(a\s+)?(new\s+)?(doc(ument)?|note|sheet|spreadsheet|mindmap|mind\s+map|page)\b/i, "create"],
+  [/\bnew\s+(doc(ument)?|note|sheet|spreadsheet|mindmap|mind\s+map)\b/i,                  "create"],
+
+  // ── SHARE (KO → EN) ────────────────────────────────────────
+  [/공유\s*(해\s*줘|해\s*주세요|해\s*봐|해\s*드려)/i,                                    "share"],
+  [/(문서|파일|노트|시트|마인드맵)를?\s*공유/i,                                          "share"],
+  [/\b(share|publish)\b.{0,30}(doc(ument)?|sheet|spreadsheet|mindmap|mind\s*map|note|file)/i, "share"],
+  [/(doc(ument)?|sheet|spreadsheet|mindmap|note|file).{0,20}\b(share|publish)\b/i,         "share"],
+
   // ── RECOMMEND (KO → EN → ZH → JA) ─────────────────────────
   [/추천\s*(해\s*줘|해\s*주세요|드려|좀)/i,              "recommend"],
   [/좋은\s*(자료|글|영상|책|것들?)\s*있/i,              "recommend"],
@@ -159,6 +178,248 @@ function needsSearch(message: string): boolean {
   // Everything else: search the knowledge base.
   // Korean question words (뭐, 어떻게, 왜, 알려줘, 설명해줘) are REAL queries.
   return true;
+}
+
+// ── Stage 0: Create / Share handlers ─────────────────────────
+
+/** Strip share-intent keywords to extract the target document title. */
+const SHARE_STRIP_PATTERNS: RegExp[] = [
+  /\s*(공유|share|publish)\s*(해\s*줘|해\s*주세요|해\s*봐|해\s*드려)?\s*[?!.]*$/i,
+  /^(share|publish|공유)\s+(the\s+)?(doc(ument)?|sheet|spreadsheet|mindmap|mind\s*map|note|file)?\s*(called|named|titled)?\s*/i,
+  /\s*(문서|파일|노트|시트|마인드맵|note|doc(ument)?|sheet)\s*/i,
+  /\s*좀\s*$/i,
+];
+
+function extractShareTarget(message: string): string {
+  let target = message.trim();
+  for (const p of SHARE_STRIP_PATTERNS) {
+    target = target.replace(p, "").trim();
+  }
+  return target;
+}
+
+/**
+ * Handle a "create" intent:
+ *  1. Ask the LLM (silently) to extract { type, title, markdown/rows/mindmap } from the message.
+ *  2. Call createEditorDocument in-process.
+ *  3. Stream a short confirmation with the doc link.
+ *  Returns the answer text for DB storage.
+ */
+async function handleCreate(
+  message: string,
+  userId: string,
+  organizationId: string,
+  writer: StreamWriter,
+  providers: ProviderInput[],
+): Promise<string> {
+  const lang = detectLanguage(message);
+  writer.status("thinking", lang === "ko" ? "문서를 생성하는 중..." : "Creating document...");
+  writer.log("Create intent detected — extracting document parameters via LLM");
+
+  const extractionSystem = `You are a structured data extraction assistant.
+The user wants to create an editor document. Extract the creation parameters and return ONLY a valid JSON object with these fields:
+- "type": "doc" | "sheet" | "mindmap"  (required; infer from keywords: sheet/표/스프레드시트→sheet, mindmap/마인드맵→mindmap, else→doc)
+- "title": string  (required; extract from user message or infer a short descriptive title)
+- "markdown": string  (type=doc only: document body as Markdown; use # headings, - lists, \`\`\` code blocks)
+- "rows": array of arrays  (type=sheet only: 2D cell values, e.g. [["Name","Score"],["Kim",90]])
+- "sheetName": string  (type=sheet only: worksheet name, default "Sheet1")
+- "mindmap": { "topic": string, "children": [{ "topic": string, "children": [...] }] }  (type=mindmap only)
+
+Include only the field that matches the type. Return ONLY the raw JSON object — no markdown fence, no explanation.`;
+
+  let extracted = "";
+  try {
+    extracted = await routeChat(
+      providers,
+      extractionSystem,
+      [{ role: "user", content: message }],
+      () => {}, // silent — no tokens to client during extraction
+      undefined,
+      (msg) => writer.log(msg),
+      userId,
+      // omit organizationId: this is an internal extraction call, not a
+      // user-facing conversation, and some AI server versions reject the field
+    );
+    writer.log(`Extracted params: ${extracted.slice(0, 120)}`);
+  } catch (err) {
+    writer.log(`LLM extraction failed: ${(err as Error).message} — using fallback`);
+  }
+
+  // Parse extracted JSON.
+  // Strategy 1: pure JSON or markdown-fenced JSON.
+  // Strategy 2: if LLM returned prose (e.g. the document content itself),
+  //   use the first non-empty line as the title and the whole response as content.
+  // Strategy 3: fall back to the user's original message as the doc body.
+  type ExtractedParams = {
+    type: "doc" | "sheet" | "mindmap";
+    title: string;
+    markdown?: string;
+    rows?: CellValue[][];
+    sheetName?: string;
+    mindmap?: MindInput;
+  };
+
+  let docParams: ExtractedParams | null = null;
+
+  // Strategy 1 — try JSON parse (handles both raw JSON and ```json fences)
+  const jsonCandidate = extracted
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
+  try {
+    const parsed = JSON.parse(jsonCandidate) as unknown;
+    if (
+      parsed !== null &&
+      typeof parsed === "object" &&
+      "type" in parsed &&
+      "title" in parsed &&
+      typeof (parsed as Record<string, unknown>).type === "string" &&
+      typeof (parsed as Record<string, unknown>).title === "string"
+    ) {
+      docParams = parsed as ExtractedParams;
+    }
+  } catch {
+    // not JSON — try prose extraction below
+  }
+
+  // Strategy 2 — LLM returned the document content as prose/markdown
+  if (!docParams && extracted.trim().length > 0) {
+    const proseLines = extracted.trim().split("\n");
+    const firstLine = proseLines.find((l) => l.trim())?.replace(/^#+\s*/, "").replace(/\*\*/g, "").trim() ?? "";
+    // Infer type from original user message keywords
+    const isSheet = /sheet|spreadsheet|표|스프레드시트/i.test(message);
+    const isMindmap = /mindmap|마인드맵|마인드 맵/i.test(message);
+    const inferredType: "doc" | "sheet" | "mindmap" = isMindmap ? "mindmap" : isSheet ? "sheet" : "doc";
+    writer.log(`Prose response detected — using as ${inferredType} content`);
+    docParams = {
+      type: inferredType,
+      title: firstLine || "Untitled",
+      markdown: inferredType === "doc" ? extracted : undefined,
+    };
+  }
+
+  // Strategy 3 — nothing worked; create a blank doc from the user's message
+  if (!docParams || !["doc", "sheet", "mindmap"].includes(docParams.type ?? "")) {
+    docParams = { type: "doc", title: "Untitled", markdown: message };
+  }
+
+  writer.status(
+    "thinking",
+    lang === "ko" ? `'${docParams.title}' 생성 중...` : `Creating '${docParams.title}'...`,
+  );
+
+  let docResult: { id: string; url: string };
+  try {
+    docResult = await createEditorDocument({
+      userId,
+      organizationId,
+      type: docParams.type,
+      title: docParams.title,
+      markdown: docParams.markdown,
+      rows: docParams.rows,
+      sheetName: docParams.sheetName,
+      mindmap: docParams.mindmap,
+    });
+    writer.log(`Created ${docParams.type} '${docParams.title}' → id: ${docResult.id}`);
+  } catch (err) {
+    const errMsg = (err as Error).message;
+    writer.log(`Document creation failed: ${errMsg}`);
+    const errorAnswer =
+      lang === "ko"
+        ? `문서 생성에 실패했습니다: ${errMsg}`
+        : `Failed to create document: ${errMsg}`;
+    writer.token(errorAnswer);
+    return errorAnswer;
+  }
+
+  const typeLabel =
+    lang === "ko"
+      ? docParams.type === "mindmap" ? "마인드맵" : docParams.type === "sheet" ? "스프레드시트" : "문서"
+      : docParams.type === "mindmap" ? "mind map" : docParams.type === "sheet" ? "spreadsheet" : "document";
+
+  // Korean object particle: 마인드맵 ends in a consonant (을); 문서/스프레드시트 in a vowel (를).
+  const particle = docParams.type === "mindmap" ? "을" : "를";
+  const answer =
+    lang === "ko"
+      ? `**${docParams.title}** ${typeLabel}${particle} 만들었습니다. [열기](${docResult.url})`
+      : `Created **${docParams.title}** ${typeLabel}. [Open it](${docResult.url})`;
+
+  writer.token(answer);
+  return answer;
+}
+
+/**
+ * Handle a "share" intent:
+ *  1. Extract a target document title from the message (regex strip).
+ *  2. Fuzzy-search the user's documents by title.
+ *  3. If found → call shareEditorDocument, stream the share link.
+ *  4. If not found → ask the user to specify.
+ *  Returns the answer text for DB storage.
+ */
+async function handleShare(
+  message: string,
+  userId: string,
+  writer: StreamWriter,
+): Promise<string> {
+  const lang = detectLanguage(message);
+  writer.status("thinking", lang === "ko" ? "문서를 공유하는 중..." : "Sharing document...");
+
+  const titleQuery = extractShareTarget(message);
+  writer.log(`Share intent — title query: "${titleQuery}"`);
+
+  let docId: string | null = null;
+  let docTitle = "";
+
+  if (titleQuery.length >= 1) {
+    try {
+      const result = await pool.query(
+        `SELECT id, title FROM documents
+         WHERE user_id = $1 AND title ILIKE $2
+         ORDER BY updated_at DESC LIMIT 1`,
+        [userId, `%${titleQuery}%`],
+      );
+      if (result.rows.length > 0) {
+        docId = result.rows[0].id as string;
+        docTitle = result.rows[0].title as string;
+      }
+    } catch (err) {
+      writer.log(`Document lookup failed: ${(err as Error).message}`);
+    }
+  }
+
+  if (!docId) {
+    const ask =
+      lang === "ko"
+        ? "어떤 문서를 공유할까요? 문서 제목을 알려주세요."
+        : "Which document would you like to share? Please tell me the document title.";
+    writer.token(ask);
+    return ask;
+  }
+
+  writer.log(`Sharing doc: ${docId} ("${docTitle}")`);
+
+  let shareResult: { shareToken: string; url: string };
+  try {
+    shareResult = await shareEditorDocument({ documentId: docId, userId });
+    writer.log(`Share token: ${shareResult.shareToken}`);
+  } catch (err) {
+    const errMsg = (err as Error).message;
+    writer.log(`Share failed: ${errMsg}`);
+    const errorAnswer =
+      lang === "ko"
+        ? `문서 공유에 실패했습니다: ${errMsg}`
+        : `Failed to share document: ${errMsg}`;
+    writer.token(errorAnswer);
+    return errorAnswer;
+  }
+
+  const answer =
+    lang === "ko"
+      ? `**${docTitle}** 문서를 공유했습니다. [공유 링크](${shareResult.url})`
+      : `Shared **${docTitle}**. [Share link](${shareResult.url})`;
+
+  writer.token(answer);
+  return answer;
 }
 
 // ── Stage 1: Search Knowledge Base (MiniLM vector search) ────
@@ -493,8 +754,36 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   const { message, conversationId, userId, organizationId, history, writer, providers } = input;
 
   try {
-    // Detect user intent (recommend / search / explain / general)
+    // Detect user intent (create / share / recommend / search / explain / general)
     const intent = detectIntent(message);
+
+    // Branch: create / share — skip RAG entirely, act directly on documents
+    if (intent === "create" || intent === "share") {
+      const answer =
+        intent === "create"
+          ? await handleCreate(message, userId, organizationId, writer, providers ?? [])
+          : await handleShare(message, userId, writer);
+
+      let messageId = "";
+      try {
+        const insertResult = await pool.query(
+          `INSERT INTO messages (conversation_id, role, content, citations)
+           VALUES ($1, 'assistant', $2, $3::jsonb)
+           RETURNING id`,
+          [conversationId, answer, JSON.stringify([])],
+        );
+        messageId = insertResult.rows[0]?.id ?? "";
+        await pool.query(
+          `UPDATE conversations SET updated_at = NOW() WHERE id = $1`,
+          [conversationId],
+        );
+      } catch (err) {
+        console.error("[pipeline] Failed to store create/share message:", err);
+      }
+
+      writer.done({ conversationId, messageId });
+      return;
+    }
 
     // Stage 1: Vector search (MiniLM embedding, no LLM)
     const { sources, contextText, catalogText } = await searchKnowledge(message, userId, organizationId, writer, intent);
