@@ -7,15 +7,12 @@
 // shared item actually needs them.
 
 import * as React from "react";
-import dynamic from "next/dynamic";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { docSchema, type DocBlock } from "@/components/docs/doc-schema";
-
-// Univer sheet editor (no SSR, heavy) — reused read-only.
-const OfficeTab = dynamic(() => import("@/components/docs/office-tab"), { ssr: false });
+import { SharedSheetTable } from "@/components/share/shared-sheet-table";
 
 interface DocTab {
   id: string;
@@ -125,16 +122,7 @@ function SharedDocTabs({ data }: { data: DocTabsData }) {
           className="w-full h-[70vh] min-h-[400px] border-0 bg-white rounded-md"
         />
       ) : active.kind === "sheet" ? (
-        <div className="h-[70vh] min-h-[400px] border rounded-md overflow-hidden">
-          <OfficeTab
-            key={active.id}
-            tabId={active.id}
-            kind="sheet"
-            initialSnapshot={data.univer?.[active.id] ?? null}
-            editable={false}
-            onSnapshotChange={() => {}}
-          />
-        </div>
+        <SharedSheetTable snapshot={data.univer?.[active.id] ?? null} />
       ) : (
         <ReadOnlyBlockNote key={active.id} blocks={data.blocks?.[active.id] ?? []} />
       )}
