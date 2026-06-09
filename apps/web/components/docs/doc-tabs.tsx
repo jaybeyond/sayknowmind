@@ -1214,6 +1214,9 @@ function DocTabsLayout({
         ? t("docs.unsaved")
         : t("docs.saved");
   const statusActive = canWrite && saveStatus !== "saved";
+  // The body shows a large title only for BlockNote docs; sheets and full-page
+  // HTML have none, so their title is rendered in the header bar instead.
+  const showHeaderTitle = !!activeHtml || fullBleed;
 
   return (
     <div className="flex h-full min-h-0">
@@ -1328,17 +1331,30 @@ function DocTabsLayout({
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Top toolbar: back · live · status · summary */}
         <div className="flex items-center justify-between gap-3 h-11 px-4 border-b shrink-0">
-          {onBack ? (
-            <button
-              onClick={onBack}
-              className="inline-flex items-center gap-1 -ml-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronLeft className="size-4" />
-              {t("docs.backToList")}
-            </button>
-          ) : (
-            <span />
-          )}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="inline-flex items-center gap-1 -ml-1 shrink-0 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ChevronLeft className="size-4" />
+                <span className="hidden sm:inline">{t("docs.backToList")}</span>
+              </button>
+            )}
+            {/* Sheets and full-page HTML have no in-body title, so the doc title
+                lives here in the header. BlockNote keeps its large body title. */}
+            {showHeaderTitle && (
+              <input
+                type="text"
+                value={title}
+                onChange={onTitleChange}
+                readOnly={!canWrite}
+                placeholder={t("docs.untitled")}
+                aria-label={t("docs.untitled")}
+                className="min-w-0 flex-1 text-base font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground/50"
+              />
+            )}
+          </div>
           <div className="flex items-center gap-3 shrink-0 text-xs">
             {connected !== null && connected && (
               <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400" title={t("docs.live")}>
@@ -1440,21 +1456,9 @@ function DocTabsLayout({
             )}
           </div>
         ) : fullBleed ? (
-          // Office editor (Univer): a slim title bar on top, the sheet fills the rest.
-          // (The sheet has no built-in title field, so the doc title lives here.)
-          <div className="flex-1 min-h-0 flex flex-col">
-            <div className="shrink-0 px-4 py-2 border-b">
-              <input
-                type="text"
-                value={title}
-                onChange={onTitleChange}
-                readOnly={!canWrite}
-                placeholder={t("docs.untitled")}
-                className="w-full text-lg font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground/60"
-              />
-            </div>
-            <div className="flex-1 min-h-0">{children}</div>
-          </div>
+          // Office editor (Univer) fills the content area; its title lives in the
+          // top header bar (see showHeaderTitle above), not here.
+          <div className="flex-1 min-h-0">{children}</div>
         ) : (
           <div className="flex-1 overflow-auto">
             <div className="max-w-3xl mx-auto py-8 px-6">
