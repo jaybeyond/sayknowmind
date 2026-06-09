@@ -9,6 +9,7 @@
  * These tools proxy to the SayknowMind web app API.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getRequestContext } from "../auth-context.js";
 import { formatError } from "../errors.js";
@@ -34,6 +35,169 @@ function verifyAuthToken(token?: string): boolean {
   if (getRequestContext()?.rawToken) return true;
   if (!AUTH_SECRET) return true; // No auth configured
   return token === AUTH_SECRET;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rich-content builders
+//
+// Turn agent-friendly input into the EXACT metadata structures the web editor
+// reads back, so a doc/sheet/mindmap created via MCP opens (and shares) just
+// like one made in the UI:
+//   - doc     → metadata.docTabs.blocks[tabId] = BlockNote blocks (partial; the
+//               editor normalises on load)
+//   - sheet   → metadata.docTabs.univer[tabId] = Univer IWorkbookData snapshot
+//   - mindmap → metadata.mindmap = mind-elixir { nodeData }
+// (mirrors apps/web POST /api/docs seeding + doc-tabs / mindmap-editor persist.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type SimpleBlock = { type: string; content?: string; props?: Record<string, unknown> };
+type CellValue = string | number | boolean | null;
+interface MindInput { topic: string; children?: MindInput[] }
+interface MindNode { id: string; topic: string; children?: MindNode[] }
+interface ContentInput { markdown?: string; rows?: CellValue[][]; sheet_name?: string; mindmap?: MindInput }
+
+const rowsSchema = z.array(z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])));
+const mindNodeSchema: z.ZodType<MindInput> = z.lazy(() =>
+  z.object({ topic: z.string(), children: z.array(mindNodeSchema).optional() }),
+);
+
+/** Minimal Markdown → BlockNote partial blocks (headings, lists, code, quotes, paragraphs). */
+function markdownToBlocks(md: string): SimpleBlock[] {
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  const blocks: SimpleBlock[] = [];
+  let inCode = false;
+  let codeBuf: string[] = [];
+  for (const line of lines) {
+    if (line.trim().startsWith("```")) {
+      if (inCode) {
+        blocks.push({ type: "codeBlock", content: codeBuf.join("\n") });
+        codeBuf = [];
+        inCode = false;
+      } else {
+        inCode = true;
+      }
+      continue;
+    }
+    if (inCode) { codeBuf.push(line); continue; }
+    const t = line.trim();
+    if (t === "") continue;
+    const h = t.match(/^(#{1,3})\s+(.*)$/);
+    if (h) { blocks.push({ type: "heading", props: { level: h[1].length }, content: h[2] }); continue; }
+    const bullet = t.match(/^[-*]\s+(.*)$/);
+    if (bullet) { blocks.push({ type: "bulletListItem", content: bullet[1] }); continue; }
+    const num = t.match(/^\d+\.\s+(.*)$/);
+    if (num) { blocks.push({ type: "numberedListItem", content: num[1] }); continue; }
+    const quote = t.match(/^>\s+(.*)$/);
+    if (quote) { blocks.push({ type: "quote", content: quote[1] }); continue; }
+    blocks.push({ type: "paragraph", content: t });
+  }
+  if (inCode && codeBuf.length) blocks.push({ type: "codeBlock", content: codeBuf.join("\n") });
+  return blocks.length ? blocks : [{ type: "paragraph", content: "" }];
+}
+
+function blocksToPlaintext(blocks: SimpleBlock[]): string {
+  return blocks.map((b) => b.content ?? "").filter(Boolean).join("\n");
+}
+
+/** 2D rows → minimal Univer IWorkbookData snapshot (cellData keyed [row][col].v). */
+function rowsToWorkbook(rows: CellValue[][], sheetName: string, title: string) {
+  const sheetId = "sheet-1";
+  const cellData: Record<string, Record<string, { v: CellValue }>> = {};
+  let maxCol = 0;
+  rows.forEach((row, r) => {
+    const colObj: Record<string, { v: CellValue }> = {};
+    row.forEach((val, c) => {
+      if (val === null || val === undefined || val === "") return;
+      colObj[String(c)] = { v: val };
+      if (c + 1 > maxCol) maxCol = c + 1;
+    });
+    if (Object.keys(colObj).length) cellData[String(r)] = colObj;
+  });
+  return {
+    id: randomUUID(),
+    name: title || sheetName || "Sheet",
+    sheetOrder: [sheetId],
+    styles: {},
+    sheets: {
+      [sheetId]: {
+        id: sheetId,
+        name: sheetName || "Sheet1",
+        cellData,
+        rowCount: Math.max(rows.length + 20, 100),
+        columnCount: Math.max(maxCol + 6, 26),
+      },
+    },
+  };
+}
+
+function rowsToPlaintext(rows: CellValue[][]): string {
+  return rows.map((r) => r.map((c) => (c == null ? "" : String(c))).join("\t")).join("\n");
+}
+
+/** Nested {topic,children} → mind-elixir nodeData (root id fixed to "root"). */
+function treeToMindmap(tree: MindInput | undefined, title: string): { nodeData: MindNode } {
+  const build = (node: MindInput): MindNode => ({
+    id: randomUUID(),
+    topic: node.topic,
+    children: (node.children ?? []).map(build),
+  });
+  if (!tree) return { nodeData: { id: "root", topic: title || "Mind map" } };
+  const root = build(tree);
+  root.id = "root";
+  return { nodeData: root };
+}
+
+function mindTopics(node: MindNode): string[] {
+  return [node.topic, ...(node.children ?? []).flatMap(mindTopics)];
+}
+
+/**
+ * Build the PATCH body (content + metadata) that populates a doc/sheet/mindmap.
+ * Returns null when no content was supplied for the type (create stays blank).
+ */
+function buildContentPatch(
+  type: "doc" | "sheet" | "mindmap",
+  title: string,
+  c: ContentInput,
+): Record<string, unknown> | null {
+  if (type === "doc") {
+    if (c.markdown == null) return null;
+    const blocks = markdownToBlocks(c.markdown);
+    const tabId = randomUUID();
+    return {
+      content: blocksToPlaintext(blocks),
+      metadata: {
+        content_format: "blocknote",
+        docTabs: { tabs: [{ id: tabId, name: title || "Page", kind: "blocknote" }], blocks: { [tabId]: blocks }, univer: {} },
+      },
+    };
+  }
+  if (type === "sheet") {
+    if (!c.rows) return null;
+    const tabId = randomUUID();
+    const snap = rowsToWorkbook(c.rows, c.sheet_name ?? "", title);
+    return {
+      content: rowsToPlaintext(c.rows),
+      metadata: {
+        content_format: "blocknote",
+        docTabs: { tabs: [{ id: tabId, name: c.sheet_name || title || "Sheet1", kind: "sheet" }], blocks: {}, univer: { [tabId]: snap } },
+      },
+    };
+  }
+  if (type === "mindmap") {
+    if (!c.mindmap) return null;
+    const data = treeToMindmap(c.mindmap, title);
+    return { content: mindTopics(data.nodeData).join("\n"), metadata: { content_format: "mindmap", mindmap: data } };
+  }
+  return null;
+}
+
+/** Standard MCP tool success / auth-failure envelopes. */
+function ok(obj: unknown) {
+  return { content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }] };
+}
+function invalidAuth() {
+  return { content: [{ type: "text" as const, text: JSON.stringify({ error: "Invalid auth token" }) }], isError: true as const };
 }
 
 export function registerSayknowmindTools(server: McpServer): void {
@@ -899,6 +1063,162 @@ export function registerSayknowmindTools(server: McpServer): void {
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
         };
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.doc_create — Create a Notion-style doc, spreadsheet, or mind map
+  //
+  // Mirrors the web editor's "New" actions: POST /api/docs to create the blank
+  // document, then (if content was supplied) PATCH /api/documents/[id] with the
+  // exact editor metadata so it opens fully populated.
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_doc_create",
+    "Create a new SayknowMind editor document — a Notion-style rich doc, an Excel-style spreadsheet, or a mind map — optionally populated with initial content. Returns the new document id and its URL.",
+    {
+      type: z
+        .enum(["doc", "sheet", "mindmap"])
+        .describe("'doc' = Notion-style rich text; 'sheet' = spreadsheet; 'mindmap' = mind map"),
+      title: z.string().optional().describe("Document title (default: Untitled)"),
+      category_id: z.string().nullable().optional().describe("Collection UUID to file it under (omit for none)"),
+      markdown: z
+        .string()
+        .optional()
+        .describe("type=doc only: initial body as Markdown (#/##/### headings, -/* and 1. lists, ``` code, > quotes)"),
+      rows: rowsSchema.optional().describe("type=sheet only: 2D array of cell values, row-major (e.g. [[\"Name\",\"Score\"],[\"Kim\",90]])"),
+      sheet_name: z.string().optional().describe("type=sheet only: worksheet name (default: Sheet1)"),
+      mindmap: mindNodeSchema.optional().describe("type=mindmap only: root node { topic, children: [{ topic, children }] }"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const title = params.title?.trim() || "Untitled";
+
+        const createRes = await fetch(`${WEB_APP_URL}/api/docs`, {
+          method: "POST",
+          headers: apiHeaders(),
+          body: JSON.stringify({ type: params.type, title, categoryId: params.category_id ?? null }),
+        });
+        if (!createRes.ok) {
+          const e = await createRes.text();
+          throw new Error(`/api/docs returned ${createRes.status}: ${e.slice(0, 200)}`);
+        }
+        const { id } = (await createRes.json()) as { id: string };
+
+        const patch = buildContentPatch(params.type, title, params);
+        if (patch) {
+          const pr = await fetch(`${WEB_APP_URL}/api/documents/${encodeURIComponent(id)}`, {
+            method: "PATCH",
+            headers: apiHeaders(),
+            body: JSON.stringify(patch),
+          });
+          if (!pr.ok) {
+            const e = await pr.text();
+            throw new Error(`content PATCH returned ${pr.status}: ${e.slice(0, 200)}`);
+          }
+        }
+
+        const path = params.type === "mindmap" ? "mindmaps" : "docs";
+        return ok({ id, type: params.type, url: `${WEB_APP_URL}/${path}/${id}`, populated: !!patch });
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.doc_set_content — Replace the body of an existing editor doc
+  //
+  // Same builders as doc_create; PATCHes the metadata for the matching type.
+  // (Replaces the document's tabs/body, so pass the full intended content.)
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_doc_set_content",
+    "Replace the body content of an existing SayknowMind editor document. Use the field that matches its type: markdown (doc), rows (sheet), or mindmap (mind map). This replaces the document's content.",
+    {
+      document_id: z.string().describe("Document UUID to edit"),
+      type: z.enum(["doc", "sheet", "mindmap"]).describe("Must match the document's kind"),
+      title: z.string().optional().describe("Optional new title (also used as the tab/sheet name)"),
+      markdown: z.string().optional().describe("type=doc: full body as Markdown"),
+      rows: rowsSchema.optional().describe("type=sheet: full 2D array of cell values"),
+      sheet_name: z.string().optional().describe("type=sheet: worksheet name"),
+      mindmap: mindNodeSchema.optional().describe("type=mindmap: full root node { topic, children }"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const patch = buildContentPatch(params.type, params.title?.trim() ?? "", params);
+        if (!patch) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ error: `no content provided for type '${params.type}' (need ${params.type === "doc" ? "markdown" : params.type === "sheet" ? "rows" : "mindmap"})` }) }],
+            isError: true,
+          };
+        }
+        if (params.title?.trim()) patch.title = params.title.trim();
+
+        const res = await fetch(`${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`, {
+          method: "PATCH",
+          headers: apiHeaders(),
+          body: JSON.stringify(patch),
+        });
+        if (res.status === 404) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "not_found", document_id: params.document_id }) }],
+            isError: true,
+          };
+        }
+        if (!res.ok) {
+          const e = await res.text();
+          throw new Error(`Document API returned ${res.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await res.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.share_create — Mint a public read-only share link
+  //
+  // POST /api/share. Anyone with the URL views the doc/sheet/mindmap read-only
+  // (rendered by the public /s/[token] page). Supports passphrase + expiry.
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_share_create",
+    "Create a public share link for a SayknowMind document so anyone with the URL can view it read-only. Optionally protect it with a passphrase or set an expiry.",
+    {
+      document_id: z.string().describe("Document UUID to share"),
+      access_type: z.enum(["public", "passphrase"]).optional().describe("'public' (default) or 'passphrase'"),
+      passphrase: z.string().optional().describe("Required when access_type='passphrase'"),
+      expiry_hours: z.number().optional().describe("Hours until the link expires; 0 or omit = never"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const res = await fetch(`${WEB_APP_URL}/api/share`, {
+          method: "POST",
+          headers: apiHeaders(),
+          body: JSON.stringify({
+            documentId: params.document_id,
+            accessType: params.access_type ?? "public",
+            passphrase: params.passphrase,
+            expiryHours: params.expiry_hours ?? 0,
+          }),
+        });
+        if (!res.ok) {
+          const e = await res.text();
+          throw new Error(`/api/share returned ${res.status}: ${e.slice(0, 200)}`);
+        }
+        const r = (await res.json()) as { shareToken: string; expiresAt?: string | null };
+        return ok({ ...r, shareUrl: `${WEB_APP_URL}/s/${r.shareToken}` });
       } catch (error) {
         return formatError(error);
       }
