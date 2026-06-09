@@ -1440,8 +1440,21 @@ function DocTabsLayout({
             )}
           </div>
         ) : fullBleed ? (
-          // Office editor (Univer) needs the full content area — no title chrome / max-width.
-          <div className="flex-1 min-h-0">{children}</div>
+          // Office editor (Univer): a slim title bar on top, the sheet fills the rest.
+          // (The sheet has no built-in title field, so the doc title lives here.)
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="shrink-0 px-4 py-2 border-b">
+              <input
+                type="text"
+                value={title}
+                onChange={onTitleChange}
+                readOnly={!canWrite}
+                placeholder={t("docs.untitled")}
+                className="w-full text-lg font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground/60"
+              />
+            </div>
+            <div className="flex-1 min-h-0">{children}</div>
+          </div>
         ) : (
           <div className="flex-1 overflow-auto">
             <div className="max-w-3xl mx-auto py-8 px-6">
