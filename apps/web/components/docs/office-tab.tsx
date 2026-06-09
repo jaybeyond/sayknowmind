@@ -92,7 +92,7 @@ export interface OfficeTabProps {
  * on unmount (React 19 StrictMode-safe). The debounce + try/guard mirror
  * mindmap-block so editor churn never floods the autosave.
  */
-export default function OfficeTab({ tabId, kind, initialSnapshot, onSnapshotChange, collabDoc, onRegisterSnapshotGetter }: OfficeTabProps) {
+export default function OfficeTab({ tabId, kind, initialSnapshot, editable, onSnapshotChange, collabDoc, onRegisterSnapshotGetter }: OfficeTabProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const { resolvedTheme } = useTheme();
 
@@ -161,9 +161,19 @@ export default function OfficeTab({ tabId, kind, initialSnapshot, onSnapshotChan
           presets: [UniverSheetsCorePreset({ container: el })],
         });
         univerAPI = api;
-        univerAPI.createWorkbook((initialSnapshot as any) ?? {});
+        const fWorkbook = univerAPI.createWorkbook((initialSnapshot as any) ?? {});
         getSnapshot = () => univerAPI.getActiveWorkbook()?.save() ?? null;
         disposeFn = () => univerAPI.dispose();
+        // Shared / read-only mounts: drop the workbook to viewer mode so the
+        // canvas renders the data but blocks all edit commands. Best-effort —
+        // never let a permission-API mismatch break the read-only render.
+        if (!editable) {
+          try {
+            await fWorkbook?.getWorkbookPermission?.()?.setReadOnly?.();
+          } catch {
+            /* permission facade unavailable — fall through (still no autosave) */
+          }
+        }
       } catch (err) {
         console.error("[office-tab] failed to initialize Univer:", err);
         return;
@@ -191,6 +201,11 @@ export default function OfficeTab({ tabId, kind, initialSnapshot, onSnapshotChan
       } catch {
         /* theme toggle unsupported */
       }
+
+      // Read-only mounts (shared view) never persist or collaborate — the
+      // workbook is in viewer mode and onSnapshotChange is a no-op. Skip the
+      // autosave + Yjs broadcast wiring entirely.
+      if (!editable) return;
 
       // Debounced autosave on document mutations only (skip selection/cursor noise).
       const scheduleSave = () => {
@@ -304,7 +319,7 @@ export default function OfficeTab({ tabId, kind, initialSnapshot, onSnapshotChan
     // with the right `darkMode` so the canvas desk repaints (it can't be retoned
     // live). Other referenced values are intentionally excluded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, resolvedTheme]);
+  }, [kind, resolvedTheme, editable]);
 
   return <div ref={containerRef} className="univer-office-host w-full h-full" />;
 }
