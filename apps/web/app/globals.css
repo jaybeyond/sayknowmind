@@ -129,6 +129,17 @@
   }
 }
 
+/* BlockNote editor — in dark mode let the writing surface match the page
+   background (pure black) instead of BlockNote's default #1f1f1f gray card.
+   The `.dark` ancestor raises specificity above BlockNote's own
+   `.bn-root[data-color-scheme=dark]` rule (which would otherwise win on load
+   order). Only the editor surface is changed — menus/popovers keep their own
+   background so the slash menu and toolbars stay visible against black. Light
+   mode (no `.dark` ancestor) is untouched. */
+.dark .bn-editor {
+  background-color: transparent;
+}
+
 /* Univer office editor — keep dark-mode integration scoped to editor chrome.
    Do not override `--univer-white`: Univer uses it for dark-mode text/icons. */
 .dark .univer-office-host,
