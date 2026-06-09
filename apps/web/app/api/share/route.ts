@@ -66,12 +66,19 @@ export async function POST(request: NextRequest) {
     const meta = (doc.metadata ?? {}) as Record<string, unknown>;
     // For URL sources, raw content is scraped HTML — only include for text/file types
     const includeRawContent = doc.source_type === "text" || doc.source_type === "file";
+    // Rich editor state so the public viewer can render the real thing read-only:
+    // doc/sheet keep their tab structure (blocknote blocks + univer snapshots),
+    // mindmaps keep their node tree. Other types leave these undefined.
+    const isTabbed = doc.source_type === "doc" || doc.source_type === "sheet";
     const shareContent = JSON.stringify({
       title: doc.title,
       summary: doc.summary,
       content: includeRawContent ? doc.content : undefined,
       url: doc.url,
       sourceType: doc.source_type,
+      contentFormat: typeof meta.content_format === "string" ? meta.content_format : undefined,
+      docTabs: isTabbed && meta.docTabs && typeof meta.docTabs === "object" ? meta.docTabs : undefined,
+      mindmap: doc.source_type === "mindmap" && meta.mindmap && typeof meta.mindmap === "object" ? meta.mindmap : undefined,
       ogImage: typeof meta.ogImage === "string" ? meta.ogImage : undefined,
       aiSummary: typeof meta.summary === "string" ? meta.summary : undefined,
       whatItSolves: typeof meta.what_it_solves === "string" ? meta.what_it_solves : undefined,

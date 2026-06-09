@@ -18,6 +18,7 @@ import {
   FileText,
   Link2,
 } from "lucide-react";
+import { SharedRichView, hasRichContent } from "@/components/share/shared-rich-view";
 
 interface ShareData {
   title?: string;
@@ -37,6 +38,10 @@ interface ShareData {
   error?: string;
   message?: string;
   fallback?: boolean;
+  // Rich editor state (doc/sheet keep tab structure, mindmap keeps its tree).
+  contentFormat?: string;
+  docTabs?: { tabs: { id: string; name: string; kind?: "blocknote" | "sheet"; html?: string }[]; blocks?: Record<string, unknown[]>; univer?: Record<string, unknown> };
+  mindmap?: unknown;
 }
 
 /** Split plain-text content into paragraphs, preserving blank-line breaks. */
@@ -232,6 +237,7 @@ export default function ShareViewPage() {
   const contentParagraphs = data?.content ? splitParagraphs(data.content) : [];
   const readingTime = data?.readingTimeMinutes ?? 0;
   const hasTags = data?.tags && data.tags.length > 0;
+  const isRich = hasRichContent({ sourceType: data?.sourceType, docTabs: data?.docTabs as any, mindmap: data?.mindmap });
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -289,7 +295,13 @@ export default function ShareViewPage() {
                 ? "File"
                 : data.sourceType === "text"
                   ? "Note"
-                  : "Web"}
+                  : data.sourceType === "doc"
+                    ? "Document"
+                    : data.sourceType === "sheet"
+                      ? "Spreadsheet"
+                      : data.sourceType === "mindmap"
+                        ? "Mind map"
+                        : "Web"}
             </span>
           )}
           {data?.expiresAt && (
@@ -408,12 +420,21 @@ export default function ShareViewPage() {
         {(displaySummary ||
           data?.whatItSolves ||
           (data?.keyPoints && data.keyPoints.length > 0)) &&
-          contentParagraphs.length > 0 && (
+          (isRich || contentParagraphs.length > 0) && (
             <hr className="border-border/50 mb-8" />
           )}
 
-        {/* Content body */}
-        {contentParagraphs.length > 0 && (
+        {/* Rich editor content (note / spreadsheet / mind map) — read-only */}
+        {isRich && (
+          <SharedRichView
+            sourceType={data?.sourceType}
+            docTabs={data?.docTabs as any}
+            mindmap={data?.mindmap}
+          />
+        )}
+
+        {/* Content body (plain text) — only when there is no rich content */}
+        {!isRich && contentParagraphs.length > 0 && (
           <div className="space-y-5">
             {contentParagraphs.map((para, i) => (
               <p
