@@ -250,8 +250,13 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  // Context-safe: renders nothing outside a SidebarProvider (e.g. the
+  // standalone /docs/[id] editor) instead of throwing, so the same editor
+  // header can show it inline-on-dashboard yet stay silent full-screen.
+  const context = React.useContext(SidebarContext)
   const { t } = useTranslation()
+  if (!context) return null
+  const { toggleSidebar } = context
 
   return (
     <Button

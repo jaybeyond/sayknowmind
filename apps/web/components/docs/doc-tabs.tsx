@@ -17,6 +17,7 @@ import { Network, Code2, Plus, ChevronLeft, X, FileText, FileSpreadsheet, Downlo
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import { useTranslation, useI18nStore } from "@/lib/i18n";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SummaryButton } from "./summary-button";
 import { docSchema, type DocBlock } from "./doc-schema";
 import { extractOfficePlaintext, isOfficeKind, type OfficeKind } from "./office-shared";
@@ -1332,10 +1333,13 @@ function DocTabsLayout({
         {/* Top toolbar: back · live · status · summary */}
         <div className="flex items-center justify-between gap-3 h-11 px-4 border-b shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
+            {/* Sidebar toggle — visible only inside the dashboard's SidebarProvider
+                (in-place editor); renders nothing on the standalone /docs page. */}
+            <SidebarTrigger className="shrink-0 -ml-1" />
             {onBack && (
               <button
                 onClick={onBack}
-                className="inline-flex items-center gap-1 -ml-1 shrink-0 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="inline-flex items-center gap-1 shrink-0 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ChevronLeft className="size-4" />
                 <span className="hidden sm:inline">{t("docs.backToList")}</span>

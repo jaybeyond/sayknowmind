@@ -7,6 +7,7 @@ import { en as meEn, ko as meKo, ja as meJa, zh_CN as meZh, type LangPack } from
 import "mind-elixir/style.css";
 import { toast } from "sonner";
 import { useTranslation, useI18nStore } from "@/lib/i18n";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "@/components/ui/dropdown-menu";
 import { SummaryButton } from "./summary-button";
 
@@ -493,6 +494,8 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
     <div className="flex flex-col h-full">
       {/* Single header row: back · title · theme · node color · status */}
       <div className="flex items-center gap-3 px-4 py-2 border-b shrink-0">
+        {/* Sidebar toggle — only inside the dashboard's SidebarProvider. */}
+        <SidebarTrigger className="shrink-0 -ml-1" />
         {onBack && (
           <button
             onClick={onBack}
