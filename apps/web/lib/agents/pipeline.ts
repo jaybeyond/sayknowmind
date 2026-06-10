@@ -41,21 +41,27 @@ function inferDocType(message: string): "doc" | "sheet" | "mindmap" {
 
 /** Pull an explicit title the user named in the message, across languages. */
 function extractTitleFromMessage(message: string): string | null {
+  // Explicit title markers first (highest confidence), then descriptive
+  // "<name> <type>" phrasings. Order matters — e.g. "titled X" must win over
+  // the generic "<word> spreadsheet" capture so it doesn't grab "create a".
   const pats: RegExp[] = [
     /제목\s*(?:은|는|:|：)?\s*['"「『]?([^'"「』\n,.]{1,40}?)['"」』]?(?:\s*(?:으로|로|이라고|라고))?\s*(?:[,.]|$)/i, // 제목은 X
-    /标题\s*(?:是|为|叫|:|：)?\s*['"「『]?([^'"「』\n,，.。]{1,40})['"」』]?/i, // 标题是 X
+    /标题\s*(?:是|为|叫|:|：)?\s*['"「『]?([^'"「』\n,，.。]{1,40})['"」』]?/i, // 标题(是/叫) X
     /タイトル\s*(?:は|:|：)?\s*['"「『]?([^'"「』\n、。]{1,40})['"」』]?/i, // タイトルは X
+    /\b(?:titled|called|title)\s*[:：]?\s*['"]?([^'".\n,]{1,40}?)['"]?(?:[,.]|$)/i, // titled X
+    /['"「『]([^'"」』\n]{1,40})['"」』]/, // 「X」 / "X"
     /([^\s、。「『'"]{1,40})\s*という\s*(?:ドキュメント|シート|マインドマップ|ノート|文書|表)/, // Xというドキュメント
     /([^\s、。「『'"]{1,40})の(?:マインドマップ|ドキュメント|スプレッドシート|シート|表|文書|ノート)/, // Xのマインドマップ
     /([^\s，。'"]{1,40})的(?:思维导图|脑图|文档|表格|电子表格|笔记)/, // X的思维导图
     /([^\s,.'"]{1,40}?)\s*(?:마인드맵|마인드\s?맵|문서|스프레드시트|시트|표)\b/i, // X 마인드맵
     /\b([A-Za-z][\w\s]{0,38})\s+(?:mind\s?map|document|doc|spreadsheet|sheet)\b/i, // project plan mindmap
-    /['"「『]([^'"」』\n]{1,40})['"」』]/, // 「X」 / "X"
-    /\b(?:titled|called|title)\s*[:：]?\s*['"]?([^'".\n,]{1,40}?)['"]?(?:[,.]|$)/i, // titled X
   ];
   for (const p of pats) {
     const m = message.match(p);
-    const cap = m?.[1]?.trim();
+    let cap = m?.[1]?.trim();
+    if (!cap) continue;
+    // Strip leading filler verbs the descriptive EN pattern may grab.
+    cap = cap.replace(/^(?:please\s+)?(?:create|make|build|write|new|add|a|an|the)\s+/gi, "").trim();
     if (cap) return cap;
   }
   return null;
