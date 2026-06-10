@@ -12,8 +12,14 @@
 
 /**
  * Read scope for tables that carry both `organization_id` and
- * `privacy_level` (documents, categories): visible when shared with the org,
- * or when it is the caller's own — even if private.
+ * `privacy_level` (documents, categories). The caller's OWN resources are
+ * always visible regardless of which organization is currently active — teams
+ * only ADD visibility (shared resources of the active org), they never hide
+ * your own memories. Without the unconditional `user_id` match, switching the
+ * active org (or a legacy/NULL `organization_id`) would make a user's own
+ * private memories vanish entirely.
+ *
+ * Only ever broadens to the caller's own rows, so it cannot leak anyone else's.
  *
  * @param orgParam   placeholder index bound to the active organization id
  * @param userParam  placeholder index bound to the caller's user id
@@ -23,7 +29,7 @@ export function visibilityClause(
   orgParam: number,
   userParam: number,
 ): string {
-  return `(${alias}.organization_id = $${orgParam} AND (${alias}.privacy_level <> 'private' OR ${alias}.user_id = $${userParam}))`;
+  return `(${alias}.user_id = $${userParam} OR (${alias}.organization_id = $${orgParam} AND ${alias}.privacy_level <> 'private'))`;
 }
 
 /**
