@@ -32,6 +32,52 @@ function L(lang: Lang, s: { en: string; ko: string; zh: string; ja: string }): s
   return s[lang] ?? s.en;
 }
 
+/** Infer the editor document kind from the user's request (all 4 languages). */
+function inferDocType(message: string): "doc" | "sheet" | "mindmap" {
+  if (/mind\s?map|마인드\s?맵|思维导图|脑图|マインドマップ/i.test(message)) return "mindmap";
+  if (/\b(sheet|spreadsheet)\b|표|스프레드시트|表格|电子表格|スプレッドシート|シート/i.test(message)) return "sheet";
+  return "doc";
+}
+
+/** Pull an explicit title the user named in the message, across languages. */
+function extractTitleFromMessage(message: string): string | null {
+  const pats: RegExp[] = [
+    /제목\s*(?:은|는|:|：)?\s*['"「『]?([^'"「』\n,.]{1,40}?)['"」』]?(?:\s*(?:으로|로|이라고|라고))?\s*(?:[,.]|$)/i, // 제목은 X
+    /标题\s*(?:是|为|叫|:|：)?\s*['"「『]?([^'"「』\n,，.。]{1,40})['"」』]?/i, // 标题是 X
+    /タイトル\s*(?:は|:|：)?\s*['"「『]?([^'"「』\n、。]{1,40})['"」』]?/i, // タイトルは X
+    /([^\s、。「『'"]{1,40})\s*という\s*(?:ドキュメント|シート|マインドマップ|ノート|文書|表)/, // Xというドキュメント
+    /([^\s、。「『'"]{1,40})の(?:マインドマップ|ドキュメント|スプレッドシート|シート|表|文書|ノート)/, // Xのマインドマップ
+    /([^\s，。'"]{1,40})的(?:思维导图|脑图|文档|表格|电子表格|笔记)/, // X的思维导图
+    /([^\s,.'"]{1,40}?)\s*(?:마인드맵|마인드\s?맵|문서|스프레드시트|시트|표)\b/i, // X 마인드맵
+    /\b([A-Za-z][\w\s]{0,38})\s+(?:mind\s?map|document|doc|spreadsheet|sheet)\b/i, // project plan mindmap
+    /['"「『]([^'"」』\n]{1,40})['"」』]/, // 「X」 / "X"
+    /\b(?:titled|called|title)\s*[:：]?\s*['"]?([^'".\n,]{1,40}?)['"]?(?:[,.]|$)/i, // titled X
+  ];
+  for (const p of pats) {
+    const m = message.match(p);
+    const cap = m?.[1]?.trim();
+    if (cap) return cap;
+  }
+  return null;
+}
+
+/** First non-empty prose line → a short, clean title (strips markdown, caps length). */
+function cleanTitle(text: string): string {
+  const first = text.trim().split("\n").find((l) => l.trim()) ?? "";
+  const cleaned = first.replace(/^#+\s*/, "").replace(/\*\*/g, "").replace(/[:：]\s*$/, "").trim();
+  return cleaned.length <= 40 ? cleaned : `${cleaned.slice(0, 40).trim()}…`;
+}
+
+/** Language-specific generic title when none can be extracted. */
+function defaultDocTitle(type: "doc" | "sheet" | "mindmap", lang: Lang): string {
+  const m: Record<"doc" | "sheet" | "mindmap", { en: string; ko: string; zh: string; ja: string }> = {
+    doc: { en: "Untitled document", ko: "제목 없는 문서", zh: "未命名文档", ja: "無題のドキュメント" },
+    sheet: { en: "Untitled spreadsheet", ko: "제목 없는 시트", zh: "未命名表格", ja: "無題のスプレッドシート" },
+    mindmap: { en: "Untitled mind map", ko: "제목 없는 마인드맵", zh: "未命名思维导图", ja: "無題のマインドマップ" },
+  };
+  return L(lang, m[type]);
+}
+
 function detectLanguage(text: string): Lang {
   // Check for Korean characters (Hangul)
   if (/[\uAC00-\uD7AF\u1100-\u11FF]/.test(text)) return "ko";
@@ -302,25 +348,33 @@ Include only the field that matches the type. Return ONLY the raw JSON object �
     // not JSON — try prose extraction below
   }
 
-  // Strategy 2 — LLM returned the document content as prose/markdown
+  // Strategy 2 — LLM returned prose instead of JSON. Infer the kind from the
+  // user's request (all 4 languages) and derive a clean title. Only a doc can
+  // absorb prose as its body; a sheet/mindmap needs structured input the
+  // prose-only response didn't give, so it's created titled-but-empty (correct
+  // type beats a doc full of the model's prose).
   if (!docParams && extracted.trim().length > 0) {
-    const proseLines = extracted.trim().split("\n");
-    const firstLine = proseLines.find((l) => l.trim())?.replace(/^#+\s*/, "").replace(/\*\*/g, "").trim() ?? "";
-    // Infer type from original user message keywords
-    const isSheet = /sheet|spreadsheet|표|스프레드시트/i.test(message);
-    const isMindmap = /mindmap|마인드맵|마인드 맵/i.test(message);
-    const inferredType: "doc" | "sheet" | "mindmap" = isMindmap ? "mindmap" : isSheet ? "sheet" : "doc";
-    writer.log(`Prose response detected — using as ${inferredType} content`);
+    const inferredType = inferDocType(message);
+    const title =
+      extractTitleFromMessage(message) ??
+      (inferredType === "doc" ? cleanTitle(extracted) || defaultDocTitle(inferredType, lang) : defaultDocTitle(inferredType, lang));
+    writer.log(`Prose response — inferred type=${inferredType}, title="${title}"`);
     docParams = {
       type: inferredType,
-      title: firstLine || "Untitled",
+      title,
       markdown: inferredType === "doc" ? extracted : undefined,
     };
   }
 
-  // Strategy 3 — nothing worked; create a blank doc from the user's message
+  // Strategy 3 — nothing worked (empty LLM response); still honour the requested
+  // type and title, with the user's message as the doc body.
   if (!docParams || !["doc", "sheet", "mindmap"].includes(docParams.type ?? "")) {
-    docParams = { type: "doc", title: "Untitled", markdown: message };
+    const inferredType = inferDocType(message);
+    docParams = {
+      type: inferredType,
+      title: extractTitleFromMessage(message) ?? defaultDocTitle(inferredType, lang),
+      markdown: inferredType === "doc" ? message : undefined,
+    };
   }
 
   writer.status(
