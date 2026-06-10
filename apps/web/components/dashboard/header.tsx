@@ -318,14 +318,21 @@ export function MemoryHeader({ title, titleKey, showFilters = true }: MemoryHead
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* Single "+" entry point: the frequent "add memory" action sits
+                  at the top, document/mindmap/sheet creation folds in below. */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="hidden sm:flex">
+                  <Button size="sm" className="hidden sm:flex">
                     <Plus className="size-4" />
-                    {t("header.createNew")}
+                    {t("header.add")}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onClick={() => setAddOpen(true)}>
+                    <Plus className="size-4 mr-2" />
+                    {t("header.addMemory")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleNewDoc}>
                     <FileText className="size-4 mr-2" />
                     {t("header.newDoc")}
@@ -341,11 +348,6 @@ export function MemoryHeader({ title, titleKey, showFilters = true }: MemoryHead
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              <Button size="sm" className="hidden sm:flex" onClick={() => setAddOpen(true)}>
-                <Plus className="size-4" />
-                {t("header.addMemory")}
-              </Button>
 
               {/* Mobile FAB */}
               <Button
