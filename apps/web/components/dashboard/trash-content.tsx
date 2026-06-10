@@ -5,15 +5,32 @@ import { useMemoryStore, type Memory } from "@/store/memory-store";
 import { MemoryCard } from "./memory-card";
 import { MemoryDetailPanel } from "./memory-detail-panel";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 
 export function TrashContent() {
-  const { getTrashedMemories, fetchTrashedMemories, trashedMemories, isLoading, viewMode } =
+  const { getTrashedMemories, fetchTrashedMemories, emptyTrash, trashedMemories, isLoading, viewMode } =
     useMemoryStore();
   const { t } = useTranslation();
   const [selectedMemory, setSelectedMemory] = React.useState<Memory | null>(null);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [emptying, setEmptying] = React.useState(false);
+
+  async function handleEmptyTrash() {
+    setEmptying(true);
+    await emptyTrash();
+    setEmptying(false);
+    setConfirmOpen(false);
+  }
 
   React.useEffect(() => {
     fetchTrashedMemories();
@@ -60,9 +77,20 @@ export function TrashContent() {
               </div>
             </div>
             {trashedMemories.length > 0 && (
-              <p className="text-xs text-muted-foreground hidden sm:block">
-                {t("trash.retention")}
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-muted-foreground hidden md:block">
+                  {t("trash.retention")}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmOpen(true)}
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="size-4" />
+                  {t("trash.empty")}
+                </Button>
+              </div>
             )}
           </div>
 
@@ -90,6 +118,28 @@ export function TrashContent() {
         </div>
       </div>
       <MemoryDetailPanel memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
+
+      <Dialog open={confirmOpen} onOpenChange={(o) => !emptying && setConfirmOpen(o)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="size-5" />
+              {t("trash.emptyConfirmTitle")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("trash.emptyConfirmDesc").replace("{{count}}", String(trashedMemories.length))}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={emptying}>
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleEmptyTrash} disabled={emptying}>
+              {emptying ? t("common.loading") : t("trash.emptyConfirmAction")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

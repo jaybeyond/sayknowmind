@@ -164,6 +164,7 @@ interface MemoryState {
   trashMemory: (memoryId: string) => void;
   restoreFromTrash: (memoryId: string) => void;
   permanentlyDelete: (memoryId: string) => void;
+  emptyTrash: () => Promise<void>;
   fetchMemories: () => Promise<void>;
   loadMoreMemories: () => Promise<void>;
   fetchArchivedMemories: () => Promise<void>;
@@ -456,6 +457,19 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
         set((s) => ({ trashedMemories: [...s.trashedMemories, memory] }));
       }
     });
+  },
+
+  emptyTrash: async () => {
+    const snapshot = get().trashedMemories;
+    if (snapshot.length === 0) return;
+    // Optimistically clear, roll back if the bulk delete fails.
+    set({ trashedMemories: [] });
+    try {
+      const res = await fetch("/api/documents/trash", { method: "DELETE" });
+      if (!res.ok) throw new Error(`empty trash failed: ${res.status}`);
+    } catch {
+      set({ trashedMemories: snapshot });
+    }
   },
 
   /** Fetch first page of active memories (resets pagination) */
