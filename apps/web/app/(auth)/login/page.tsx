@@ -1,18 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { signIn } from "@/lib/auth-client";
 import { useTranslation } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
-  const router = useRouter();
   const { t } = useTranslation();
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -32,20 +28,21 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const { error: authError } = await signIn.email(
-      { email, password, callbackURL: "/" },
-      {
-        onError: (ctx) => {
-          setError(translateAuthError(ctx.error.code, ctx.error.message));
-        },
-        onSuccess: () => {
-          router.push("/");
-        },
+    try {
+      const res = await fetch("/api/auth/external-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ loginId, password }),
+      });
+      if (res.ok) {
+        // Full reload so middleware + server components pick up the new session.
+        window.location.href = "/";
+        return;
       }
-    );
-
-    if (authError) {
-      setError(translateAuthError(authError.code, authError.message));
+      const data = await res.json().catch(() => ({}));
+      setError(translateAuthError(data.code, data.message));
+    } catch {
+      setError(translateAuthError("SAAS_UNREACHABLE"));
     }
     setLoading(false);
   }
@@ -61,6 +58,10 @@ export default function LoginPage() {
         </p>
       </div>
 
+      <div className="rounded-md bg-muted/50 px-3 py-2 text-center text-sm text-muted-foreground">
+        {t("auth.useSayKnowWorkAccount")}
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
@@ -69,17 +70,17 @@ export default function LoginPage() {
         )}
 
         <div className="space-y-2">
-          <label htmlFor="email" className="text-sm font-medium">
-            {t("auth.email")}
+          <label htmlFor="loginId" className="text-sm font-medium">
+            {t("auth.loginId")}
           </label>
           <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            id="loginId"
+            type="text"
+            value={loginId}
+            onChange={(e) => setLoginId(e.target.value)}
+            placeholder={t("auth.loginIdPlaceholder")}
             required
-            autoComplete="email"
+            autoComplete="username"
           />
         </div>
 
@@ -112,13 +113,6 @@ export default function LoginPage() {
           {loading ? t("common.loading") : t("auth.login")}
         </Button>
       </form>
-
-      <p className="text-center text-sm text-muted-foreground">
-        {t("auth.noAccount")}{" "}
-        <Link href="/signup" className="text-primary hover:underline">
-          {t("auth.signup")}
-        </Link>
-      </p>
     </div>
   );
 }
