@@ -58,6 +58,7 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   const [addOpen, setAddOpen] = React.useState(false);
   const router = useRouter();
   const setOpenEditor = useMemoryStore((s) => s.setOpenEditor);
+  const openEditor = useMemoryStore((s) => s.openEditor);
 
   // Create + open in place (the header only renders on the dashboard home,
   // where the content area can host the editor).
@@ -162,6 +163,11 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
 
   const currentSort = sortOptions.find((opt) => opt.value === sortBy);
   const currentFilter = filterOptions.find((opt) => opt.value === filterType);
+
+  // When a doc / sheet / mind map is open in place on the dashboard, the editor
+  // renders its own header (title + back), so this global header is redundant —
+  // hide it. Other pages pass a `title`, so they keep their header regardless.
+  if (openEditor && !title) return null;
 
   return (
     <>
