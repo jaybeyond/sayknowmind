@@ -80,6 +80,7 @@
     "memory": "Memory",
     "searchPlaceholder": "Search...",
     "addMemory": "Add Memory",
+    "add": "Add",
     "sortBy": "Sort by",
     "filterBy": "Filter by",
     "clearFilter": "Clear filter",
@@ -121,6 +122,8 @@
     "login": "Log in",
     "signup": "Sign up",
     "email": "Email",
+    "loginId": "Employee ID or email",
+    "loginIdPlaceholder": "10001 or you@example.com",
     "password": "Password",
     "name": "Name",
     "confirmPassword": "Confirm Password",
@@ -137,9 +140,14 @@
       "INVALID_PASSWORD": "Password must be at least 8 characters.",
       "PASSWORD_TOO_LONG": "Password must be less than 128 characters.",
       "RATE_LIMIT_EXCEEDED": "Too many attempts. Please try again later.",
+      "ACCOUNT_NOT_ACTIVE": "Your account is not active yet. Please contact your administrator.",
+      "SAAS_UNREACHABLE": "Can't reach the sign-in service. Please try again shortly.",
+      "SAAS_ERROR": "Sign-in failed. Please try again.",
+      "SESSION_MINT_FAILED": "Signed in, but the session could not be created. Please try again.",
       "UNKNOWN": "Something went wrong. Please try again."
     },
-    "rememberMe": "Keep me signed in"
+    "rememberMe": "Keep me signed in",
+    "useSayKnowWorkAccount": "Sign in with your SayKnowWork account."
   },
   "chat": {
     "placeholder": "Ask anything about your knowledge...",
@@ -452,7 +460,11 @@
     "countMany": "{{count}} memories in trash",
     "deleteForever": "Delete Forever",
     "confirmDelete": "Permanently delete this?",
-    "retention": "Items in trash will be permanently deleted after 30 days"
+    "retention": "Items in trash will be permanently deleted after 30 days",
+    "empty": "Empty Trash",
+    "emptyConfirmTitle": "Empty trash?",
+    "emptyConfirmDesc": "This permanently deletes all {{count}} items in the trash. This can't be undone.",
+    "emptyConfirmAction": "Delete all"
   },
   "memory": {
     "copyUrl": "Copy URL",

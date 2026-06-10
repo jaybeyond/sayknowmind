@@ -80,6 +80,7 @@
     "memory": "记忆",
     "searchPlaceholder": "搜索...",
     "addMemory": "添加记忆",
+    "add": "添加",
     "sortBy": "排序",
     "filterBy": "筛选",
     "clearFilter": "清除筛选",
@@ -121,6 +122,8 @@
     "login": "登录",
     "signup": "注册",
     "email": "邮箱",
+    "loginId": "工号或邮箱",
+    "loginIdPlaceholder": "工号或 you@example.com",
     "password": "密码",
     "name": "姓名",
     "confirmPassword": "确认密码",
@@ -137,9 +140,14 @@
       "INVALID_PASSWORD": "密码至少需要8个字符。",
       "PASSWORD_TOO_LONG": "密码不能超过128个字符。",
       "RATE_LIMIT_EXCEEDED": "尝试次数过多，请稍后再试。",
+      "ACCOUNT_NOT_ACTIVE": "您的账户尚未激活，请联系管理员。",
+      "SAAS_UNREACHABLE": "无法连接登录服务，请稍后再试。",
+      "SAAS_ERROR": "登录失败，请重试。",
+      "SESSION_MINT_FAILED": "已登录，但会话创建失败，请重试。",
       "UNKNOWN": "出现错误，请重试。"
     },
-    "rememberMe": "保持登录状态"
+    "rememberMe": "保持登录状态",
+    "useSayKnowWorkAccount": "请使用您的 SayKnowWork 账户登录。"
   },
   "chat": {
     "placeholder": "询问关于你的知识库的任何问题...",
@@ -452,7 +460,11 @@
     "countMany": "回收站中有 {{count}} 条记忆",
     "deleteForever": "永久删除",
     "confirmDelete": "确认永久删除？",
-    "retention": "回收站中的项目将在 30 天后永久删除"
+    "retention": "回收站中的项目将在 30 天后永久删除",
+    "empty": "清空回收站",
+    "emptyConfirmTitle": "清空回收站？",
+    "emptyConfirmDesc": "将永久删除回收站中的全部 {{count}} 个项目，此操作无法撤销。",
+    "emptyConfirmAction": "全部删除"
   },
   "memory": {
     "copyUrl": "复制链接",

@@ -80,6 +80,7 @@
     "memory": "메모리",
     "searchPlaceholder": "검색...",
     "addMemory": "메모리 추가",
+    "add": "추가",
     "sortBy": "정렬",
     "filterBy": "필터",
     "clearFilter": "필터 해제",
@@ -121,6 +122,8 @@
     "login": "로그인",
     "signup": "회원가입",
     "email": "이메일",
+    "loginId": "사번 또는 이메일",
+    "loginIdPlaceholder": "사번 또는 you@example.com",
     "password": "비밀번호",
     "name": "이름",
     "confirmPassword": "비밀번호 확인",
@@ -137,9 +140,14 @@
       "INVALID_PASSWORD": "비밀번호는 8자 이상이어야 합니다.",
       "PASSWORD_TOO_LONG": "비밀번호는 128자 이하여야 합니다.",
       "RATE_LIMIT_EXCEEDED": "시도 횟수가 초과되었습니다. 잠시 후 다시 시도해 주세요.",
+      "ACCOUNT_NOT_ACTIVE": "아직 활성화되지 않은 계정입니다. 관리자에게 문의해 주세요.",
+      "SAAS_UNREACHABLE": "로그인 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+      "SAAS_ERROR": "로그인에 실패했습니다. 다시 시도해 주세요.",
+      "SESSION_MINT_FAILED": "로그인은 됐지만 세션 생성에 실패했습니다. 다시 시도해 주세요.",
       "UNKNOWN": "문제가 발생했습니다. 다시 시도해 주세요."
     },
-    "rememberMe": "로그인 유지"
+    "rememberMe": "로그인 유지",
+    "useSayKnowWorkAccount": "SayKnowWork 계정으로 로그인하세요."
   },
   "chat": {
     "placeholder": "지식에 대해 무엇이든 물어보세요...",
@@ -452,7 +460,11 @@
     "countMany": "{{count}}개 메모리가 휴지통에 있습니다",
     "deleteForever": "영구 삭제",
     "confirmDelete": "영구적으로 삭제하시겠습니까?",
-    "retention": "휴지통의 항목은 30일 후 영구 삭제됩니다"
+    "retention": "휴지통의 항목은 30일 후 영구 삭제됩니다",
+    "empty": "휴지통 비우기",
+    "emptyConfirmTitle": "휴지통을 비울까요?",
+    "emptyConfirmDesc": "휴지통의 {{count}}개 항목을 모두 영구 삭제합니다. 되돌릴 수 없습니다.",
+    "emptyConfirmAction": "모두 삭제"
   },
   "memory": {
     "copyUrl": "URL 복사",

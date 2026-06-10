@@ -80,6 +80,7 @@
     "memory": "メモリ",
     "searchPlaceholder": "検索...",
     "addMemory": "メモリを追加",
+    "add": "追加",
     "sortBy": "並び替え",
     "filterBy": "フィルター",
     "clearFilter": "フィルターをクリア",
@@ -121,6 +122,8 @@
     "login": "ログイン",
     "signup": "サインアップ",
     "email": "メールアドレス",
+    "loginId": "社員番号またはメール",
+    "loginIdPlaceholder": "社員番号または you@example.com",
     "password": "パスワード",
     "name": "名前",
     "confirmPassword": "パスワードを確認",
@@ -137,9 +140,14 @@
       "INVALID_PASSWORD": "パスワードは8文字以上必要です。",
       "PASSWORD_TOO_LONG": "パスワードは128文字以下にしてください。",
       "RATE_LIMIT_EXCEEDED": "試行回数が多すぎます。しばらくしてからお試しください。",
+      "ACCOUNT_NOT_ACTIVE": "アカウントがまだ有効化されていません。管理者にお問い合わせください。",
+      "SAAS_UNREACHABLE": "ログインサービスに接続できません。しばらくしてからお試しください。",
+      "SAAS_ERROR": "ログインに失敗しました。もう一度お試しください。",
+      "SESSION_MINT_FAILED": "ログインしましたが、セッションを作成できませんでした。もう一度お試しください。",
       "UNKNOWN": "エラーが発生しました。もう一度お試しください。"
     },
-    "rememberMe": "ログインを保持"
+    "rememberMe": "ログインを保持",
+    "useSayKnowWorkAccount": "SayKnowWork アカウントでログインしてください。"
   },
   "chat": {
     "placeholder": "ナレッジについて何でも聞いてください...",
@@ -452,7 +460,11 @@
     "countMany": "ゴミ箱に {{count}} 件のメモリ",
     "deleteForever": "完全に削除",
     "confirmDelete": "完全に削除しますか？",
-    "retention": "ゴミ箱のアイテムは 30 日後に完全削除されます"
+    "retention": "ゴミ箱のアイテムは 30 日後に完全削除されます",
+    "empty": "ゴミ箱を空にする",
+    "emptyConfirmTitle": "ゴミ箱を空にしますか？",
+    "emptyConfirmDesc": "ゴミ箱内の {{count}} 件すべてを完全に削除します。元に戻せません。",
+    "emptyConfirmAction": "すべて削除"
   },
   "memory": {
     "copyUrl": "URLをコピー",
