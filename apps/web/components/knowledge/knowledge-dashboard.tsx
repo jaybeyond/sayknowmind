@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NodeDetailPanel } from "./node-detail-panel";
@@ -69,6 +69,11 @@ export function KnowledgeDashboard() {
   const [filter, setFilter] = useState<string>("all");
   const [liveStatus, setLiveStatus] = useState<"connecting" | "connected" | "offline">("connecting");
   const [autoFitToken, setAutoFitToken] = useState(0);
+  // Signature of the last graph data we committed to state. Silent SSE refreshes
+  // fire often; if the structure is unchanged we must NOT call setNodes/setEdges,
+  // because new array refs restart the d3-force simulation and the graph visibly
+  // re-settles ("keeps moving on its own").
+  const graphSigRef = useRef<string>("");
 
   const fetchGraph = useCallback(async (options: { silent?: boolean } = {}) => {
     if (!options.silent) setLoading(true);
@@ -83,14 +88,24 @@ export function KnowledgeDashboard() {
       if (!res.ok) throw new Error("Failed to fetch graph");
 
       const data = await res.json();
-      setNodes(data.nodes ?? []);
-      setEdges(data.edges ?? []);
+      const newNodes: GraphNode[] = data.nodes ?? [];
+      const newEdges: GraphEdge[] = data.edges ?? [];
+      const sig =
+        newNodes.map((n) => `${n.id}:${n.type}:${n.label}`).sort().join(",") +
+        "|" +
+        newEdges.map((e) => `${e.source}->${e.target}:${e.type}`).sort().join(",");
+      if (sig !== graphSigRef.current) {
+        graphSigRef.current = sig;
+        setNodes(newNodes);
+        setEdges(newEdges);
+      }
       if (!options.silent) {
         setAutoFitToken((value) => value + 1);
       }
     } catch (err) {
       console.error("Failed to load graph:", err);
       if (!options.silent) {
+        graphSigRef.current = "";
         setNodes([]);
         setEdges([]);
       }

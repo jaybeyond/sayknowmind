@@ -83,6 +83,24 @@ interface FGLink {
   label: string;
 }
 
+// Fit the graph into view. zoomToFit() on a single node has a zero-area bounding
+// box, so its computed scale blows up and the lone node fills the whole screen
+// as a giant circle — guard that case with a fixed, sane zoom instead.
+function fitGraph(
+  fg: ForceGraphMethods<FGNode, FGLink> | undefined,
+  nodeCount: number,
+  ms: number,
+  padding: number,
+) {
+  if (!fg) return;
+  if (nodeCount <= 1) {
+    fg.centerAt(0, 0, ms);
+    fg.zoom(1.2, ms);
+  } else {
+    fg.zoomToFit(ms, padding);
+  }
+}
+
 export function GraphCanvas({
   nodes,
   edges,
@@ -133,9 +151,9 @@ export function GraphCanvas({
   // Re-fit graph when dimensions change
   useEffect(() => {
     if (fgRef.current && dimensions.width > 0 && dimensions.height > 0) {
-      setTimeout(() => fgRef.current?.zoomToFit(300, 40), 100);
+      setTimeout(() => fitGraph(fgRef.current, nodes.length, 300, 40), 100);
     }
-  }, [dimensions.width, dimensions.height]);
+  }, [dimensions.width, dimensions.height, nodes.length]);
 
   // Build graph data — useMemo keeps stable references so d3-force doesn't restart on re-render
   const data = useMemo(() => {
@@ -189,10 +207,10 @@ export function GraphCanvas({
   // Silent SSE refreshes preserve the user's current viewport.
   useEffect(() => {
     const timer = setTimeout(() => {
-      fgRef.current?.zoomToFit(400, 60);
+      fitGraph(fgRef.current, nodes.length, 400, 60);
     }, 800);
     return () => clearTimeout(timer);
-  }, [autoFitToken]);
+  }, [autoFitToken, nodes.length]);
 
   // Center on focused node (drill-down from panel)
   useEffect(() => {
