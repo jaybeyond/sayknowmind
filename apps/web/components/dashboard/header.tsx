@@ -178,7 +178,7 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
         <div className="flex items-center gap-3">
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-5" />
-          {breadcrumb ? (
+          {breadcrumb && !title ? (
             <nav className="hidden sm:flex items-center gap-1 text-sm">
               <button
                 onClick={() => { setSelectedCollection("all"); setSelectedTab(null); }}
