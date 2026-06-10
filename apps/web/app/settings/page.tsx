@@ -11,7 +11,7 @@ export default function Settings() {
       <MemorySidebar />
       <div className="h-svh overflow-hidden lg:p-2 w-full">
         <div className="lg:border lg:rounded-md overflow-hidden flex flex-col bg-container h-full w-full bg-background">
-          <MemoryHeader title="Settings" showFilters={false} />
+          <MemoryHeader titleKey="sidebar.settings" showFilters={false} />
           <SettingsPage />
         </div>
       </div>

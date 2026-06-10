@@ -11,7 +11,7 @@ export default function FavoritesPage() {
       <MemorySidebar />
       <div className="h-svh overflow-hidden lg:p-2 w-full">
         <div className="lg:border lg:rounded-md overflow-hidden flex flex-col items-center justify-start bg-container h-full w-full bg-background">
-          <MemoryHeader title="Favorites" />
+          <MemoryHeader titleKey="sidebar.favorites" />
           <FavoritesContent />
         </div>
       </div>

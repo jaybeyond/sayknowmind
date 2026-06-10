@@ -11,7 +11,7 @@ export default function Chat() {
       <MemorySidebar />
       <div className="h-svh overflow-hidden lg:p-2 w-full">
         <div className="lg:border lg:rounded-md overflow-hidden flex flex-col bg-container h-full w-full bg-background">
-          <MemoryHeader title="Chat" showFilters={false} />
+          <MemoryHeader titleKey="sidebar.chat" showFilters={false} />
           <ChatPage />
         </div>
       </div>

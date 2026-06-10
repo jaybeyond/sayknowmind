@@ -23,6 +23,7 @@
     "knowledge": "지식 그래프",
     "categories": "카테고리",
     "settings": "설정",
+    "toggle": "사이드바 토글",
     "renamed": "이름 변경됨",
     "renameFailed": "이름 변경 실패",
     "deleted": "삭제됨",

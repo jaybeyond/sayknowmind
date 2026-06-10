@@ -50,11 +50,14 @@ import { useRuntimeStore } from "@/store/runtime-store";
 import { useRouter } from "next/navigation";
 
 interface MemoryHeaderProps {
+  /** Literal title (rarely used — prefer titleKey for i18n). */
   title?: string;
+  /** i18n key for the page title, e.g. "sidebar.settings". Translated client-side. */
+  titleKey?: string;
   showFilters?: boolean;
 }
 
-export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
+export function MemoryHeader({ title, titleKey, showFilters = true }: MemoryHeaderProps) {
   const [addOpen, setAddOpen] = React.useState(false);
   const router = useRouter();
   const setOpenEditor = useMemoryStore((s) => s.setOpenEditor);
@@ -164,10 +167,14 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
   const currentSort = sortOptions.find((opt) => opt.value === sortBy);
   const currentFilter = filterOptions.find((opt) => opt.value === filterType);
 
+  // Page title: prefer the i18n key, fall back to a literal, then the default.
+  const hasTitle = !!(title || titleKey);
+  const displayTitle = titleKey ? t(titleKey) : (title ?? t("header.memory"));
+
   // When a doc / sheet / mind map is open in place on the dashboard, the editor
   // renders its own header (title + back), so this global header is redundant —
   // hide it. Other pages pass a `title`, so they keep their header regardless.
-  if (openEditor && !title) return null;
+  if (openEditor && !hasTitle) return null;
 
   return (
     <>
@@ -178,13 +185,13 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
         <div className="flex items-center gap-3">
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-5" />
-          {breadcrumb && !title ? (
+          {breadcrumb && !hasTitle ? (
             <nav className="hidden sm:flex items-center gap-1 text-sm">
               <button
                 onClick={() => { setSelectedCollection("all"); setSelectedTab(null); }}
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
-                {title ?? t("header.memory")}
+                {displayTitle}
               </button>
               {breadcrumb.map((seg, i) => (
                 <React.Fragment key={seg.id}>
@@ -203,7 +210,7 @@ export function MemoryHeader({ title, showFilters = true }: MemoryHeaderProps) {
               ))}
             </nav>
           ) : (
-            <h1 className="text-base font-semibold hidden sm:block">{title ?? t("header.memory")}</h1>
+            <h1 className="text-base font-semibold hidden sm:block">{displayTitle}</h1>
           )}
         </div>
 
