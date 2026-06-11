@@ -22,11 +22,19 @@ function maskUrl(url: string): string {
   }
 }
 
-async function checkService(id: string, name: string, url: string, healthPath: string): Promise<ServiceStatus> {
+async function checkService(
+  id: string,
+  name: string,
+  url: string,
+  healthPath: string,
+  method: "GET" | "POST" = "GET",
+): Promise<ServiceStatus> {
   const start = Date.now();
   const displayUrl = maskUrl(url);
   try {
-    const res = await fetch(`${url}${healthPath}`, { signal: AbortSignal.timeout(5_000) });
+    // IPFS Kubo's RPC API only accepts POST — a GET returns 405, which would
+    // mislabel a perfectly healthy node as "degraded".
+    const res = await fetch(`${url}${healthPath}`, { method, signal: AbortSignal.timeout(5_000) });
     const latencyMs = Date.now() - start;
     if (res.ok) {
       let version: string | undefined;
@@ -51,7 +59,7 @@ export async function GET() {
   const services = await Promise.all([
     checkService("edgequake", "EdgeQuake RAG", process.env.EDGEQUAKE_URL ?? "http://localhost:5403", "/health"),
     checkService("ai-server", "AI Server", process.env.AI_SERVER_URL ?? "http://localhost:4000", "/health"),
-    checkService("ipfs", "IPFS Kubo", process.env.IPFS_KUBO_API ?? "http://localhost:5001", "/api/v0/version"),
+    checkService("ipfs", "IPFS Kubo", process.env.IPFS_KUBO_API ?? "http://localhost:5001", "/api/v0/version", "POST"),
     checkService("mcp", "MCP Server", process.env.MCP_SERVER_URL ?? "http://localhost:8082", "/health"),
   ]);
 
