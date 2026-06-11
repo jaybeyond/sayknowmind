@@ -108,9 +108,32 @@ function blocksToPlaintext(blocks: DocBlock[]): string {
  * Derive initial docTabs from raw document metadata, migrating legacy
  * `metadata.blocknote` if no `docTabs` key is present yet.
  */
+/** Drop tabs with a duplicate id, keeping the first occurrence. */
+function dedupeTabs(list: DocTab[]): DocTab[] {
+  const seen = new Set<string>();
+  const out: DocTab[] = [];
+  for (const tab of list) {
+    if (seen.has(tab.id)) continue;
+    seen.add(tab.id);
+    out.push(tab);
+  }
+  return out;
+}
+
+/**
+ * Deterministic id for the synthesized first ("seed") tab. Two collab clients
+ * opening the same fresh room must seed the SAME id — otherwise each generates a
+ * random id and Yjs merges them into duplicate "Tab 1" entries. With a stable id
+ * the merge produces same-id rows that dedupeTabs() collapses to one.
+ */
+function seedTabId(docId: string | undefined): string {
+  return docId ? `seed-${docId}` : crypto.randomUUID();
+}
+
 function deriveInitialDocTabs(
   metadata: Record<string, unknown>,
   defaultTabName: string,
+  docId?: string,
 ): DocTabsData {
   const raw = metadata.docTabs;
   if (
@@ -120,11 +143,11 @@ function deriveInitialDocTabs(
     (raw as DocTabsData).tabs.length > 0
   ) {
     const data = raw as DocTabsData;
-    return { tabs: data.tabs, blocks: data.blocks ?? {}, univer: data.univer ?? {} };
+    return { tabs: dedupeTabs(data.tabs), blocks: data.blocks ?? {}, univer: data.univer ?? {} };
   }
   // Migration: synthesize a single tab from the legacy blocknote field.
   const legacyBlocks = Array.isArray(metadata.blocknote) ? (metadata.blocknote as DocBlock[]) : [];
-  const id = crypto.randomUUID();
+  const id = seedTabId(docId);
   return {
     tabs: [{ id, name: defaultTabName }],
     blocks: { [id]: legacyBlocks },
@@ -477,7 +500,7 @@ function DocTabsSingle({
 }) {
   const { t } = useTranslation();
   const derived = React.useMemo(
-    () => deriveInitialDocTabs(initialMetadata, t("tabs.defaultName")),
+    () => deriveInitialDocTabs(initialMetadata, t("tabs.defaultName"), docId),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -717,7 +740,7 @@ function DocTabsCollab({
 }) {
   const { t } = useTranslation();
   const derived = React.useMemo(
-    () => deriveInitialDocTabs(initialMetadata, t("tabs.defaultName")),
+    () => deriveInitialDocTabs(initialMetadata, t("tabs.defaultName"), docId),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -851,14 +874,18 @@ function DocTabsCollab({
         tabsSeeded.current = true;
         if (yTabs.length > 0) {
           // Adopt the shared tabs list (peer/relay-persisted data wins).
-          const adopted: DocTab[] = yTabs.toArray().map((item) => ({
+          const raw: DocTab[] = yTabs.toArray().map((item) => ({
             id: item.id,
             name: item.name,
             html: item.html,
             kind: item.kind,
           }));
+          const adopted = dedupeTabs(raw);
           setTabs(adopted);
           setActiveTabId((prev) => (adopted.some((t) => t.id === prev) ? prev : adopted[0].id));
+          // Self-heal: a seed race can leave duplicate-id rows in the shared
+          // array — rewrite the collapsed list so every peer converges.
+          if (session.canWrite && adopted.length !== raw.length) writeTabs(adopted);
         } else if (session.canWrite) {
           // Empty shared list (fresh room) → seed it from the DB-derived tabs.
           writeTabs(derived.tabs);
@@ -899,21 +926,24 @@ function DocTabsCollab({
   // Observe the shared tabs array — keep local state in sync with peers
   React.useEffect(() => {
     const observer = () => {
-      const updated: DocTab[] = yTabs.toArray().map((item) => ({
+      const raw: DocTab[] = yTabs.toArray().map((item) => ({
         id: item.id,
         name: item.name,
         html: item.html,
         kind: item.kind,
       }));
+      const updated = dedupeTabs(raw);
       if (updated.length > 0) {
         setTabs(updated);
         // Keep active tab valid
         setActiveTabId((prev) => (updated.some((t) => t.id === prev) ? prev : updated[0].id));
+        // Collapse any duplicate-id rows a peer introduced; converges in one pass.
+        if (session.canWrite && updated.length !== raw.length) writeTabs(updated);
       }
     };
     yTabs.observe(observer);
     return () => yTabs.unobserve(observer);
-  }, [yTabs]);
+  }, [yTabs, session.canWrite, writeTabs]);
 
   React.useEffect(() => {
     return () => {
