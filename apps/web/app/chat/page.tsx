@@ -3,8 +3,6 @@ import { MemorySidebar } from "@/components/dashboard/sidebar";
 import { MemoryHeader } from "@/components/dashboard/header";
 import { ChatPage } from "@/components/chat/chat-page";
 
-export const dynamic = "force-dynamic";
-
 export default function Chat() {
   return (
     <SidebarProvider className="bg-sidebar">

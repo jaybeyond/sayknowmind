@@ -3,8 +3,6 @@ import { MemoryHeader } from "@/components/dashboard/header";
 import { TrashContent } from "@/components/dashboard/trash-content";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
-export const dynamic = "force-dynamic";
-
 export default function TrashPage() {
   return (
     <SidebarProvider className="bg-sidebar">
