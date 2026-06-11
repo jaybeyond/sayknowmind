@@ -23,10 +23,15 @@ ARG NEXT_PUBLIC_APP_URL=https://sayknowmind.ypai.click
 ARG NEXT_PUBLIC_DEPLOY_MODE=cloud
 ARG BETTER_AUTH_SECRET=build-time-placeholder
 ARG BETTER_AUTH_URL=https://sayknowmind.ypai.click
+# Real-time collab (docs/sheets/mindmaps) — the browser connects to this WS URL.
+# NEXT_PUBLIC_* are baked at build time, so this MUST be a build arg (not just a
+# runtime env) or the client bundle ships with collab disabled.
+ARG NEXT_PUBLIC_COLLAB_WS_URL=wss://sayknowmind.ypai.click/collab
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_DEPLOY_MODE=$NEXT_PUBLIC_DEPLOY_MODE
 ENV BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
 ENV BETTER_AUTH_URL=$BETTER_AUTH_URL
+ENV NEXT_PUBLIC_COLLAB_WS_URL=$NEXT_PUBLIC_COLLAB_WS_URL
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

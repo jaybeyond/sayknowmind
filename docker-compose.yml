@@ -125,6 +125,12 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+      # NEXT_PUBLIC_* must be passed at BUILD time (baked into client JS),
+      # not just as runtime environment below.
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://sayknowmind.ypai.click}
+        NEXT_PUBLIC_DEPLOY_MODE: ${NEXT_PUBLIC_DEPLOY_MODE:-cloud}
+        NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:-wss://sayknowmind.ypai.click/collab}
     container_name: sayknowmind-web
     ports:
       - "${WEB_PORT:-3000}:3000"
