@@ -131,6 +131,7 @@ services:
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://sayknowmind.ypai.click}
         NEXT_PUBLIC_DEPLOY_MODE: ${NEXT_PUBLIC_DEPLOY_MODE:-cloud}
         NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:-wss://sayknowmind.ypai.click/collab}
+        NEXT_PUBLIC_AUTH_MODE: ${NEXT_PUBLIC_AUTH_MODE:-saas}
     container_name: sayknowmind-web
     ports:
       - "${WEB_PORT:-3000}:3000"
@@ -145,6 +146,7 @@ services:
       # secret the relay verifies; the browser connects to the relay WS URL.
       RELAY_SHARED_SECRET: ${RELAY_SHARED_SECRET}
       NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:-}
+      NEXT_PUBLIC_AUTH_MODE: ${NEXT_PUBLIC_AUTH_MODE:-saas}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       EDGEQUAKE_URL: http://edgequake:8080
       EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}

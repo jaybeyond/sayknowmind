@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { signIn } from "@/lib/auth-client";
+import { isSaasAuth } from "@/lib/auth-mode";
 import { useTranslation } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,22 +31,38 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    try {
-      const res = await fetch("/api/auth/external-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ loginId, password }),
-      });
-      if (res.ok) {
-        // Full reload so middleware + server components pick up the new session.
-        window.location.href = "/";
-        return;
+    if (isSaasAuth) {
+      // Enterprise: delegate credential check to SayKnowWork SaaS.
+      try {
+        const res = await fetch("/api/auth/external-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ loginId, password }),
+        });
+        if (res.ok) {
+          window.location.href = "/";
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        setError(translateAuthError(data.code, data.message));
+      } catch {
+        setError(translateAuthError("SAAS_UNREACHABLE"));
       }
-      const data = await res.json().catch(() => ({}));
-      setError(translateAuthError(data.code, data.message));
-    } catch {
-      setError(translateAuthError("SAAS_UNREACHABLE"));
+      setLoading(false);
+      return;
     }
+
+    // Open: built-in better-auth email/password login.
+    const { error: authError } = await signIn.email(
+      { email: loginId, password, callbackURL: "/" },
+      {
+        onError: (ctx) => setError(translateAuthError(ctx.error.code, ctx.error.message)),
+        onSuccess: () => {
+          window.location.href = "/";
+        },
+      },
+    );
+    if (authError) setError(translateAuthError(authError.code, authError.message));
     setLoading(false);
   }
 
@@ -58,9 +77,11 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <div className="rounded-md bg-muted/50 px-3 py-2 text-center text-sm text-muted-foreground">
-        {t("auth.useSayKnowWorkAccount")}
-      </div>
+      {isSaasAuth && (
+        <div className="rounded-md bg-muted/50 px-3 py-2 text-center text-sm text-muted-foreground">
+          {t("auth.useSayKnowWorkAccount")}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
@@ -71,16 +92,16 @@ export default function LoginPage() {
 
         <div className="space-y-2">
           <label htmlFor="loginId" className="text-sm font-medium">
-            {t("auth.loginId")}
+            {isSaasAuth ? t("auth.loginId") : t("auth.email")}
           </label>
           <Input
             id="loginId"
-            type="text"
+            type={isSaasAuth ? "text" : "email"}
             value={loginId}
             onChange={(e) => setLoginId(e.target.value)}
-            placeholder={t("auth.loginIdPlaceholder")}
+            placeholder={isSaasAuth ? t("auth.loginIdPlaceholder") : "you@example.com"}
             required
-            autoComplete="username"
+            autoComplete={isSaasAuth ? "username" : "email"}
           />
         </div>
 
@@ -114,16 +135,25 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
-        <a
-          href="https://sayknowwork.ai-ops.click"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary hover:underline"
-        >
-          {t("auth.forgotPasswordSayKnowWork")}
-        </a>
-      </p>
+      {isSaasAuth ? (
+        <p className="text-center text-sm text-muted-foreground">
+          <a
+            href="https://sayknowwork.ai-ops.click"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            {t("auth.forgotPasswordSayKnowWork")}
+          </a>
+        </p>
+      ) : (
+        <p className="text-center text-sm text-muted-foreground">
+          {t("auth.noAccount")}{" "}
+          <Link href="/signup" className="text-primary hover:underline">
+            {t("auth.signup")}
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

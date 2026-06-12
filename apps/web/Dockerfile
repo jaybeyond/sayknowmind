@@ -27,11 +27,15 @@ ARG BETTER_AUTH_URL=https://sayknowmind.ypai.click
 # NEXT_PUBLIC_* are baked at build time, so this MUST be a build arg (not just a
 # runtime env) or the client bundle ships with collab disabled.
 ARG NEXT_PUBLIC_COLLAB_WS_URL=wss://sayknowmind.ypai.click/collab
+# Auth edition: "saas" = enterprise (login via SayKnowWork), "local" = open
+# (built-in email/password). Defaults to saas; the open build passes "local".
+ARG NEXT_PUBLIC_AUTH_MODE=saas
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_DEPLOY_MODE=$NEXT_PUBLIC_DEPLOY_MODE
 ENV BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
 ENV BETTER_AUTH_URL=$BETTER_AUTH_URL
 ENV NEXT_PUBLIC_COLLAB_WS_URL=$NEXT_PUBLIC_COLLAB_WS_URL
+ENV NEXT_PUBLIC_AUTH_MODE=$NEXT_PUBLIC_AUTH_MODE
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

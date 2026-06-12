@@ -10,6 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff } from "lucide-react";
+import { signIn } from "@/lib/auth-client";
+import { isSaasAuth } from "@/lib/auth-mode";
 import { useTranslation } from "@/lib/i18n";
 
 interface AuthModalProps {
@@ -36,9 +38,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
         </DialogHeader>
 
         <div className="p-6 space-y-4">
-          <div className="rounded-md bg-muted/50 px-3 py-2 text-center text-sm text-muted-foreground">
-            {t("auth.useSayKnowWorkAccount")}
-          </div>
+          {isSaasAuth && (
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-center text-sm text-muted-foreground">
+              {t("auth.useSayKnowWorkAccount")}
+            </div>
+          )}
           <LoginForm />
         </div>
       </DialogContent>
@@ -104,21 +108,36 @@ function LoginForm() {
     setError("");
     setLoading(true);
 
-    try {
-      const res = await fetch("/api/auth/external-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ loginId: email, password, rememberMe }),
-      });
-      if (res.ok) {
-        window.location.href = "/";
-        return;
+    if (isSaasAuth) {
+      try {
+        const res = await fetch("/api/auth/external-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ loginId: email, password, rememberMe }),
+        });
+        if (res.ok) {
+          window.location.href = "/";
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        setError(translateAuthError(data.code, data.message));
+      } catch {
+        setError(translateAuthError("SAAS_UNREACHABLE"));
       }
-      const data = await res.json().catch(() => ({}));
-      setError(translateAuthError(data.code, data.message));
-    } catch {
-      setError(translateAuthError("SAAS_UNREACHABLE"));
+      setLoading(false);
+      return;
     }
+
+    const { error: authError } = await signIn.email(
+      { email, password, rememberMe, callbackURL: "/" },
+      {
+        onError: (ctx) => setError(translateAuthError(ctx.error.code, ctx.error.message)),
+        onSuccess: () => {
+          window.location.href = "/";
+        },
+      },
+    );
+    if (authError) setError(translateAuthError(authError.code, authError.message));
     setLoading(false);
   }
 
@@ -131,16 +150,16 @@ function LoginForm() {
       )}
       <div className="space-y-2">
         <label htmlFor="modal-loginId" className="text-sm font-medium">
-          {t("auth.loginId")}
+          {isSaasAuth ? t("auth.loginId") : t("auth.email")}
         </label>
         <Input
           id="modal-loginId"
-          type="text"
+          type={isSaasAuth ? "text" : "email"}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder={t("auth.loginIdPlaceholder")}
+          placeholder={isSaasAuth ? t("auth.loginIdPlaceholder") : "you@example.com"}
           required
-          autoComplete="username"
+          autoComplete={isSaasAuth ? "username" : "email"}
         />
       </div>
       <div className="space-y-2">
