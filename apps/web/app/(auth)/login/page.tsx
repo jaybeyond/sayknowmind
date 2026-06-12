@@ -113,6 +113,17 @@ export default function LoginPage() {
           {loading ? t("common.loading") : t("auth.login")}
         </Button>
       </form>
+
+      <p className="text-center text-sm text-muted-foreground">
+        <a
+          href="https://sayknowwork.ai-ops.click"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          {t("auth.forgotPasswordSayKnowWork")}
+        </a>
+      </p>
     </div>
   );
 }

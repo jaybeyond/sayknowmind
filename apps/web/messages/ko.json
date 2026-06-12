@@ -131,6 +131,7 @@
     "showPassword": "비밀번호 보기",
     "hidePassword": "비밀번호 숨기기",
     "forgotPassword": "비밀번호를 잊으셨나요?",
+    "forgotPasswordSayKnowWork": "비밀번호를 잊으셨나요? SayKnowWork에서 재설정하세요",
     "noAccount": "계정이 없으신가요?",
     "hasAccount": "이미 계정이 있으신가요?",
     "errors": {
@@ -417,6 +418,8 @@
     "namePlaceholder": "이름을 입력하세요",
     "emailNote": "이메일은 변경할 수 없습니다",
     "noName": "이름 미설정",
+    "managedBySayKnowWork": "계정(이름·이메일·비밀번호)은 SayKnowWork에서 관리됩니다. 프로필 수정이나 비밀번호 재설정은 SayKnowWork에서 로그인해 진행하세요.",
+    "manageOnSayKnowWork": "SayKnowWork에서 계정 관리",
     "updated": "프로필이 업데이트되었습니다",
     "saveFailed": "저장에 실패했습니다",
     "changePassword": "비밀번호 변경",

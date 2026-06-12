@@ -31,12 +31,10 @@ export const useI18nStore = create<I18nState>()(
     }),
     {
       name: "sayknowmind-locale",
-      onRehydrateStorage: () => (state) => {
-        // After loading from localStorage, sync to server in case DB is out of date
-        if (state?.locale) {
-          syncLocaleToServer(state.locale);
-        }
-      },
+      // Intentionally NOT syncing on rehydrate: that fired PATCH /api/user/me on
+      // every page load — including for logged-out visitors (login page) — which
+      // produced a noisy 401. The locale is synced only when the user actively
+      // changes it via setLocale (where they're authenticated).
     }
   )
 );

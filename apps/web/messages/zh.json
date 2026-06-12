@@ -131,6 +131,7 @@
     "showPassword": "显示密码",
     "hidePassword": "隐藏密码",
     "forgotPassword": "忘记密码？",
+    "forgotPasswordSayKnowWork": "忘记密码？请在 SayKnowWork 重置",
     "noAccount": "没有账户？",
     "hasAccount": "已有账户？",
     "errors": {
@@ -417,6 +418,8 @@
     "namePlaceholder": "你的名字",
     "emailNote": "邮箱不可更改",
     "noName": "未设置名称",
+    "managedBySayKnowWork": "您的账户（姓名、邮箱、密码）由 SayKnowWork 管理。请在 SayKnowWork 登录以修改资料或重置密码。",
+    "manageOnSayKnowWork": "在 SayKnowWork 管理账户",
     "updated": "个人资料已更新",
     "saveFailed": "保存失败",
     "changePassword": "修改密码",

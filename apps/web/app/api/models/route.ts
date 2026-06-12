@@ -6,6 +6,10 @@ export async function GET() {
     const models = await ollamaListModels();
     return NextResponse.json({ models });
   } catch {
-    return NextResponse.json({ models: [], error: "Failed to fetch models" }, { status: 502 });
+    // Ollama is optional (only used for local model listing). When it's not
+    // reachable — e.g. cloud mode using external APIs — return an empty list
+    // with 200 so the model picker degrades gracefully instead of throwing a
+    // 502 + console error on every load.
+    return NextResponse.json({ models: [], unavailable: true });
   }
 }
