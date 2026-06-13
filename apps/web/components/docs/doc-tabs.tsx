@@ -18,6 +18,7 @@ import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import { useTranslation, useI18nStore } from "@/lib/i18n";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { SummaryButton } from "./summary-button";
 import { docSchema, type DocBlock } from "./doc-schema";
 import { extractOfficePlaintext, isOfficeKind, type OfficeKind } from "./office-shared";
@@ -173,11 +174,18 @@ function aggregatePlaintext(
 
 // ── Collab session ──────────────────────────────────────────────────────────
 
+interface CollabUser {
+  id?: string;
+  name: string;
+  color: string;
+  image?: string | null;
+}
+
 interface CollabSession {
   token: string;
   wsUrl: string;
   canWrite: boolean;
-  user: { name: string; color: string };
+  user: CollabUser;
 }
 
 function isCollabSession(value: unknown): value is CollabSession {
@@ -252,7 +260,7 @@ interface TabEditorCollabProps extends TabEditorBaseProps {
   ydoc: Y.Doc;
   provider: HocuspocusProvider;
   fragmentName: string;
-  user: { name: string; color: string };
+  user: CollabUser;
   canWrite: boolean;
 }
 
@@ -751,6 +759,9 @@ function DocTabsCollab({
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("saved");
   const [connected, setConnected] = React.useState(false);
   const [peers, setPeers] = React.useState(1);
+  // Distinct collaborators currently in the room (deduped by user id), for the
+  // header presence avatars.
+  const [presence, setPresence] = React.useState<CollabUser[]>([]);
   const [renamingId, setRenamingId] = React.useState<string | null>(null);
   const [renameValue, setRenameValue] = React.useState("");
 
@@ -904,7 +915,25 @@ function DocTabsCollab({
     }, 500);
 
     const awareness = provider.awareness;
-    const onAwareness = () => setPeers(awareness ? awareness.getStates().size : 1);
+    const onAwareness = () => {
+      if (!awareness) {
+        setPeers(1);
+        setPresence([]);
+        return;
+      }
+      const states = Array.from(awareness.getStates().values());
+      setPeers(states.length || 1);
+      // BlockNote stores the collaborator under awareness `user` ({id,name,color,
+      // image}). Dedupe by id (same person in multiple tabs = one avatar).
+      const byId = new Map<string, CollabUser>();
+      for (const st of states) {
+        const u = (st as { user?: CollabUser }).user;
+        if (!u || typeof u.name !== "string") continue;
+        const key = u.id ?? `${u.name}|${u.color}`;
+        if (!byId.has(key)) byId.set(key, u);
+      }
+      setPresence(Array.from(byId.values()));
+    };
     awareness?.on("change", onAwareness);
     onAwareness();
 
@@ -1126,6 +1155,7 @@ function DocTabsCollab({
       canWrite={session.canWrite}
       connected={connected}
       peers={peers}
+      presence={presence}
       activeHtml={tabs.find((tb) => tb.id === activeTabId)?.html}
       onInsertHtmlFile={(html) => setActiveHtml(html)}
       onClearHtml={() => setActiveHtml(undefined)}
@@ -1184,6 +1214,8 @@ interface DocTabsLayoutProps {
   /** null = single-user (hide collab indicators) */
   connected: boolean | null;
   peers: number | null;
+  /** Distinct collaborators in the room (for the header avatar stack). */
+  presence?: CollabUser[];
   /** When set, the active tab renders this HTML full-bleed instead of the editor. */
   activeHtml?: string;
   /** Set the active tab to a full-page HTML view from a picked .html file. */
@@ -1218,6 +1250,7 @@ function DocTabsLayout({
   canWrite,
   connected,
   peers,
+  presence,
   activeHtml,
   onInsertHtmlFile,
   onClearHtml,
@@ -1395,6 +1428,28 @@ function DocTabsLayout({
                 <span className="size-1.5 rounded-full bg-current" />
                 {t("docs.online").replace("{count}", String(peers ?? 1))}
               </span>
+            )}
+            {presence && presence.length > 0 && (
+              <div className="flex items-center -space-x-2">
+                {presence.slice(0, 5).map((u, i) => (
+                  <Avatar
+                    key={u.id ?? `${u.name}|${u.color}|${i}`}
+                    className="size-6 ring-2 ring-background"
+                    title={u.name}
+                  >
+                    {u.image ? <AvatarImage src={u.image} alt={u.name} /> : null}
+                    <AvatarFallback
+                      className="text-[10px] font-medium text-white"
+                      style={{ backgroundColor: u.color }}
+                    >
+                      {u.name.trim().charAt(0).toUpperCase() || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                ))}
+                {presence.length > 5 && (
+                  <span className="ml-3 text-muted-foreground">+{presence.length - 5}</span>
+                )}
+              </div>
             )}
             <span className={statusActive ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}>
               {statusLabel}

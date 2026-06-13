@@ -62,11 +62,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     const canWrite = result.rows[0].can_write === true;
 
-    // Display name for cursor labels (fall back to a short id slice).
-    const userRow = await pool.query(`SELECT name FROM "user" WHERE id = $1`, [ctx.userId]);
+    // Display name + avatar for cursor labels and the presence stack.
+    const userRow = await pool.query(`SELECT name, image FROM "user" WHERE id = $1`, [ctx.userId]);
     const name =
       (typeof userRow.rows[0]?.name === "string" && userRow.rows[0].name.trim()) ||
       `User ${ctx.userId.slice(0, 6)}`;
+    const image =
+      typeof userRow.rows[0]?.image === "string" && userRow.rows[0].image.trim()
+        ? userRow.rows[0].image
+        : null;
 
     const token = issueCollabToken(ctx.userId, ctx.organizationId, id, canWrite);
 
@@ -74,7 +78,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       token,
       wsUrl: getCollabWsUrl(),
       canWrite,
-      user: { name, color: colorForUser(ctx.userId) },
+      user: { id: ctx.userId, name, color: colorForUser(ctx.userId), image },
     });
   } catch (err) {
     console.error("[documents] collab-token error:", err);
