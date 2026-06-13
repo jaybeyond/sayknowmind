@@ -50,10 +50,14 @@ export async function GET() {
          ORDER BY dr.created_at DESC LIMIT 5`,
         [userId, organizationId],
       ),
-      // Pending processing
+      // Pending processing. $1 (userId) is unused here but still bound (fixed
+      // positions), so anchor its type — without this Postgres rejects the
+      // prepared statement with 42P18 (could not determine data type of $1),
+      // which dropped the whole endpoint into the catch and returned all zeros.
       pool.query(
         `SELECT COUNT(*) as count FROM ingestion_jobs ij
-         WHERE ${orgScopeClause("ij", 2)} AND ij.status IN ('pending', 'processing')`,
+         WHERE ${orgScopeClause("ij", 2)} AND ij.status IN ('pending', 'processing')
+           AND $1::text IS NOT NULL`,
         [userId, organizationId],
       ),
     ]);
@@ -72,7 +76,8 @@ export async function GET() {
       })),
       pendingJobs: parseInt(pendingRes.rows[0].count, 10),
     });
-  } catch {
+  } catch (err) {
+    console.error("[insights] query failed:", err);
     return NextResponse.json({
       totalDocuments: 0, thisWeek: 0, topCategories: [], recentRelations: [], pendingJobs: 0,
     });

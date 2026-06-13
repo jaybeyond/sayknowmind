@@ -520,6 +520,42 @@
       "entity": "Entity",
       "category": "Category",
       "tag": "Tag"
+    },
+    "entityType": {
+      "technology": "Technology",
+      "concept": "Concept",
+      "event": "Event",
+      "product": "Product",
+      "person": "Person",
+      "organization": "Organization",
+      "location": "Location",
+      "date": "Date",
+      "other": "Other"
+    },
+    "propKey": {
+      "sourceType": "Source type",
+      "createdAt": "Created",
+      "updatedAt": "Updated",
+      "language": "Language",
+      "aiTags": "AI tags",
+      "key_points": "Key points",
+      "content_format": "Format",
+      "content_type": "Content type",
+      "reading_time_minutes": "Reading time (min)",
+      "docTabs": "Tabs",
+      "confidence": "Confidence",
+      "summary": "Summary",
+      "url": "URL",
+      "status": "Status",
+      "wordCount": "Word count",
+      "what_it_solves": "What it solves",
+      "mindmap": "Mind map",
+      "entityType": "Entity type",
+      "description": "Description",
+      "depth": "Depth",
+      "path": "Path",
+      "canonicalName": "Canonical name",
+      "documentCount": "Documents"
     }
   },
   "offline": {
@@ -946,7 +982,21 @@
     "summaryRegenerate": "Regenerate",
     "summaryGenerating": "Generating…",
     "summaryEmpty": "No summary yet",
-    "summaryFailed": "Failed to generate summary"
+    "summaryFailed": "Failed to generate summary",
+    "history": {
+      "title": "Version history",
+      "empty": "No saved versions yet",
+      "restore": "Restore",
+      "restoreConfirm": "Restore this version? The current content is saved as a new version first.",
+      "restored": "Restored",
+      "restoreFailed": "Restore failed",
+      "someone": "Someone",
+      "current": "current",
+      "initial": "First version",
+      "titleChanged": "Title",
+      "noChange": "No content change",
+      "moreChanges": "+{count} more"
+    }
   },
   "mindmap": {
     "theme": "Theme",

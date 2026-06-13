@@ -33,6 +33,9 @@ interface NodeDetailPanelProps {
   onDrillDown?: (nodeId: string) => void;
 }
 
+// Internal/noisy metadata keys never worth showing in the panel.
+const HIDDEN_PROPS = new Set(["docTabs", "mindmap", "edgequake_sync_failed"]);
+
 const typeConfig: Record<string, { bg: string; text: string; icon: typeof FileText }> = {
   document: { bg: "bg-cyan-500/20", text: "text-cyan-400", icon: FileText },
   entity: { bg: "bg-pink-500/20", text: "text-pink-400", icon: Tag },
@@ -42,17 +45,54 @@ const typeConfig: Record<string, { bg: string; text: string; icon: typeof FileTe
 };
 
 export function NodeDetailPanel({ node, onClose, onDrillDown }: NodeDetailPanelProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
 
   if (!node) return null;
+
+  const localeTag = ({ en: "en-US", ko: "ko-KR", zh: "zh-CN", ja: "ja-JP" } as Record<string, string>)[locale] ?? "en-US";
 
   const config = typeConfig[node.type] ?? { bg: "bg-muted", text: "text-muted-foreground", icon: Tag };
   const TypeIcon = config.icon;
 
+  // Localize a node/entity type. Graph node types (document/entity/category/tag)
+  // live under knowledge.nodeType; entity subtypes (technology/concept/…) under
+  // knowledge.entityType. Fall back to the raw value for anything unmapped.
+  const typeLabel = (raw: string): string => {
+    const node = t(`knowledge.nodeType.${raw}`);
+    if (node !== `knowledge.nodeType.${raw}`) return node;
+    const entity = t(`knowledge.entityType.${raw}`);
+    if (entity !== `knowledge.entityType.${raw}`) return entity;
+    return raw;
+  };
+
+  // Localize a property key (knowledge.propKey.*), falling back to the raw key.
+  const propLabel = (key: string): string => {
+    const k = t(`knowledge.propKey.${key}`);
+    return k === `knowledge.propKey.${key}` ? key : k;
+  };
+
+  // Render a property value: localize ISO timestamps, the entityType value
+  // (technology/concept/…), join arrays, drop nested objects and empties.
+  const formatPropValue = (key: string, v: unknown): string => {
+    if (v === null || v === undefined) return "";
+    if (key === "entityType" && typeof v === "string") return typeLabel(v);
+    if (Array.isArray(v)) return v.map((x) => String(x)).join(", ");
+    if (typeof v === "object") return "";
+    const s = String(v);
+    if (/^\d{4}-\d{2}-\d{2}T[\d:.]+Z?$/.test(s)) {
+      const d = new Date(s);
+      if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleString(localeTag, { dateStyle: "medium", timeStyle: "short" });
+      }
+    }
+    return s;
+  };
+
   const properties: [string, string][] = node.properties
     ? Object.entries(node.properties)
-        .filter(([, v]) => v !== null && v !== undefined && v !== "")
-        .map(([k, v]) => [k, String(v)])
+        .filter(([k]) => !HIDDEN_PROPS.has(k))
+        .map(([k, v]) => [k, formatPropValue(k, v)] as [string, string])
+        .filter(([, v]) => v !== "")
     : [];
   const entities = node.connectedEntities ?? [];
   const documents = node.connectedDocuments ?? [];
@@ -69,7 +109,7 @@ export function NodeDetailPanel({ node, onClose, onDrillDown }: NodeDetailPanelP
             <div className="flex items-center gap-2 mb-2">
               <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium", config.bg, config.text)}>
                 <TypeIcon className="size-3" />
-                {node.type}
+                {typeLabel(node.type)}
               </span>
             </div>
             <h3 className="font-semibold text-base leading-tight break-words">{node.label}</h3>
@@ -90,7 +130,7 @@ export function NodeDetailPanel({ node, onClose, onDrillDown }: NodeDetailPanelP
             <dl className="space-y-1.5">
               {properties.map(([key, value]) => (
                 <div key={key} className="flex items-start gap-2 text-sm">
-                  <dt className="text-muted-foreground shrink-0">{key}:</dt>
+                  <dt className="text-muted-foreground shrink-0">{propLabel(key)}:</dt>
                   <dd className="min-w-0">
                     {key === "url" ? (
                       <a
@@ -127,7 +167,7 @@ export function NodeDetailPanel({ node, onClose, onDrillDown }: NodeDetailPanelP
                   >
                     <Tag className="size-3.5 text-pink-400 shrink-0" />
                     <span className="text-sm flex-1 truncate">{entity.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{entity.type}</span>
+                    <span className="text-[10px] text-muted-foreground">{typeLabel(entity.type)}</span>
                     <ArrowRight className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   </button>
                 </li>

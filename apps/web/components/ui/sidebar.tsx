@@ -603,7 +603,13 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  const [width] = React.useState(() => `${Math.floor(Math.random() * 40) + 50}%`)
+  // Start from a fixed width so server and client first render match (Math.random
+  // in the initializer produced different values per side → hydration mismatch).
+  // Randomize only after mount, which is a normal client update, not hydration.
+  const [width, setWidth] = React.useState("70%")
+  React.useEffect(() => {
+    setWidth(`${Math.floor(Math.random() * 40) + 50}%`)
+  }, [])
 
   return (
     <div

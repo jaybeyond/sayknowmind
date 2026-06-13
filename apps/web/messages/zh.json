@@ -520,6 +520,42 @@
       "entity": "实体",
       "category": "分类",
       "tag": "标签"
+    },
+    "entityType": {
+      "technology": "技术",
+      "concept": "概念",
+      "event": "事件",
+      "product": "产品",
+      "person": "人物",
+      "organization": "组织",
+      "location": "地点",
+      "date": "日期",
+      "other": "其他"
+    },
+    "propKey": {
+      "sourceType": "来源类型",
+      "createdAt": "创建时间",
+      "updatedAt": "更新时间",
+      "language": "语言",
+      "aiTags": "AI 标签",
+      "key_points": "要点",
+      "content_format": "内容格式",
+      "content_type": "内容类型",
+      "reading_time_minutes": "阅读时长(分钟)",
+      "docTabs": "标签页",
+      "confidence": "置信度",
+      "summary": "摘要",
+      "url": "链接",
+      "status": "状态",
+      "wordCount": "字数",
+      "what_it_solves": "解决的问题",
+      "mindmap": "思维导图",
+      "entityType": "实体类型",
+      "description": "描述",
+      "depth": "层级",
+      "path": "路径",
+      "canonicalName": "规范名称",
+      "documentCount": "文档数"
     }
   },
   "offline": {
@@ -946,7 +982,21 @@
     "summaryRegenerate": "重新生成",
     "summaryGenerating": "生成中…",
     "summaryEmpty": "暂无摘要",
-    "summaryFailed": "生成摘要失败"
+    "summaryFailed": "生成摘要失败",
+    "history": {
+      "title": "版本历史",
+      "empty": "暂无保存的版本",
+      "restore": "恢复",
+      "restoreConfirm": "恢复到此版本？当前内容会先另存为新版本。",
+      "restored": "已恢复",
+      "restoreFailed": "恢复失败",
+      "someone": "某人",
+      "current": "当前",
+      "initial": "初始版本",
+      "titleChanged": "标题",
+      "noChange": "内容无变化",
+      "moreChanges": "+{count} 处更多"
+    }
   },
   "mindmap": {
     "theme": "主题",

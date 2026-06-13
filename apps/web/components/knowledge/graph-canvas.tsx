@@ -58,13 +58,37 @@ const NODE_COLORS: Record<string, string> = {
 };
 
 const BASE_SIZES: Record<string, number> = {
-  document: 6,
-  entity: 4,
-  category: 8,
-  tag: 5,
+  document: 5,
+  entity: 3,
+  category: 6,
+  tag: 4,
 };
 
 const DEFAULT_COLOR = "#888888";
+
+// Persisted manual node layout (per browser). Keyed by node id → graph coords.
+// Dragging a node saves its spot here so the arrangement survives refreshes.
+const POSITIONS_KEY = "knowledge-graph-positions";
+type SavedPositions = Record<string, { x: number; y: number }>;
+
+function loadSavedPositions(): SavedPositions {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(POSITIONS_KEY);
+    return raw ? (JSON.parse(raw) as SavedPositions) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistSavedPositions(map: SavedPositions) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(POSITIONS_KEY, JSON.stringify(map));
+  } catch {
+    /* storage full or unavailable — layout just won't persist */
+  }
+}
 
 interface FGNode {
   id: string;
@@ -74,6 +98,10 @@ interface FGNode {
   baseSize: number;
   x?: number;
   y?: number;
+  // d3-force fixed position — set while dragging to pin the node to the cursor,
+  // left set after a drag so the manual placement sticks (undefined = free).
+  fx?: number;
+  fy?: number;
   _original: GraphNode;
 }
 
@@ -82,6 +110,11 @@ interface FGLink {
   target: string | FGNode;
   label: string;
 }
+
+// Largest zoom the AUTO-FIT is allowed to settle at. Manual zoom is unbounded
+// (see ForceGraph2D minZoom/maxZoom below) — this only tames zoomToFit, which
+// on a sparse graph (few/close nodes) over-zooms and renders giant blobs.
+const FIT_MAX_ZOOM = 3.5;
 
 // Fit the graph into view. zoomToFit() on a single node has a zero-area bounding
 // box, so its computed scale blows up and the lone node fills the whole screen
@@ -96,9 +129,14 @@ function fitGraph(
   if (nodeCount <= 1) {
     fg.centerAt(0, 0, ms);
     fg.zoom(1.2, ms);
-  } else {
-    fg.zoomToFit(ms, padding);
+    return;
   }
+  fg.zoomToFit(ms, padding);
+  // Clamp ONLY the auto-fit result, after its animation, so sparse graphs don't
+  // blow up. The user can still manually zoom in past this afterwards.
+  setTimeout(() => {
+    if (fg.zoom() > FIT_MAX_ZOOM) fg.zoom(FIT_MAX_ZOOM, 200);
+  }, ms + 60);
 }
 
 export function GraphCanvas({
@@ -116,6 +154,13 @@ export function GraphCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const nodeMapRef = useRef<Map<string, FGNode>>(new Map());
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
+  // Node currently being dragged (manual drag — see pointer handlers below).
+  // prevFx/prevFy remember the pin state before grabbing so a pure click restores it.
+  const dragNodeRef = useRef<{ node: FGNode; moved: boolean; prevFx?: number; prevFy?: number } | null>(null);
+  // Persisted manual layout, lazily loaded once on the client.
+  const savedPositionsRef = useRef<SavedPositions | null>(null);
+  if (savedPositionsRef.current === null) savedPositionsRef.current = loadSavedPositions();
+  const [draggingNode, setDraggingNode] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [sizeMultiplier, setSizeMultiplier] = useState(1);
 
@@ -170,6 +215,15 @@ export function GraphCanvas({
         baseSize: BASE_SIZES[n.type] ?? 5,
         _original: n,
       };
+      // Restore a previously-dragged position: seed coords and pin it there so
+      // the saved layout is honoured (unsaved nodes stay free for auto-layout).
+      const saved = savedPositionsRef.current?.[n.id];
+      if (saved) {
+        fgNode.x = saved.x;
+        fgNode.y = saved.y;
+        fgNode.fx = saved.x;
+        fgNode.fy = saved.y;
+      }
       fgNodeMap.set(n.id, fgNode);
       return fgNode;
     });
@@ -260,8 +314,68 @@ export function GraphCanvas({
     [],
   );
 
-  const handleContainerPointerDown = useCallback((e: React.PointerEvent) => {
-    pointerDownRef.current = { x: e.clientX, y: e.clientY };
+  const handleContainerPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      pointerDownRef.current = { x: e.clientX, y: e.clientY };
+      const target = e.target as HTMLElement;
+      if (target.tagName !== "CANVAS") return;
+      const hit = findNodeAtScreen(e.clientX, e.clientY);
+      if (!hit) return; // background → let ForceGraph pan/zoom as usual
+      // Grab the node: pin it to its current spot and reheat the layout so
+      // neighbours react. Pan is disabled (enablePanInteraction) while dragging.
+      dragNodeRef.current = { node: hit, moved: false, prevFx: hit.fx, prevFy: hit.fy };
+      hit.fx = hit.x;
+      hit.fy = hit.y;
+      setDraggingNode(true);
+      fgRef.current?.d3ReheatSimulation();
+    },
+    [findNodeAtScreen],
+  );
+
+  const handleContainerPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      const drag = dragNodeRef.current;
+      const fg = fgRef.current;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (drag && fg && rect) {
+        const gc = fg.screen2GraphCoords(e.clientX - rect.left, e.clientY - rect.top);
+        drag.node.fx = gc.x;
+        drag.node.fy = gc.y;
+        drag.node.x = gc.x;
+        drag.node.y = gc.y;
+        drag.moved = true;
+        fg.d3ReheatSimulation();
+        if (containerRef.current) containerRef.current.style.cursor = "grabbing";
+        return;
+      }
+      // Hover affordance
+      const target = e.target as HTMLElement;
+      if (target.tagName !== "CANVAS") return;
+      const hit = findNodeAtScreen(e.clientX, e.clientY);
+      if (containerRef.current) containerRef.current.style.cursor = hit ? "grab" : "default";
+    },
+    [findNodeAtScreen],
+  );
+
+  const handleContainerPointerUp = useCallback(() => {
+    const drag = dragNodeRef.current;
+    if (!drag) return;
+    if (drag.moved) {
+      // Real drag → keep the node pinned where dropped and persist the spot.
+      const { node } = drag;
+      if (node.fx != null && node.fy != null && savedPositionsRef.current) {
+        savedPositionsRef.current[node.id] = { x: node.fx, y: node.fy };
+        persistSavedPositions(savedPositionsRef.current);
+      }
+    } else {
+      // Pure click → restore the pin state it had before grabbing (so clicking
+      // a saved/pinned node doesn't unpin it).
+      drag.node.fx = drag.prevFx;
+      drag.node.fy = drag.prevFy;
+    }
+    dragNodeRef.current = null;
+    setDraggingNode(false);
+    fgRef.current?.d3ReheatSimulation();
   }, []);
 
   const handleContainerClick = useCallback(
@@ -288,17 +402,6 @@ export function GraphCanvas({
     [findNodeAtScreen, onNodeClick, onBackgroundClick],
   );
 
-  const handleContainerMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName !== "CANVAS") return;
-      const hit = findNodeAtScreen(e.clientX, e.clientY);
-      const el = containerRef.current;
-      if (el) el.style.cursor = hit ? "pointer" : "default";
-    },
-    [findNodeAtScreen],
-  );
-
   if (nodes.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -320,8 +423,10 @@ export function GraphCanvas({
       ref={containerRef}
       className="flex-1 relative min-h-0 overflow-hidden"
       onPointerDown={handleContainerPointerDown}
+      onPointerMove={handleContainerPointerMove}
+      onPointerUp={handleContainerPointerUp}
+      onPointerCancel={handleContainerPointerUp}
       onClick={handleContainerClick}
-      onMouseMove={handleContainerMouseMove}
     >
       <ForceGraph2D
         ref={fgRef}
@@ -375,7 +480,10 @@ export function GraphCanvas({
         cooldownTicks={120}
         d3AlphaDecay={0.02}
         d3VelocityDecay={0.3}
-        enableNodeDrag={true}
+        enableNodeDrag={false}
+        enablePanInteraction={!draggingNode}
+        minZoom={0.02}
+        maxZoom={1e5}
       />
 
       {/* Controls */}

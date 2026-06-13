@@ -83,13 +83,31 @@ function InsightsWidget() {
     topCategories: Array<{ name: string; count: number }>;
     pendingJobs: number;
   } | null>(null);
+  // Change signal: the memory store is refreshed by the SSE stream (see
+  // useDocumentEvents) and by user actions, so refetch insights whenever it moves.
+  const memories = useMemoryStore((s) => s.memories);
 
-  React.useEffect(() => {
+  const loadInsights = React.useCallback(() => {
     fetch("/api/insights")
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data) setInsights(data); })
       .catch(() => {});
   }, []);
+
+  // Refetch on mount and whenever documents change.
+  React.useEffect(() => { loadInsights(); }, [loadInsights, memories]);
+
+  // Also refetch on tab refocus and on a slow interval — catches changes that
+  // don't emit an SSE event (e.g. direct DB edits) so the counts don't go stale.
+  React.useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") loadInsights(); };
+    document.addEventListener("visibilitychange", onVisible);
+    const interval = setInterval(loadInsights, 60_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(interval);
+    };
+  }, [loadInsights]);
 
   if (!insights) return null;
 

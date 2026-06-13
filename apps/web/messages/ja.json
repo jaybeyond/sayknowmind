@@ -520,6 +520,42 @@
       "entity": "エンティティ",
       "category": "カテゴリ",
       "tag": "タグ"
+    },
+    "entityType": {
+      "technology": "テクノロジー",
+      "concept": "コンセプト",
+      "event": "イベント",
+      "product": "製品",
+      "person": "人物",
+      "organization": "組織",
+      "location": "場所",
+      "date": "日付",
+      "other": "その他"
+    },
+    "propKey": {
+      "sourceType": "ソースタイプ",
+      "createdAt": "作成日時",
+      "updatedAt": "更新日時",
+      "language": "言語",
+      "aiTags": "AIタグ",
+      "key_points": "要点",
+      "content_format": "フォーマット",
+      "content_type": "コンテンツタイプ",
+      "reading_time_minutes": "読了時間(分)",
+      "docTabs": "タブ",
+      "confidence": "信頼度",
+      "summary": "要約",
+      "url": "URL",
+      "status": "ステータス",
+      "wordCount": "文字数",
+      "what_it_solves": "解決する課題",
+      "mindmap": "マインドマップ",
+      "entityType": "エンティティタイプ",
+      "description": "説明",
+      "depth": "階層",
+      "path": "パス",
+      "canonicalName": "正規名",
+      "documentCount": "ドキュメント数"
     }
   },
   "offline": {
@@ -946,7 +982,21 @@
     "summaryRegenerate": "再生成",
     "summaryGenerating": "生成中…",
     "summaryEmpty": "まだ要約がありません",
-    "summaryFailed": "要約の生成に失敗しました"
+    "summaryFailed": "要約の生成に失敗しました",
+    "history": {
+      "title": "バージョン履歴",
+      "empty": "保存されたバージョンはありません",
+      "restore": "復元",
+      "restoreConfirm": "このバージョンに戻しますか？現在の内容は先に新しいバージョンとして保存されます。",
+      "restored": "復元しました",
+      "restoreFailed": "復元に失敗しました",
+      "someone": "誰か",
+      "current": "現在",
+      "initial": "最初のバージョン",
+      "titleChanged": "タイトル変更",
+      "noChange": "内容の変更なし",
+      "moreChanges": "他 +{count} 件"
+    }
   },
   "mindmap": {
     "theme": "テーマ",
