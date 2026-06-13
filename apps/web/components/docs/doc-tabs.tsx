@@ -13,13 +13,14 @@ import {
 import { BlockNoteView } from "@blocknote/mantine";
 import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from "@blocknote/core/extensions";
 import { en as bnEn, ko as bnKo, ja as bnJa, zh as bnZh } from "@blocknote/core/locales";
-import { Network, Code2, Plus, ChevronLeft, X, FileText, FileSpreadsheet, Download } from "lucide-react";
+import { Network, Code2, Plus, ChevronLeft, X, FileText, FileSpreadsheet, Download, History } from "lucide-react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import { useTranslation, useI18nStore } from "@/lib/i18n";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { SummaryButton } from "./summary-button";
+import { VersionHistoryPanel } from "./version-history-panel";
 import { docSchema, type DocBlock } from "./doc-schema";
 import { extractOfficePlaintext, isOfficeKind, type OfficeKind } from "./office-shared";
 
@@ -1262,6 +1263,7 @@ function DocTabsLayout({
   const { t } = useTranslation();
   const htmlFileInputRef = React.useRef<HTMLInputElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = React.useState(false);
+  const [historyOpen, setHistoryOpen] = React.useState(false);
   const [addMenuOpen, setAddMenuOpen] = React.useState(false);
 
   // New-tab kinds offered in the add menu (icon + i18n label + tab kind).
@@ -1392,7 +1394,7 @@ function DocTabsLayout({
       </aside>
 
       {/* Main column: top toolbar + scrollable title/editor */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+      <div className="relative flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Top toolbar: back · live · status · summary */}
         <div className="flex items-center justify-between gap-3 h-11 px-4 border-b shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1518,6 +1520,15 @@ function DocTabsLayout({
                 )}
               </div>
             )}
+            <button
+              onClick={() => setHistoryOpen(true)}
+              title={t("docs.history.title")}
+              aria-label={t("docs.history.title")}
+              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <History className="size-4" />
+              <span className="hidden sm:inline">{t("docs.history.title")}</span>
+            </button>
             <SummaryButton docId={docId} />
           </div>
         </div>
@@ -1563,6 +1574,8 @@ function DocTabsLayout({
             </div>
           </div>
         )}
+
+        <VersionHistoryPanel docId={docId} open={historyOpen} onClose={() => setHistoryOpen(false)} />
       </div>
     </div>
   );

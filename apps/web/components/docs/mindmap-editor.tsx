@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronDown, Circle, Smile, Image as ImageIcon, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronLeft, ChevronDown, Circle, Smile, Image as ImageIcon, ArrowUp, ArrowDown, History } from "lucide-react";
 import type { MindElixirData, MindElixirInstance, Operation, Theme } from "mind-elixir";
 import { en as meEn, ko as meKo, ja as meJa, zh_CN as meZh, type LangPack } from "mind-elixir/i18n";
 import "mind-elixir/style.css";
@@ -10,6 +10,7 @@ import { useTranslation, useI18nStore } from "@/lib/i18n";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "@/components/ui/dropdown-menu";
 import { SummaryButton } from "./summary-button";
+import { VersionHistoryPanel } from "./version-history-panel";
 
 // Built-in mind-elixir context-menu language packs, keyed by our app locales.
 const ME_LOCALE: Record<string, LangPack> = { en: meEn, ko: meKo, ja: meJa, zh: meZh };
@@ -75,6 +76,7 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
   const mindRef = React.useRef<MindElixirInstance | null>(null);
   const [title, setTitle] = React.useState(initialTitle);
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("saved");
+  const [historyOpen, setHistoryOpen] = React.useState(false);
   const [colorOpen, setColorOpen] = React.useState(false);
   const [emojiOpen, setEmojiOpen] = React.useState(false);
   const [imageOpen, setImageOpen] = React.useState(false);
@@ -491,7 +493,7 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
   const canEdit = collabState ? collabState.canWrite : true;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="relative flex flex-col h-full">
       {/* Single header row: back · title · theme · node color · status */}
       <div className="flex items-center gap-3 px-4 py-2 border-b shrink-0">
         {/* Sidebar toggle — only inside the dashboard's SidebarProvider. */}
@@ -670,9 +672,21 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
                   : t("docs.saved")}
           </span>
         </div>
+
+        <button
+          onClick={() => setHistoryOpen(true)}
+          title={t("docs.history.title")}
+          aria-label={t("docs.history.title")}
+          className="inline-flex items-center gap-1 shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <History className="size-4" />
+          <span className="hidden sm:inline">{t("docs.history.title")}</span>
+        </button>
       </div>
 
       <div ref={containerRef} className="flex-1 w-full bg-background" />
+
+      <VersionHistoryPanel docId={docId} open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </div>
   );
 }

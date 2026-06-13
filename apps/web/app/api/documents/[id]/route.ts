@@ -5,6 +5,7 @@ import { ErrorCode } from "@/lib/types";
 import { readableClause, writableClause, editableViaShareClause } from "@/lib/visibility";
 import { emitDocumentEvent } from "@/lib/events";
 import { assignTags, clearDocumentTags, type Queryable } from "@/lib/tags/store";
+import { captureDocumentVersion } from "@/lib/versions/store";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -246,6 +247,19 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
       await client.query("COMMIT");
       emitDocumentEvent({ type: "document:updated", documentId: id, userId: ctx.userId, title: result.rows[0].title ?? undefined });
+
+      // Checkpoint editable content (notes/sheets/mindmaps) into version history.
+      // Throttled + best-effort: a versioning hiccup must never fail the save.
+      const isContentSave =
+        content !== undefined ||
+        (metadata !== undefined && (metadata.docTabs !== undefined || metadata.mindmap !== undefined));
+      if (isContentSave) {
+        try {
+          await captureDocumentVersion(id, ctx.userId);
+        } catch (versionErr) {
+          console.warn("[documents] version capture failed:", versionErr);
+        }
+      }
 
       return NextResponse.json(result.rows[0]);
     } catch (err) {
