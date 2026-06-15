@@ -52,7 +52,10 @@ jobs:
 
       - name: Build Tauri app
         working-directory: apps/desktop
-        run: cargo tauri build --target ${{ matrix.target }}
+        # Lite variant: thin webview wrapper that loads https://sayknowmind.ypai.click
+        # (the default/full variant needs a bundled Next.js sidecar and renders blank
+        # without it). beforeBuildCommand fetches the codex sidecar per platform.
+        run: cargo tauri build -c src-tauri/tauri.lite.conf.json --target ${{ matrix.target }} -- --no-default-features --features lite
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}

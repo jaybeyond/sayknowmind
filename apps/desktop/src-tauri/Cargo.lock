@@ -3250,7 +3250,7 @@ dependencies = [
 
 [[package]]
 name = "sayknowmind-desktop"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "dirs-next",
  "reqwest 0.12.28",
