@@ -1116,8 +1116,14 @@ fn ocp_install_sync() -> Result<OcpInstallResult, String> {
             let key: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
             fs::create_dir_all(&ocp_state_dir).map_err(|e| format!("mkdir ~/.ocp: {}", e))?;
             fs::write(&key_file, &key).map_err(|e| format!("write admin-key: {}", e))?;
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&key_file, fs::Permissions::from_mode(0o600));
+            // Restrict the key file to the owner. POSIX-only; on Windows the file
+            // inherits the user's profile ACL (and `from_mode`/`os::unix` don't
+            // exist there, which broke the Windows build).
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(&key_file, fs::Permissions::from_mode(0o600));
+            }
             key
         }
     };
