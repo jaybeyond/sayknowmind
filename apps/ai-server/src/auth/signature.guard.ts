@@ -18,8 +18,23 @@ export class SignatureGuard implements CanActivate {
     private cryptoService: CryptoService,
     private configService: ConfigService,
   ) {
-    this.skipAuth = this.configService.get('SKIP_AUTH', 'false') === 'true';
+    const skipAuthRequested = this.configService.get('SKIP_AUTH', 'false') === 'true';
     this.aiApiKey = this.configService.get('AI_API_KEY', '');
+    const isProduction =
+      (this.configService.get('NODE_ENV', '') || process.env.NODE_ENV) === 'production';
+
+    // SKIP_AUTH only ever takes effect in development AND when no API key is
+    // configured. It can NEVER disable auth in production, and a configured
+    // AI_API_KEY always wins — so a stray SKIP_AUTH=true cannot silently open
+    // the AI server (and its per-user memory/GDPR endpoints) to the network.
+    this.skipAuth = skipAuthRequested && !isProduction && !this.aiApiKey;
+
+    if (skipAuthRequested && !this.skipAuth) {
+      this.logger.error(
+        `SKIP_AUTH=true is IGNORED (${isProduction ? 'production' : 'AI_API_KEY is set'}) — ` +
+          'authentication remains enforced.',
+      );
+    }
 
     if (this.skipAuth) {
       this.logger.warn('⚠️  AUTH DISABLED - Development mode only!');

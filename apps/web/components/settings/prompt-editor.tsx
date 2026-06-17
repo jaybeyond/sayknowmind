@@ -50,13 +50,22 @@ export function PromptEditor() {
   const [prompts, setPrompts] = useState<AllPrompts | null>(null);
   const [defaults, setDefaults] = useState<AllPrompts | null>(null);
   const [saving, setSaving] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [activeLang, setActiveLang] = useState<Lang>("en");
   const [activeCategory, setActiveCategory] = useState<PromptCategory>("chat");
 
   useEffect(() => {
     fetch("/api/settings/prompts")
-      .then((r) => r.json())
+      .then(async (r) => {
+        // Prompts are a global admin-only config; non-admins get 401/403.
+        if (r.status === 401 || r.status === 403) {
+          setAccessDenied(true);
+          return null;
+        }
+        return r.json();
+      })
       .then((data) => {
+        if (!data) return;
         setPrompts(data.prompts);
         setDefaults(data.defaults);
       })
@@ -106,6 +115,14 @@ export function PromptEditor() {
       [key]: { ...prompts[key], [activeLang]: defaults[key]?.[activeLang] ?? "" },
     });
   };
+
+  if (accessDenied) {
+    return (
+      <div className="text-sm text-muted-foreground py-4">
+        {t("prompts.adminOnly")}
+      </div>
+    );
+  }
 
   if (!prompts) {
     return (

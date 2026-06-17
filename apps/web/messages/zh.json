@@ -587,6 +587,7 @@
     "deleteFailed": "删除账户失败"
   },
   "prompts": {
+    "adminOnly": "提示词设置仅限管理员。如需更改请联系管理员。",
     "loading": "加载提示词设置中...",
     "description": "自定义 AI 总结保存内容的方式。",
     "descriptionFull": "自定义聊天和文档处理中使用的所有 AI 提示词。每个提示词可按语言设置。使用 {{docCount}} 作为文档数量占位符。",

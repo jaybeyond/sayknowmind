@@ -4,6 +4,21 @@ import { execSync } from "child_process";
 import { join } from "path";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
+import { getDeployMode } from "@/lib/environment";
+
+/**
+ * This route shells out (download, tar extract, `pnpm build`, `rm -rf`, process start/stop)
+ * to manage the embedded local runtime. It is ONLY meaningful inside the Tauri desktop
+ * build, whose embedded Next server is launched with NEXT_PUBLIC_DEPLOY_MODE=desktop
+ * (apps/desktop/src-tauri/src/main.rs). On any hosted/cloud deployment it is a remote
+ * command-execution / DoS surface, so we hard-gate it to desktop builds and 404 elsewhere.
+ */
+function guardDesktopOnly(): NextResponse | null {
+  if (getDeployMode() !== "desktop") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  return null;
+}
 
 const APP_DATA = join(
   process.env.HOME ?? ".",
@@ -41,8 +56,11 @@ function detectBinary(bundledPath: string, name: string): { path: string; versio
   return null;
 }
 
-/** GET /api/desktop/runtime — Check runtime status + system environment */
+/** GET /api/desktop/runtime — Check runtime status + system environment (desktop build only) */
 export async function GET() {
+  const blocked = guardDesktopOnly();
+  if (blocked) return blocked;
+
   const node = detectBinary(NODE_BIN, "node");
   const serverReady = existsSync(join(WEB_DIR, "server.js"));
 
@@ -79,8 +97,11 @@ export async function GET() {
   });
 }
 
-/** POST /api/desktop/runtime — Download and install runtime (SSE progress) */
+/** POST /api/desktop/runtime — Download and install runtime (SSE progress) (desktop build only) */
 export async function POST(request: NextRequest) {
+  const blocked = guardDesktopOnly();
+  if (blocked) return blocked;
+
   const action = request.nextUrl.searchParams.get("action") ?? "download";
 
   if (action === "start") {

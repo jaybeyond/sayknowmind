@@ -587,6 +587,7 @@
     "deleteFailed": "Failed to delete account"
   },
   "prompts": {
+    "adminOnly": "Prompt settings are admin-only. Contact a workspace administrator to change them.",
     "loading": "Loading prompt settings...",
     "description": "Customize how the AI summarizes your saved content.",
     "descriptionFull": "Customize all AI prompts used in chat and document processing. Each prompt can be set per language. Use {{docCount}} as placeholder for document count.",

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { getSession, requireAdmin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -192,16 +193,36 @@ function readPrompts(): AllPrompts {
   return DEFAULT_PROMPTS;
 }
 
-/** GET /api/settings/prompts — read custom prompts */
+/**
+ * Prompts are a GLOBAL, process-wide config (`.sayknowmind-prompts.json`) consumed by
+ * the shared ingestion/chat pipeline for every user. Reading or writing them must be
+ * restricted to admins — otherwise any caller could overwrite the system prompt for all
+ * users (stored prompt injection).
+ */
+async function guardAdmin(): Promise<NextResponse | null> {
+  try {
+    await requireAdmin(await getSession());
+    return null;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Forbidden";
+    return NextResponse.json({ error: msg }, { status: msg === "Unauthorized" ? 401 : 403 });
+  }
+}
+
+/** GET /api/settings/prompts — read custom prompts (admin only) */
 export async function GET() {
+  const denied = await guardAdmin();
+  if (denied) return denied;
   return NextResponse.json({
     prompts: readPrompts(),
     defaults: DEFAULT_PROMPTS,
   });
 }
 
-/** POST /api/settings/prompts — save custom prompts */
+/** POST /api/settings/prompts — save custom prompts (admin only) */
 export async function POST(request: NextRequest) {
+  const denied = await guardAdmin();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const prompts = readPrompts();

@@ -185,6 +185,39 @@ apply_sql db/migrations/049_web_graph_schema_compat.sql || exit 3
 # 050 scopes Telegram sender links by bot token and excludes pending
 # verification-code rows from uniqueness, so user-owned bots remain isolated.
 apply_sql db/migrations/050_telegram_per_bot_link_scope.sql || exit 3
+# 051 adds mcp_audit_log, read by /api/user/mcp-audit and written by the
+# mcp-server per per-user-key call. Missing → the audit view 500s.
+apply_sql db/migrations/051_mcp_audit_log.sql || exit 3
+# 052 adds the UNIQUE (user_id, name, COALESCE(parent_id)) index that the
+# ingest job-queue and MCP category_create rely on for ON CONFLICT. Missing
+# → AI-suggested collections silently never land (empty Collections panel).
+apply_sql db/migrations/052_categories_unique_per_user_parent.sql || exit 3
+# 053–058 are the team feature: better-auth organization plugin tables, then
+# organization_id on the six user-scoped resource tables, team-visible default,
+# and the per-resource / per-team share ACLs. The web app's visibility layer
+# (lib/org-context.ts, lib/visibility.ts) queries these — without them every
+# org-scoped read and all sharing break. Additive (CREATE TABLE / ADD COLUMN
+# IF NOT EXISTS) and order-sensitive: 053 must precede 054–058.
+apply_sql db/migrations/053_add_organization_tables.sql || exit 3
+apply_sql db/migrations/054_add_organization_id_to_resources.sql || exit 3
+apply_sql db/migrations/055_team_visibility_defaults.sql || exit 3
+apply_sql db/migrations/056_add_resource_shares.sql || exit 3
+apply_sql db/migrations/057_backfill_orphan_organization_id.sql || exit 3
+apply_sql db/migrations/058_add_resource_team_shares.sql || exit 3
+# 059 doc_collab persists the Yjs CRDT state for live collaborative editing
+# (relay-server onLoadDocument/onStoreDocument). 060 adds categories.kind so
+# the Collections / Documents / Mind maps folder trees don't collide. 061
+# document_versions backs version-history capture+restore at PATCH
+# /api/documents/:id. All additive and required by the collab/version features
+# on this branch — missing → "relation does not exist" at runtime.
+apply_sql db/migrations/059_add_doc_collab.sql || exit 3
+apply_sql db/migrations/060_add_category_kind.sql || exit 3
+apply_sql db/migrations/061_add_document_versions.sql || exit 3
+# 062 stops storing MCP API keys in plaintext: adds api_key_hash (validation)
+# + api_key_enc (re-display), backfills hashes for existing keys, drops the
+# NOT NULL on api_key. Requires pgcrypto (created by the migration). Existing
+# keys keep working — they validate by the backfilled hash.
+apply_sql db/migrations/062_hash_mcp_api_keys.sql || exit 3
 
 # better-auth rateLimit (no migration file ships this)
 echo "creating rateLimit table (if missing)"

@@ -7,6 +7,10 @@ use crate::error::Result;
 use super::SOTAQueryEngine;
 
 impl SOTAQueryEngine {
+    /// Fail CLOSED: when a tenant/workspace scope is requested, a record whose
+    /// metadata lacks the matching tag is REJECTED, not allowed through. The
+    /// previous behaviour only rejected on a *mismatch* and silently passed
+    /// untagged records, leaking them into every scoped query.
     pub(super) fn matches_tenant_filter(
         &self,
         metadata: &serde_json::Value,
@@ -18,25 +22,25 @@ impl SOTAQueryEngine {
         }
 
         if let Some(tid) = tenant_id {
-            if let Some(meta_tid) = metadata.get("tenant_id").and_then(|v| v.as_str()) {
-                if meta_tid != tid {
-                    return false;
-                }
+            match metadata.get("tenant_id").and_then(|v| v.as_str()) {
+                Some(meta_tid) if meta_tid == tid => {}
+                _ => return false,
             }
         }
 
         if let Some(wid) = workspace_id {
-            if let Some(meta_wid) = metadata.get("workspace_id").and_then(|v| v.as_str()) {
-                if meta_wid != wid {
-                    return false;
-                }
+            match metadata.get("workspace_id").and_then(|v| v.as_str()) {
+                Some(meta_wid) if meta_wid == wid => {}
+                _ => return false,
             }
         }
 
         true
     }
 
-    /// Check if properties match tenant filter.
+    /// Check if properties match tenant filter. Fail CLOSED — see
+    /// `matches_tenant_filter`: a scoped query rejects records that lack the
+    /// matching tenant/workspace property instead of letting them through.
     pub(super) fn matches_tenant_filter_props(
         &self,
         properties: &HashMap<String, serde_json::Value>,
@@ -48,18 +52,16 @@ impl SOTAQueryEngine {
         }
 
         if let Some(tid) = tenant_id {
-            if let Some(prop_tid) = properties.get("tenant_id").and_then(|v| v.as_str()) {
-                if prop_tid != tid {
-                    return false;
-                }
+            match properties.get("tenant_id").and_then(|v| v.as_str()) {
+                Some(prop_tid) if prop_tid == tid => {}
+                _ => return false,
             }
         }
 
         if let Some(wid) = workspace_id {
-            if let Some(prop_wid) = properties.get("workspace_id").and_then(|v| v.as_str()) {
-                if prop_wid != wid {
-                    return false;
-                }
+            match properties.get("workspace_id").and_then(|v| v.as_str()) {
+                Some(prop_wid) if prop_wid == wid => {}
+                _ => return false,
             }
         }
 

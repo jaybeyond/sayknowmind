@@ -65,6 +65,16 @@ jobs:
               ports: ["8082:8082"]
           COMPOSE
 
+      # WARNING: this is NOT the canonical deploy path — scripts/production-deploy.sh is.
+      # This step is UNSAFE as written and must not be enabled against the production DB
+      # until it is unified with the tracked runner:
+      #   1. It applies db/migrations/*.sql blindly with `|| true`, masking failures AND
+      #      RE-RUNNING destructive migrations every release. 031_conversations_simple
+      #      DROPs the conversations/messages tables — re-running it wipes live chat data.
+      #   2. There is no schema_migrations tracking here, so db/migrations/scripts/migrate.sh
+      #      cannot be dropped in directly until production's schema_migrations table is
+      #      backfilled with the already-applied filenames (otherwise migrate.sh also
+      #      re-runs 031). See production-deploy.sh for the curated, idempotent list.
       - name: Run DB migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

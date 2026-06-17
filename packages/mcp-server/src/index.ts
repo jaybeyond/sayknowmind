@@ -6,7 +6,7 @@
  * - SSE (GET /sse + POST /messages) — deprecated but widely supported
  * - stdio — for local CLI usage (pass --stdio flag)
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -19,6 +19,9 @@ import { createServer } from "./server.js";
 const PORT = parseInt(process.env.PORT ?? "8082", 10);
 const ADMIN_API_KEY = process.env.MCP_API_KEY;
 const DATABASE_URL = process.env.DATABASE_URL;
+// Anonymous (no-auth) HTTP mode must be opted into explicitly — never the
+// silent default just because no key/DB happens to be configured.
+const ALLOW_ANONYMOUS = process.env.MCP_ALLOW_ANONYMOUS === "true";
 
 // ── Transport registry ──────────────────────────────────────
 type AnyTransport = StreamableHTTPServerTransport | SSEServerTransport;
@@ -44,9 +47,11 @@ async function findUserByApiKey(token: string): Promise<string | null> {
   const pool = getPgPool();
   if (!pool) return null;
   try {
+    // Keys are stored as SHA-256(token) hex (migration 062), never plaintext.
+    const hash = createHash("sha256").update(token).digest("hex");
     const result = await pool.query(
-      `SELECT user_id FROM user_mcp_keys WHERE api_key = $1`,
-      [token],
+      `SELECT user_id FROM user_mcp_keys WHERE api_key_hash = $1`,
+      [hash],
     );
     return (result.rows[0]?.user_id as string) ?? null;
   } catch (err) {
@@ -67,9 +72,11 @@ function extractAuthToken(req: express.Request): string | undefined {
 
 // ── Auth middleware ──────────────────────────────────────────
 // Priority:
-//   1. No ADMIN_API_KEY *and* no DATABASE_URL  → open mode (dev only)
+//   1. No auth configured:
+//        MCP_ALLOW_ANONYMOUS=true  → open mode (dev only)
+//        otherwise                 → 401 (refuse — don't silently run open)
 //   2. Token matches ADMIN_API_KEY              → allow (no user attached)
-//   3. Token found in user_mcp_keys             → allow, attach userId
+//   3. Token found in user_mcp_keys (by hash)   → allow, attach userId
 //   4. Otherwise                                → 401
 async function authMiddleware(
   req: express.Request,
@@ -77,7 +84,16 @@ async function authMiddleware(
   next: express.NextFunction,
 ): Promise<void> {
   if (!ADMIN_API_KEY && !DATABASE_URL) {
-    requestContext.run({ userId: null, rawToken: "", isAdmin: true }, () => next());
+    if (ALLOW_ANONYMOUS) {
+      requestContext.run({ userId: null, rawToken: "", isAdmin: true }, () => next());
+    } else {
+      res.status(401).json({
+        error:
+          "MCP server has no auth configured. Set DATABASE_URL (per-user keys) " +
+          "or MCP_API_KEY (shared admin key), or set MCP_ALLOW_ANONYMOUS=true to " +
+          "explicitly allow anonymous access (dev only).",
+      });
+    }
     return;
   }
 
@@ -201,9 +217,13 @@ function startHttpServer(): void {
     const authModes: string[] = [];
     if (DATABASE_URL) authModes.push("per-user keys (user_mcp_keys table)");
     if (ADMIN_API_KEY) authModes.push("admin/shared MCP_API_KEY");
+    if (authModes.length === 0 && ALLOW_ANONYMOUS)
+      authModes.push("OPEN — anonymous (MCP_ALLOW_ANONYMOUS=true, dev only)");
     console.log(
       `[MCP] Auth: ${
-        authModes.length > 0 ? authModes.join(" + ") : "open (no DATABASE_URL or MCP_API_KEY set)"
+        authModes.length > 0
+          ? authModes.join(" + ")
+          : "NONE configured — all requests will 401 (set DATABASE_URL / MCP_API_KEY / MCP_ALLOW_ANONYMOUS)"
       }`,
     );
   });
