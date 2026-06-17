@@ -44,6 +44,15 @@
 - ⬜ web-client/EdgeQuake perf/ops 부채
 - ⬜ 문서 정합성 (라이선스 모순, AGENTS.md 정정, PRD archived 배너)
 
+## 검증 (2026-06-18) — 실DB 마이그레이션 테스트 + 13-에이전트 적대적 리뷰
+독립 리뷰가 7건 confirmed(15 중). 발견·수정:
+- **[HIGH] 063 unique index가 실데이터 중복으로 실패** (실DB rollback에서 재현) → **비유니크 인덱스 + 앱레벨 per-org upsert**(`document-store.ts`)로 전환. 062는 실DB 검증 통과.
+- **[HIGH] Telegram fail-closed 회귀** (기존 봇 침묵 + 주석 거짓) → **opt-in으로 복원**(설정 시만 enforce) + `telegram.ts setWebhook`이 secret 전송 + 주석 정정.
+- **[HIGH] OG SSRF 리다이렉트 우회** → `url-fetcher.ts safeFetch`(매 hop 재검증) 추가, og route + `file-storage downloadOgImage` 교체.
+- [MED] 063 비원자성 → `BEGIN/COMMIT` 래핑.
+- [LOW] `models/pull` 미인증 → auth 게이트. `mcp-key ensureTable` → `CREATE EXTENSION pgcrypto` 보강.
+- 남은 LOW follow-up: 062 레거시 평문 키 앱사이드 re-encrypt(약속됨), chat-router regex 토큰중복, EdgeQuake constant-time 비교, [botId] webhook 정렬(이제 둘 다 opt-in이라 일치).
+
 ## 변경 로그
 - **2026-06-18** #2 완료: `apps/web/app/api/auth/test`(삭제), `settings/prompts/route.ts`, `desktop/runtime/route.ts`, `components/settings/prompt-editor.tsx`, `messages/{en,ko,ja,zh}.json`
 - **2026-06-18** #5 부분: `scripts/production-deploy.sh`(051–062 추가, bash -n 통과), `.github/workflows/deploy.yml`(위험 경고 주석)

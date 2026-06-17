@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDocument } from "@/lib/ingest/document-store";
 import { getFile, downloadOgImage } from "@/lib/ingest/file-storage";
 import { updateDocument } from "@/lib/ingest/document-store";
-import { validateUrl } from "@/lib/ingest/url-fetcher";
+import { validateUrl, safeFetch } from "@/lib/ingest/url-fetcher";
 
 /** SSRF guard: true only if the URL is well-formed and resolves to a public address. */
 async function isSafeUrl(url: string | null): Promise<boolean> {
@@ -147,7 +147,7 @@ function findExternalUrl(meta: Record<string, unknown>): string | null {
 async function fetchOgImageFromPage(docUrl: string | null): Promise<string | null> {
   if (!docUrl || !docUrl.startsWith("http")) return null;
   try {
-    const res = await fetch(docUrl, {
+    const res = await safeFetch(docUrl, {
       headers: { "User-Agent": "SayknowMind-Bot/1.0" },
       signal: AbortSignal.timeout(5000),
     });

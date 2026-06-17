@@ -120,10 +120,19 @@ export function classifyMessage(text: string): "url" | "query" | "command" {
 // ── Webhook Management ──────────────────────────────────────
 
 export async function setWebhook(botToken: string, webhookUrl: string): Promise<boolean> {
+  const body: Record<string, unknown> = {
+    url: webhookUrl,
+    allowed_updates: ["message", "callback_query"],
+  };
+  // When configured, register the secret so Telegram echoes it back in
+  // x-telegram-bot-api-secret-token and the webhook handler can verify it.
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (secret) body.secret_token = secret;
+
   const res = await fetch(`${TELEGRAM_API}${botToken}/setWebhook`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: webhookUrl, allowed_updates: ["message", "callback_query"] }),
+    body: JSON.stringify(body),
   });
   const data = await res.json();
   return data.ok === true;

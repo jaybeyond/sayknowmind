@@ -1,5 +1,6 @@
 import { mkdir, writeFile, readFile, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import { safeFetch } from "./url-fetcher";
 
 const UPLOADS_DIR = join(process.cwd(), "uploads");
 
@@ -41,10 +42,11 @@ export async function downloadOgImage(
   imageUrl: string,
 ): Promise<{ relativePath: string; base64: string; contentType: string } | null> {
   try {
-    const res = await fetch(imageUrl, {
+    // safeFetch re-validates every redirect hop (SSRF guard) — an allowed public
+    // image URL that 302s to an internal address is rejected rather than fetched.
+    const res = await safeFetch(imageUrl, {
       signal: AbortSignal.timeout(10_000),
       headers: { "User-Agent": "SayKnowMind/0.1" },
-      redirect: "follow",
     });
     if (!res.ok) return null;
 

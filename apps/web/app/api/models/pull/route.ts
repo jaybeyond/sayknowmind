@@ -1,7 +1,18 @@
 import { NextRequest } from "next/server";
 import { ollamaPullStream } from "@/lib/ollama/client";
+import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 
 export async function POST(req: NextRequest) {
+  // Pulling an arbitrary Ollama model is expensive (disk/network) — require auth so
+  // an anonymous caller can't trigger downloads / fill the disk.
+  const userId = await getUserIdFromRequest();
+  if (!userId) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const { name } = await req.json();
   if (!name || typeof name !== "string") {
     return new Response(JSON.stringify({ error: "Model name required" }), {

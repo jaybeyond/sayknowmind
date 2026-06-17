@@ -1,22 +1,31 @@
 -- Fix the global entities-name collision (cross-user knowledge-graph corruption).
 --
--- The relational `entities` table is created by EdgeQuake's init script with
--- `CONSTRAINT entities_unique_name UNIQUE NULLS NOT DISTINCT (tenant_id, workspace_id, name)`.
--- The web app is the ONLY writer of this table (EdgeQuake itself stores its graph
--- in Apache AGE nodes, never here — verified: no `INSERT INTO entities` in the Rust
--- crates). The web app inserts entities with tenant_id/workspace_id left NULL, so the
--- constraint collapses to "name is globally unique across every user": the second
--- user to ingest an entity named e.g. "OpenAI" hits ON CONFLICT and UPDATES the first
--- user's row instead of getting their own. document_id (COALESCE'd) stays pointing at
--- the first user's document, and metadata from different users gets merged together.
+-- The relational `entities` table is web-app-owned (EdgeQuake stores its graph in
+-- Apache AGE, never here). On the EdgeQuake-first schema its only uniqueness was
+-- `UNIQUE (tenant_id, workspace_id, name)`, which — because the web app leaves
+-- tenant_id/workspace_id NULL — collapsed to "name is globally unique across every
+-- user", so the 2nd user to ingest an entity name UPDATEd the 1st user's row
+-- (cross-user merge/corruption). On the sayknowmind-first schema there was no
+-- uniqueness at all and duplicate names already exist.
 --
--- Fix: scope entity de-duplication to the owning ORGANISATION (the web app's team
--- pool), matching documents.organization_id. Because nothing else uses the old
--- constraint, we can safely drop it and replace it with a per-org partial unique index.
+-- Fix: scope entity de-duplication to the owning ORGANISATION.
 --
--- LIMITATION: rows already merged before this migration cannot be un-merged here (the
--- losing users' entities are gone). This stops all FUTURE collisions and correctly
--- scopes new ingestion; fully healing historical rows requires re-extraction.
+-- IMPORTANT: we do NOT add a UNIQUE (organization_id, name) index. Real databases
+-- already contain duplicate (organization_id, name) rows (verified against a live
+-- DB — older schemas never enforced name uniqueness), so a unique index would fail
+-- to build, and de-duplicating in SQL would mean destructively deleting entities
+-- and cascade-deleting their `relationships` edges. Instead, per-org de-dup is done
+-- at the application layer (apps/web/lib/ingest/document-store.ts `insertEntities`:
+-- find-by-(org,name)-then-update-else-insert, and NEVER merge when the org is NULL
+-- so org-less rows can't re-introduce the cross-user collision). This migration only
+-- adds the column + a NON-unique lookup index and drops the old global constraint.
+--
+-- Historical rows already merged before this migration cannot be un-merged here.
+
+-- Wrapped in a transaction so the column add / backfill / constraint drop / index
+-- creation either all land or none do (migrate.sh runs psql without
+-- --single-transaction, and some runners use ON_ERROR_STOP=0).
+BEGIN;
 
 ALTER TABLE entities ADD COLUMN IF NOT EXISTS organization_id TEXT;
 
@@ -30,12 +39,11 @@ UPDATE entities e
 -- Drop the global name-uniqueness (web-app-only; EdgeQuake does not rely on it).
 ALTER TABLE entities DROP CONSTRAINT IF EXISTS entities_unique_name;
 
--- De-dup per organisation instead. Rows with no organisation (orphans) are left
--- un-deduped rather than merged — that is the safe failure mode (duplicates, never
--- cross-tenant merges).
-CREATE UNIQUE INDEX IF NOT EXISTS entities_org_name_unique
-  ON entities (organization_id, name)
-  WHERE organization_id IS NOT NULL;
+-- Non-unique lookup index backing the app-layer per-org de-dup query.
+CREATE INDEX IF NOT EXISTS idx_entities_org_name
+  ON entities (organization_id, name);
 
 CREATE INDEX IF NOT EXISTS idx_entities_organization_id
   ON entities (organization_id);
+
+COMMIT;

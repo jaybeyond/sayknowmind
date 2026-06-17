@@ -71,6 +71,29 @@ export async function validateUrl(url: string): Promise<URL> {
   return parsed;
 }
 
+/**
+ * fetch() that re-validates the target on EVERY redirect hop — closing
+ * SSRF-via-redirect, where an allowed public URL 302s to a private/internal
+ * address (e.g. cloud metadata 169.254.169.254). Each hop runs validateUrl(),
+ * which rejects private resolutions, so a redirect into the internal network
+ * throws instead of being followed.
+ */
+export async function safeFetch(url: string, init?: RequestInit): Promise<Response> {
+  let target = (await validateUrl(url)).toString();
+  for (let hop = 0; hop < 5; hop++) {
+    const res = await fetch(target, { ...init, redirect: "manual" });
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location");
+      if (!location) return res;
+      // Throws if the redirect target resolves to a private/internal address.
+      target = (await validateUrl(new URL(location, target).toString())).toString();
+      continue;
+    }
+    return res;
+  }
+  throw new Error(`Too many redirects fetching ${url}`);
+}
+
 function countWords(text: string): number {
   const cjk = text.match(
     /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g,

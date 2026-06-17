@@ -116,27 +116,49 @@ export async function insertEntities(entities: InsertEntityParams[]): Promise<st
   const ids: string[] = [];
 
   for (const entity of entities) {
-    // Dedup entities per owning organisation (migration 063), NOT globally by name.
-    // organization_id is derived from the document so callers need no extra arg; a
-    // document with no org inserts an un-deduped row (safe — never a cross-tenant merge).
-    const result = await pool.query(
-      `INSERT INTO entities (document_id, organization_id, name, entity_type, type, confidence, metadata)
-       VALUES ($1, (SELECT organization_id FROM documents WHERE id = $1), $2, $3, $4::varchar(50), $5, $6)
-       ON CONFLICT (organization_id, name) WHERE organization_id IS NOT NULL DO UPDATE
-         SET document_id = COALESCE(entities.document_id, EXCLUDED.document_id),
-             confidence = GREATEST(entities.confidence, EXCLUDED.confidence),
-             metadata = entities.metadata || EXCLUDED.metadata
-       RETURNING id`,
-      [
-        entity.documentId,
-        entity.name,
-        entity.type,
-        entity.type,
-        entity.confidence,
-        JSON.stringify(entity.properties ?? {}),
-      ],
+    // Per-org de-dup at the application layer (migration 063 intentionally adds NO
+    // unique index — older DBs already hold duplicate (org, name) rows). Look for an
+    // existing entity in THIS document's organization and update it; otherwise insert.
+    // When the document has no organization we never match an existing row, so org-less
+    // entities are inserted fresh and can't re-introduce the cross-user collision.
+    const found = await pool.query(
+      `SELECT e.id FROM entities e, documents d
+        WHERE d.id = $1 AND e.name = $2
+          AND d.organization_id IS NOT NULL
+          AND e.organization_id = d.organization_id
+        LIMIT 1`,
+      [entity.documentId, entity.name],
     );
-    if (result.rows[0]) ids.push(result.rows[0].id);
+
+    let id: string | undefined;
+    if (found.rows[0]) {
+      const upd = await pool.query(
+        `UPDATE entities SET
+           document_id = COALESCE(document_id, $2),
+           confidence = GREATEST(confidence, $3),
+           metadata = metadata || $4::jsonb
+         WHERE id = $1
+         RETURNING id`,
+        [found.rows[0].id, entity.documentId, entity.confidence, JSON.stringify(entity.properties ?? {})],
+      );
+      id = upd.rows[0]?.id;
+    } else {
+      const ins = await pool.query(
+        `INSERT INTO entities (document_id, organization_id, name, entity_type, type, confidence, metadata)
+         VALUES ($1, (SELECT organization_id FROM documents WHERE id = $1), $2, $3, $4::varchar(50), $5, $6)
+         RETURNING id`,
+        [
+          entity.documentId,
+          entity.name,
+          entity.type,
+          entity.type,
+          entity.confidence,
+          JSON.stringify(entity.properties ?? {}),
+        ],
+      );
+      id = ins.rows[0]?.id;
+    }
+    if (id) ids.push(id);
   }
 
   return ids;

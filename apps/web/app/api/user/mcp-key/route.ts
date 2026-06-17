@@ -21,8 +21,10 @@ async function ensureTable() {
   await pool.query(`ALTER TABLE user_mcp_keys ADD COLUMN IF NOT EXISTS api_key_enc TEXT`);
   await pool.query(`ALTER TABLE user_mcp_keys ALTER COLUMN api_key DROP NOT NULL`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_mcp_keys_hash ON user_mcp_keys(api_key_hash)`);
-  // Best-effort backfill for legacy plaintext rows (no-op if pgcrypto missing
-  // or migration 062 already ran).
+  // Best-effort backfill for legacy plaintext rows. digest() needs pgcrypto;
+  // migration 062 creates it, but in envs that rely only on ensureTable() (no
+  // migrations) attempt it here first. No-op if already hashed / pgcrypto absent.
+  await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`).catch(() => {});
   await pool
     .query(
       `UPDATE user_mcp_keys SET api_key_hash = encode(digest(api_key, 'sha256'), 'hex')
