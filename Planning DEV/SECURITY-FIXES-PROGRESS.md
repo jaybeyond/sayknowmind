@@ -51,7 +51,8 @@
 - **[HIGH] OG SSRF 리다이렉트 우회** → `url-fetcher.ts safeFetch`(매 hop 재검증) 추가, og route + `file-storage downloadOgImage` 교체.
 - [MED] 063 비원자성 → `BEGIN/COMMIT` 래핑.
 - [LOW] `models/pull` 미인증 → auth 게이트. `mcp-key ensureTable` → `CREATE EXTENSION pgcrypto` 보강.
-- 남은 LOW follow-up: 062 레거시 평문 키 앱사이드 re-encrypt(약속됨), chat-router regex 토큰중복, EdgeQuake constant-time 비교, [botId] webhook 정렬(이제 둘 다 opt-in이라 일치).
+- ✅ LOW: 062 레거시 평문키 **GET 시 지연 re-encrypt**(`mcp-key/route.ts` — 인증 컨텍스트에서 enc+hash 후 평문 NULL). chat-router **토큰중복**(`emit` 래퍼 — 토큰 emit 후 provider 실패 시 재스트림 대신 중단).
+- ⏭️ 의도적 스킵: EdgeQuake `validate_api_key` constant-time — 내부포트·LOW에 새 Rust 의존성 추가 비효율. [botId] webhook은 메인 라우트가 opt-in으로 복원돼 이미 일치.
 
 ## 변경 로그
 - **2026-06-18** #2 완료: `apps/web/app/api/auth/test`(삭제), `settings/prompts/route.ts`, `desktop/runtime/route.ts`, `components/settings/prompt-editor.tsx`, `messages/{en,ko,ja,zh}.json`

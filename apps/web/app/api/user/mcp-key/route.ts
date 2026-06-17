@@ -87,8 +87,22 @@ export async function GET() {
       apiKey = null;
     }
   } else if (row?.api_key) {
-    // Legacy key issued before migration 062 — still plaintext, still shown.
+    // Legacy key still stored in plaintext (pre-062). Migrate it lazily now, while
+    // we hold the owner's session: encrypt it at rest, ensure the hash, then drop the
+    // plaintext column. Validation (by hash) and display (decrypt) keep working after.
     apiKey = row.api_key;
+    try {
+      await pool.query(
+        `UPDATE user_mcp_keys
+            SET api_key_enc = $2,
+                api_key_hash = COALESCE(api_key_hash, $3),
+                api_key = NULL
+          WHERE user_id = $1`,
+        [userId, encryptForUser(userId, apiKey), hashApiKey(apiKey)],
+      );
+    } catch {
+      // Best-effort migration; still return the key for display.
+    }
   }
 
   return NextResponse.json({ apiKey });

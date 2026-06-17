@@ -136,6 +136,15 @@ export async function routeChat(
 
   let shouldFallback = false;
 
+  // Track whether any tokens have already reached the client. Once they have,
+  // retrying another provider or the AI server would re-stream from scratch and
+  // duplicate output, so we stop instead of falling back.
+  let emittedTokens = false;
+  const emit = (token: string) => {
+    emittedTokens = true;
+    onToken(token);
+  };
+
   // Try each cloud provider in order (active first, then fallbacks)
   for (const provider of validProviders) {
     const config: CloudProviderConfig = {
@@ -147,12 +156,17 @@ export async function routeChat(
 
     try {
       onLog?.(`[router] Trying cloud: ${provider.id} (${provider.model})`);
-      const result = await cloudStreamChat(config, systemPrompt, messages, onToken, onReasoning, userId);
+      const result = await cloudStreamChat(config, systemPrompt, messages, emit, onReasoning, userId);
       return result;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       onLog?.(`[router] ${provider.id} failed: ${msg}`);
       console.error(`[chat-router] ${provider.id} failed:`, msg);
+
+      // If output already started streaming, retrying would duplicate it — stop.
+      if (emittedTokens) {
+        throw err instanceof Error ? err : new Error(msg);
+      }
 
       const status = extractHttpStatus(msg);
       if (status && FALLBACK_CODES.has(status)) {
@@ -164,13 +178,13 @@ export async function routeChat(
   // No providers configured → use AI server
   if (validProviders.length === 0) {
     onLog?.("[router] No cloud providers configured — using AI server cascade");
-    return aiServerStreamChat(systemPrompt, messages, onToken, onReasoning, organizationId);
+    return aiServerStreamChat(systemPrompt, messages, emit, onReasoning, organizationId);
   }
 
   // Fall back to AI server on 400/402/429
   if (shouldFallback) {
     onLog?.("[router] Cloud returned 400/402/429 — falling back to AI server cascade");
-    return aiServerStreamChat(systemPrompt, messages, onToken, onReasoning, organizationId);
+    return aiServerStreamChat(systemPrompt, messages, emit, onReasoning, organizationId);
   }
 
   onLog?.("[router] All cloud providers failed with non-recoverable errors");
