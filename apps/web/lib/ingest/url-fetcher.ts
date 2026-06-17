@@ -39,7 +39,7 @@ function isPrivateIp(ip: string): boolean {
   );
 }
 
-async function validateUrl(url: string): Promise<URL> {
+export async function validateUrl(url: string): Promise<URL> {
   let parsed: URL;
   try {
     parsed = new URL(url);

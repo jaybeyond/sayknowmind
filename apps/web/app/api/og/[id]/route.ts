@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDocument } from "@/lib/ingest/document-store";
 import { getFile, downloadOgImage } from "@/lib/ingest/file-storage";
 import { updateDocument } from "@/lib/ingest/document-store";
+import { validateUrl } from "@/lib/ingest/url-fetcher";
+
+/** SSRF guard: true only if the URL is well-formed and resolves to a public address. */
+async function isSafeUrl(url: string | null): Promise<boolean> {
+  if (!url) return false;
+  try {
+    await validateUrl(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <rect width="1200" height="630" fill="#1D1D1D"/>
@@ -71,16 +83,19 @@ export async function GET(
     });
   }
 
-  // Find external URL or re-fetch from document page
+  // Find external URL or re-fetch from document page. Both fetches hit
+  // attacker-influenced URLs server-side, so SSRF-guard them (reject private /
+  // internal targets) before fetching, reusing the ingest validator.
   const docUrl = doc.url as string | null;
   const fromMeta = findExternalUrl(meta);
-  const fromPage = fromMeta ? null : await fetchOgImageFromPage(docUrl);
+  const fromPage =
+    fromMeta || !(await isSafeUrl(docUrl)) ? null : await fetchOgImageFromPage(docUrl);
   const externalUrl = fromMeta ?? fromPage;
   trace.fromMeta = fromMeta;
   trace.fromPage = fromPage;
   trace.externalUrl = externalUrl;
 
-  if (externalUrl) {
+  if (externalUrl && (await isSafeUrl(externalUrl))) {
     try {
       const result = await downloadOgImage(documentId, externalUrl);
       trace.downloadResult = result ? { contentType: result.contentType, size: result.base64.length } : null;

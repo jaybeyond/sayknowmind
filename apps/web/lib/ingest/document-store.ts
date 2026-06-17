@@ -193,9 +193,19 @@ export async function assignDocumentCategory(
   documentId: string,
   categoryId: string,
 ): Promise<void> {
+  // Ownership guard (IDOR): only link the category if it belongs to the same
+  // owner as the document — the document's own user, or a category shared inside
+  // the document's organization. A category that belongs to someone else is
+  // silently ignored rather than linked. Owner is derived from the rows, so no
+  // caller needs to pass (and be trusted for) userId/orgId.
   await pool.query(
     `INSERT INTO document_categories (document_id, category_id)
-     VALUES ($1, $2)
+     SELECT d.id, c.id
+       FROM documents d, categories c
+      WHERE d.id = $1 AND c.id = $2
+        AND (c.user_id = d.user_id
+             OR (c.organization_id IS NOT NULL
+                 AND c.organization_id = d.organization_id))
      ON CONFLICT DO NOTHING`,
     [documentId, categoryId],
   );

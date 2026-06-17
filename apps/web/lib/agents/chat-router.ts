@@ -14,9 +14,11 @@ const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 
 /**
  * HTTP status codes that trigger AI server fallback.
- * 400 = bad request, 402 = payment required, 429 = rate limited.
+ * 400 = bad request, 402 = payment required, 429 = rate limited,
+ * 500/502/503/504 = transient cloud-provider/server errors — fall back rather
+ * than hard-fail the chat (keeps streaming and non-streaming paths consistent).
  */
-const FALLBACK_CODES = new Set([400, 402, 429]);
+const FALLBACK_CODES = new Set([400, 402, 429, 500, 502, 503, 504]);
 
 /** Extract HTTP status from error message like "Cloud provider 429: ..." */
 function extractHttpStatus(errMsg: string): number | null {

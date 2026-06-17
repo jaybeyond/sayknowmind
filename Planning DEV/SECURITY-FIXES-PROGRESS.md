@@ -16,11 +16,17 @@
 | 7 | AI 서버 cross-tenant IDOR + dead async | 🟡 | **SKIP_AUTH가 production/키설정 시 무시되도록 SignatureGuard 하드닝(완료).** async 버그는 이미 수정됨(컨트롤러 await). 날조 학습(`getRecentSpansForLearning` success:true 가짜 span)·userId 토큰 derive는 NEXT로 |
 
 ## NEXT (1–2개월)
-- ⬜ ingest job durable화 (startup sweeper + DB-backed retry)
-- ⬜ dead/mock 서브시스템 삭제/격리 (orchestrator/langgraph/zvec/YAML parser/audit)
-- ⬜ chat 5xx 폴백 / og SSRF 가드 / Telegram webhook secret 필수 / category ownership
+**자율 진행 중 (안전 하드닝 — 사용자 승인 2026-06-18):**
+- 🟡 N1: chat 5xx 폴백 — `chat-router.ts` FALLBACK_CODES에 500,502,503,504 추가 (tsc 검증 중)
+- 🟡 N2: og SSRF 가드 — `url-fetcher.ts` validateUrl export + `og/[id]/route.ts` isSafeUrl로 두 fetch(page/image) 가드
+- 🟡 N3: Telegram webhook secret fail-closed — `telegram/webhook/route.ts` 미설정 시 403 (⚠️동작변경: secret 필수)
+- 🟡 N4: category ownership — `document-store.ts` assignDocumentCategory가 동일 user/org 카테고리만 링크(시그니처 불변, 호출처 10+개 일괄 방어)
+
+**결정/파괴적 — 도달 시 확인:**
+- 🔒 dead/mock 서브시스템 삭제/격리 (orchestrator/langgraph/zvec/YAML parser/audit) — revive 의도 확인 필요
+- 🔒 SDK 계약 수정 또는 codegen — 결정 필요
+- ⬜ ingest job durable화 (startup sweeper + DB-backed retry; pg-boss/BullMQ?)
 - ⬜ Rust+relay CI 커버리지 (clippy -D, cargo test, relay build/test)
-- ⬜ SDK 계약 수정 또는 codegen
 - ⬜ desktop lite 잠금 (privileged command origin 가드, ocp commit pin, CSP)
 - ⬜ EdgeQuake 격리/성능 (vector batch upsert, pool, RLS SET LOCAL)
 

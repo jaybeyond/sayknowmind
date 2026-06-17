@@ -791,9 +791,13 @@ export async function handleTelegramUpdate(
     return NextResponse.json({ ok: false, error: "No bot token configured" }, { status: 503 });
   }
 
-  // Verify webhook secret
+  // Verify webhook secret — fail CLOSED: with no secret configured we cannot
+  // authenticate that the request actually came from Telegram, so reject. The
+  // setWebhook flow above only registers with Telegram when the secret is set,
+  // so a properly-configured bot always sends a matching secret token.
+  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
   const secret = request.headers.get("x-telegram-bot-api-secret-token");
-  if (process.env.TELEGRAM_WEBHOOK_SECRET && secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+  if (!expectedSecret || secret !== expectedSecret) {
     return NextResponse.json({ ok: false }, { status: 403 });
   }
 
