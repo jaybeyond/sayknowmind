@@ -9,7 +9,7 @@
 |---|------|------|------|
 | 1 | EdgeQuake API 인증 배선 + `from_env()` | 🔒 | Rust. canonical identity 소스 결정 필요(JWT subject) 후 진입 |
 | 2 | 무인증 웹 라우트 3종 제거/가드 | ✅ | `auth/test` 삭제 · `settings/prompts` requireAdmin · `desktop/runtime` desktop-only 404. tsc clean |
-| 3 | 전역 `entities` 충돌 수정 | ⬜ | DB migration(owner column + per-owner unique) + `document-store.ts` ON CONFLICT |
+| 3 | 전역 `entities` 충돌 수정 | ✅ | EdgeQuake가 관계형 entities에 안 씀(웹앱 전용) 확인. migration 063: organization_id 추가+백필, 전역 제약→per-org 부분 unique. `document-store.ts` ON CONFLICT (organization_id,name). web tsc clean. ⚠️과거 병합행은 미치유(한계) |
 | 4 | vector filter fail-CLOSED | ✅ | `edgequake-query/.../prompt.rs` `matches_tenant_filter(_props)` 둘 다 fail-closed. cargo check 통과(0 errors). scope 미요청 시 동작 불변 |
 | 5 | 배포 파이프라인 unblock | 🟡 | **production-deploy.sh에 051–061 추가(완료)** · deploy.yml 통일은 schema_migrations 백필 결정 필요→deferred(경고 주석만) |
 | 6 | MCP/web API key 해시화 | ✅ | hash(검증)+enc(표시) 방식 B. 기존 키 백필로 유지·UI 변경 없음. mcp open-admin fallback도 MCP_ALLOW_ANONYMOUS 게이트. ⚠️배포 전 런타임 테스트 권장 |
@@ -38,6 +38,8 @@
 - **2026-06-18** #6 완료: `db/migrations/062_hash_mcp_api_keys.sql`, `lib/ingest/session-helper.ts`, `app/api/user/mcp-key/route.ts`, `packages/mcp-server/src/index.ts` (web tsc/mcp tsc clean)
 - **2026-06-18** #7 부분: `apps/ai-server/src/auth/signature.guard.ts` (SKIP_AUTH 하드닝, ai-server tsc clean)
 - **2026-06-18** #4 완료: `packages/edgequake/crates/edgequake-query/src/sota_engine/prompt.rs` (matches_tenant_filter(_props) fail-closed, cargo check 통과)
+- **2026-06-18** ✅ 커밋 `53ea138 fix(security): NOW-bucket containment` (#2,#4,#5,#6,#7 — 17파일). 기존 무관 변경은 미커밋 보존.
+- **2026-06-18** 결정: #3 최소수정 자율 진행 / #1 EdgeQuake 인증 보류(identity 설계 논의 후)
 
 ## 다음 결정 필요 (NOW 잔여)
 - **#4 vector fail-CLOSED** (Rust, 무결정·자체완결이나 cargo 빌드 검증 필요)

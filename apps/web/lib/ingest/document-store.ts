@@ -116,10 +116,13 @@ export async function insertEntities(entities: InsertEntityParams[]): Promise<st
   const ids: string[] = [];
 
   for (const entity of entities) {
+    // Dedup entities per owning organisation (migration 063), NOT globally by name.
+    // organization_id is derived from the document so callers need no extra arg; a
+    // document with no org inserts an un-deduped row (safe — never a cross-tenant merge).
     const result = await pool.query(
-      `INSERT INTO entities (document_id, name, entity_type, type, confidence, metadata)
-       VALUES ($1, $2, $3, $4::varchar(50), $5, $6)
-       ON CONFLICT (tenant_id, workspace_id, name) DO UPDATE
+      `INSERT INTO entities (document_id, organization_id, name, entity_type, type, confidence, metadata)
+       VALUES ($1, (SELECT organization_id FROM documents WHERE id = $1), $2, $3, $4::varchar(50), $5, $6)
+       ON CONFLICT (organization_id, name) WHERE organization_id IS NOT NULL DO UPDATE
          SET document_id = COALESCE(entities.document_id, EXCLUDED.document_id),
              confidence = GREATEST(entities.confidence, EXCLUDED.confidence),
              metadata = entities.metadata || EXCLUDED.metadata

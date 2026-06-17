@@ -218,6 +218,12 @@ apply_sql db/migrations/061_add_document_versions.sql || exit 3
 # NOT NULL on api_key. Requires pgcrypto (created by the migration). Existing
 # keys keep working — they validate by the backfilled hash.
 apply_sql db/migrations/062_hash_mcp_api_keys.sql || exit 3
+# 063 fixes the global entities-name collision: the web-app-owned entities table
+# deduped by name across ALL users (tenant_id/workspace_id always NULL), merging
+# different users' entities into one row. Scopes dedup per organization_id instead
+# (additive column + per-org partial unique index; drops the global constraint that
+# only the web app used).
+apply_sql db/migrations/063_entities_per_org_unique.sql || exit 3
 
 # better-auth rateLimit (no migration file ships this)
 echo "creating rateLimit table (if missing)"
