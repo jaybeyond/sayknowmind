@@ -33,7 +33,7 @@ use tracing::info;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::middleware::{request_id, request_logging};
+use crate::middleware::{api_key_auth, request_id, request_logging, AuthConfig, AuthState};
 use crate::openapi::ApiDoc;
 use crate::routes::create_router;
 use crate::state::AppState;
@@ -83,7 +83,30 @@ impl Server {
 
     /// Build the application router with all middleware.
     pub fn build_router(&self) -> axum::Router {
-        let mut app = create_router(self.state.clone());
+        // Optional API-key authentication — defense-in-depth on top of the fact
+        // that the EdgeQuake port is normally internal-only (Docker network).
+        // OFF unless EDGEQUAKE_API_KEY is set, so existing deployments are
+        // unaffected; when set, every non-public route requires the key via
+        // `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+        //
+        // NOTE before enabling: every EdgeQuake client must send the SAME key.
+        // The web app (apps/web lib/edgequake/client.ts) and MCP server already
+        // forward EDGEQUAKE_API_KEY; the dashboard currently sends a per-user JWT
+        // instead and must be updated first, or it will get 401s.
+        let auth_config = match std::env::var("EDGEQUAKE_API_KEY") {
+            Ok(key) if !key.trim().is_empty() => {
+                info!("[auth] API-key authentication ENABLED (EDGEQUAKE_API_KEY set)");
+                AuthConfig::with_api_keys(vec![key.trim().to_string()])
+            }
+            _ => {
+                info!("[auth] API-key authentication disabled (set EDGEQUAKE_API_KEY to enable)");
+                AuthConfig::default()
+            }
+        };
+        let auth_state = AuthState::new(auth_config);
+
+        let mut app = create_router(self.state.clone())
+            .layer(middleware::from_fn_with_state(auth_state, api_key_auth));
 
         // Add middleware
         app = app

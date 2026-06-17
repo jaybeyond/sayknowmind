@@ -33,7 +33,8 @@
 ## EdgeQuake 격리 (P-series — #1 논의에서 파생, 진짜 리스크)
 > EdgeQuake는 단일 공유 인덱스(포트 internal-only, MCP per-user 키는 직접 EdgeQuake 차단). 실제 누수 리스크는 "EdgeQuake 결과를 PG 재필터 없이 쓰는 웹 경로"였음.
 - 🟡 **P1: 재필터 일원화** — `lib/edgequake/visibility.ts` 헬퍼(`filterVisibleDocIds`/`filterVisibleSources` = readableClause). 적용: ultrarag `executor.ts` search step(`/api/pipeline` 라이브 누수, sources 필터+answer 제거), `job-queue.ts` related-docs(소유자 visible 문서만 링크). orchestrator는 dead-path(langgraph 미도달) → SECURITY 주석만. tsc 검증 중.
-- P2(대기): EdgeQuake API key 강제(노출 시 2번째 겹). P3: MCP admin 키 위생. P4: 옵션 B(per-org UUID 워크스페이스, 외부화 시).
+- ✅ **P2: EdgeQuake API key 강제 (opt-in)** — `server.rs build_router`에 `api_key_auth` 배선. `EDGEQUAKE_API_KEY` 미설정=비활성(현행 무해), 설정=비공개 라우트에 키 요구. web/MCP는 이미 키 전송 ✅. **⚠️ dashboard는 유저 JWT를 보내므로 enable 시 401 — dashboard 먼저 갱신 필요(caveat).** cargo check 통과.
+- P3: MCP admin 키 위생. P4: 옵션 B(per-org UUID 워크스페이스, 외부화 시).
 
 ## LATER (분기+)
 - ⬜ two-data-models를 하나로 collapse (XL, 모든 격리 버그 root cause)
