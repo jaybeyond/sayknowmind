@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import { validatePipeline } from "./validator";
 import { queryEdgeQuake, indexDocument } from "@/lib/edgequake/client";
+import { filterVisibleSources } from "@/lib/edgequake/visibility";
 
 const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 const MCP_SERVER_URL = process.env.MCP_SERVER_URL ?? "http://localhost:8082";
@@ -135,13 +136,19 @@ async function executeStep(
         metadata: userId ? { user_id: userId } : undefined,
       });
 
-    case "search":
-      return queryEdgeQuake({
+    case "search": {
+      const eq = await queryEdgeQuake({
         query: String(step.config.query ?? ""),
         mode: (step.config.mode as "hybrid") ?? "hybrid",
         include_references: true,
         userId,
       });
+      // EdgeQuake is a shared index: keep only sources this caller may read, and
+      // drop `answer` (synthesised over the unfiltered shared context) before this
+      // step result is returned to the user via /api/pipeline.
+      const sources = await filterVisibleSources(eq.sources, userId, organizationId);
+      return { ...eq, sources, answer: "" };
+    }
 
     case "transform":
       // Pass-through with optional field mapping

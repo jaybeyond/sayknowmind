@@ -119,6 +119,12 @@ async function executeStep(
             setTimeout(() => reject(new Error("Step timeout")), STEP_TIMEOUT_MS),
           ),
         ]);
+        // SECURITY: EdgeQuake is a shared index that ignores per-user scope, and
+        // eqResult.answer/snippets can include OTHER users' content. This path is
+        // currently unreachable (langgraph has no route caller). If it is ever wired
+        // to a user, re-filter through filterVisibleSources(eq.sources, userId, orgId)
+        // (lib/edgequake/visibility.ts) and drop eqResult.answer first — orgId must
+        // be threaded into runAgent/executeStep. Until then, this is a no-op risk.
         result = eqResult.answer || eqResult.sources.map((s) => s.snippet).filter(Boolean).join("\n");
         break;
       }

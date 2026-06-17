@@ -4,6 +4,7 @@ import { getDocument, updateDocument, insertEntities, assignDocumentCategory } f
 import { generateSummary, extractEntities, suggestCategories, generateStructuredMetadata, describeImage, describeVideoFrame, type StructuredMetadata } from "./ai-processor";
 import { findSimilarCategoryByName, suggestFallbackCategory } from "./category-fallback";
 import { indexDocument, queryEdgeQuake } from "@/lib/edgequake/client";
+import { filterVisibleDocIds } from "@/lib/edgequake/visibility";
 import { createNotification } from "@/lib/notifications";
 import { detectLanguage } from "./language-detect";
 import { emitDocumentEvent } from "@/lib/events";
@@ -428,8 +429,18 @@ async function processJob(job: JobRow): Promise<void> {
             userId,
           });
 
-          const relatedDocs = similar.sources
-            .filter((s) => s.document_id && s.document_id !== documentId && s.score > 0.7)
+          const candidates = similar.sources.filter(
+            (s) => s.document_id && s.document_id !== documentId && s.score > 0.7,
+          );
+          // EdgeQuake is a shared index — only relate to documents the owner can
+          // actually read, so we never link (or notify about) another user's doc.
+          const visibleIds = await filterVisibleDocIds(
+            candidates.map((s) => s.document_id),
+            userId,
+            (doc as { organization_id?: string | null }).organization_id ?? null,
+          );
+          const relatedDocs = candidates
+            .filter((s) => visibleIds.has(s.document_id!))
             .slice(0, 5);
 
           for (const rel of relatedDocs) {
