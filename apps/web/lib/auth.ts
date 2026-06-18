@@ -134,15 +134,22 @@ export const auth = betterAuth({
   // `nextCookies()` must stay last in the plugin list.
   plugins: [organization(), nextCookies()],
 
-  trustedOrigins: process.env.TRUSTED_ORIGINS
-    ? process.env.TRUSTED_ORIGINS.split(",").map((o) => o.trim())
-    : [
-        "http://localhost:5400",
-        "http://localhost:5401",
-        "http://127.0.0.1:3457",
-        "http://localhost:3457",
-        "tauri://localhost",
-      ],
+  // better-auth rejects auth POSTs whose Origin isn't trusted (CSRF guard). The
+  // app answers on more than one host (branded custom domain + Railway-default
+  // *.up.railway.app + the EC2 domain), so all of them must be listed or login
+  // breaks on whichever host isn't the baked baseURL. Always include the known
+  // production origins; TRUSTED_ORIGINS (if set) is merged on top, not replaced.
+  trustedOrigins: [
+    "http://localhost:5400",
+    "http://localhost:5401",
+    "http://127.0.0.1:3457",
+    "http://localhost:3457",
+    "tauri://localhost",
+    "https://mind.sayknow.ai",
+    "https://sayknowmind-production.up.railway.app",
+    "https://sayknowmind.ypai.click",
+    ...(process.env.TRUSTED_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean) ?? []),
+  ],
 });
 
 export type Auth = typeof auth;

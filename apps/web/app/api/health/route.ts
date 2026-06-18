@@ -26,7 +26,7 @@ export async function GET() {
   return NextResponse.json(
     {
       status: "healthy",
-      version: "0.1.1",
+      version: "0.1.2",
       timestamp: new Date().toISOString(),
       checks,
     },
