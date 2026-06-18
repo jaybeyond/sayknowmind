@@ -96,6 +96,9 @@ jobs:
           - name: web
             context: ./apps/web
             dockerfile: ./apps/web/Dockerfile
+            # Enterprise edition for the registry image; the Dockerfile default
+            # is "local" (open/Railway), so it must be set saas explicitly here.
+            buildArgs: NEXT_PUBLIC_AUTH_MODE=saas
           - name: ai-server
             context: ./apps/ai-server
             dockerfile: ./apps/ai-server/Dockerfile
@@ -129,6 +132,7 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
+          build-args: ${{ matrix.buildArgs }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

@@ -53,6 +53,7 @@ build:web:
         --build-arg NEXT_PUBLIC_APP_URL="$APP_URL"
         --build-arg NEXT_PUBLIC_DEPLOY_MODE=cloud
         --build-arg BETTER_AUTH_URL="$APP_URL"
+        --build-arg NEXT_PUBLIC_AUTH_MODE=saas
         -f apps/web/Dockerfile
         -t "$IMAGE_WEB:$IMAGE_TAG"
         -t "$IMAGE_WEB:latest"

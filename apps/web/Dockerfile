@@ -28,8 +28,12 @@ ARG BETTER_AUTH_URL=https://sayknowmind.ypai.click
 # runtime env) or the client bundle ships with collab disabled.
 ARG NEXT_PUBLIC_COLLAB_WS_URL=wss://sayknowmind.ypai.click/collab
 # Auth edition: "saas" = enterprise (login via SayKnowWork), "local" = open
-# (built-in email/password). Defaults to saas; the open build passes "local".
-ARG NEXT_PUBLIC_AUTH_MODE=saas
+# (built-in email/password). Defaults to "local" (the open/Railway edition) so a
+# build with no override never silently delegates auth to SayKnowWork. The
+# enterprise build paths (docker-compose, GitLab CI, GitHub CI) pass "saas"
+# explicitly. Railway builds this Dockerfile directly with no override, so this
+# default is what keeps mind.sayknow.ai on local auth.
+ARG NEXT_PUBLIC_AUTH_MODE=local
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_DEPLOY_MODE=$NEXT_PUBLIC_DEPLOY_MODE
 ENV BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
