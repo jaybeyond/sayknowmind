@@ -137,14 +137,7 @@ export default function LoginPage() {
 
       {isSaasAuth ? (
         <p className="text-center text-sm text-muted-foreground">
-          <a
-            href="https://sayknowwork.ai-ops.click"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            {t("auth.forgotPasswordSayKnowWork")}
-          </a>
+          {t("auth.forgotPasswordSayKnowWork")}
         </p>
       ) : (
         <p className="text-center text-sm text-muted-foreground">

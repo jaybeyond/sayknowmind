@@ -131,7 +131,7 @@
     "showPassword": "显示密码",
     "hidePassword": "隐藏密码",
     "forgotPassword": "忘记密码？",
-    "forgotPasswordSayKnowWork": "忘记密码？",
+    "forgotPasswordSayKnowWork": "忘记密码？请联系管理员。",
     "noAccount": "没有账户？",
     "hasAccount": "已有账户？",
     "errors": {

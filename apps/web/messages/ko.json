@@ -131,7 +131,7 @@
     "showPassword": "비밀번호 보기",
     "hidePassword": "비밀번호 숨기기",
     "forgotPassword": "비밀번호를 잊으셨나요?",
-    "forgotPasswordSayKnowWork": "비밀번호를 잊으셨나요?",
+    "forgotPasswordSayKnowWork": "비밀번호를 잊으셨나요? 관리자에게 문의하세요.",
     "noAccount": "계정이 없으신가요?",
     "hasAccount": "이미 계정이 있으신가요?",
     "errors": {

@@ -131,7 +131,7 @@
     "showPassword": "パスワードを表示",
     "hidePassword": "パスワードを非表示",
     "forgotPassword": "パスワードをお忘れですか？",
-    "forgotPasswordSayKnowWork": "パスワードをお忘れですか？",
+    "forgotPasswordSayKnowWork": "パスワードをお忘れですか？管理者にお問い合わせください。",
     "noAccount": "アカウントをお持ちでないですか？",
     "hasAccount": "すでにアカウントをお持ちですか？",
     "errors": {

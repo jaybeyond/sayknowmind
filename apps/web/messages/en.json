@@ -131,7 +131,7 @@
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "forgotPassword": "Forgot password?",
-    "forgotPasswordSayKnowWork": "Forgot your password?",
+    "forgotPasswordSayKnowWork": "Forgot your password? Contact your administrator.",
     "noAccount": "Don't have an account?",
     "hasAccount": "Already have an account?",
     "errors": {
