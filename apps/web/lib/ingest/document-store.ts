@@ -110,8 +110,37 @@ export async function getDocument(documentId: string): Promise<DocumentRow | nul
   return result.rows[0] ?? null;
 }
 
+// Self-heal the entities schema that migration 063 introduces. Deploys that
+// don't run numbered migrations (Railway boots `node server.js` with no
+// pre-deploy step) reach insertEntities before 063 has touched the DB, and the
+// INSERT below writes entities.organization_id and assumes the legacy
+// EdgeQuake per-tenant uniqueness is gone. We apply the same idempotent DDL
+// once per process — the established pattern the MCP key route uses. A real 063
+// run (the EC2 path) makes every statement here a no-op. The data backfill
+// stays in 063 only; the new code treats org-less rows as fresh inserts, so it
+// is not needed to avoid errors here.
+let entitiesSchemaReady: Promise<void> | null = null;
+function ensureEntitiesSchema(): Promise<void> {
+  if (!entitiesSchemaReady) {
+    entitiesSchemaReady = (async () => {
+      await pool.query(`ALTER TABLE entities ADD COLUMN IF NOT EXISTS organization_id TEXT`);
+      // NULLS NOT DISTINCT makes this constraint collide web rows that merely
+      // share a name across users; per-org de-dup is done in app code below.
+      await pool.query(`ALTER TABLE entities DROP CONSTRAINT IF EXISTS entities_unique_name`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_entities_org_name ON entities (organization_id, name)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_entities_organization_id ON entities (organization_id)`);
+    })().catch((err) => {
+      // Don't cache a failed attempt — let the next ingest retry the DDL.
+      entitiesSchemaReady = null;
+      throw err;
+    });
+  }
+  return entitiesSchemaReady;
+}
+
 export async function insertEntities(entities: InsertEntityParams[]): Promise<string[]> {
   if (entities.length === 0) return [];
+  await ensureEntitiesSchema();
 
   const ids: string[] = [];
 
