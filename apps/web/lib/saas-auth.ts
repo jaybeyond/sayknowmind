@@ -32,6 +32,8 @@ export type SaasLoginResult =
       user: SaasUser;
       tenant?: SaasTenant;
       tenants?: SaasTenant[];
+      /** Short-lived (≈15 min) SaaS JWT issued by /v1/auth/login. */
+      accessToken?: string;
     }
   | {
       ok: false;
@@ -86,6 +88,7 @@ export async function loginToSaas(
 
   if (res.ok) {
     const data = resBody as {
+      accessToken?: string;
       user?: SaasUser;
       tenant?: SaasTenant;
       tenants?: SaasTenant[];
@@ -99,6 +102,7 @@ export async function loginToSaas(
       user: data.user,
       tenant: data.tenant,
       tenants: data.tenants,
+      accessToken: data.accessToken,
     };
   }
 
@@ -156,23 +160,36 @@ async function saasMutation(
 }
 
 /**
- * Change the user's SayKnowWork password. The current password authenticates the
- * request server-to-server (no stored token), mirroring loginToSaas.
+ * Change the user's SayKnowWork password.
  *
- * SaaS contract: POST {SAAS_BASE}/v1/auth/change-password
- *   body: { email, currentPassword, newPassword }
- *   → 200 ok | 401 wrong current password | 4xx other
+ * SaaS contract: `POST {SAAS_BASE}/v1/auth/change-password`
+ *   headers: `Authorization: Bearer <accessToken>` (identifies the user via claims.sub)
+ *   body:    `{ currentPassword, newPassword }`
+ *   → 200 ok | 401 missing/invalid token or wrong current password | 4xx other
+ *
+ * SayKnowMind holds no SaaS token (stateless), so we mint a fresh one by
+ * re-authenticating with the current password the user just typed, then use it as
+ * the Bearer. A wrong current password fails the re-login (401) — surfaced as such.
  */
 export async function changeSaasPassword(
   email: string,
   currentPassword: string,
   newPassword: string,
 ): Promise<SaasMutationResult> {
-  return saasMutation("/v1/auth/change-password", "POST", {
-    email,
-    currentPassword,
-    newPassword,
-  });
+  const login = await loginToSaas(email, currentPassword);
+  if (!login.ok) {
+    // 401 here = wrong current password → the route maps it to "incorrect password".
+    return { ok: false, status: login.status, code: login.code, message: login.message };
+  }
+  if (!login.accessToken) {
+    return { ok: false, status: 502, code: "SAAS_BAD_RESPONSE", message: "Login returned no access token" };
+  }
+  return saasMutation(
+    "/v1/auth/change-password",
+    "POST",
+    { currentPassword, newPassword },
+    { Authorization: `Bearer ${login.accessToken}` },
+  );
 }
 
 /**

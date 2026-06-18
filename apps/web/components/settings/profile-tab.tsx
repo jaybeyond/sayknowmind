@@ -155,7 +155,7 @@ export function ProfileTab() {
       <div className="space-y-4">
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="settings-name">{t("profile.displayName")}</label>
-          <Input id="settings-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("profile.namePlaceholder")} />
+          <Input id="settings-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("profile.namePlaceholder")} disabled={isSaasAuth} />
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="settings-email">{t("settings.email")}</label>
@@ -166,10 +166,14 @@ export function ProfileTab() {
         </div>
       </div>
 
-      <Button onClick={handleSave} disabled={saving || (name === (user?.name ?? "") && email === (user?.email ?? ""))}>
-        {saving && <Loader2 className="size-4 animate-spin" />}
-        {t("settings.saveChanges")}
-      </Button>
+      {/* SaaS edition: name/email are read-only (no SaaS profile-update endpoint yet),
+          so the only editable account field is the password below. */}
+      {!isSaasAuth && (
+        <Button onClick={handleSave} disabled={saving || (name === (user?.name ?? "") && email === (user?.email ?? ""))}>
+          {saving && <Loader2 className="size-4 animate-spin" />}
+          {t("settings.saveChanges")}
+        </Button>
+      )}
 
       <hr className="border-border" />
 
