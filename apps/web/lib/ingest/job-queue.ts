@@ -49,7 +49,50 @@ async function isDocumentAlive(documentId: string): Promise<boolean> {
   return r.rows.length > 0;
 }
 
+let recoveryStarted = false;
+
+/**
+ * Re-drive ingestion jobs orphaned by a process restart. Job processing is
+ * in-process fire-and-forget (createJob → processJobById), so a restart while a
+ * job is pending/processing would otherwise leave that document permanently
+ * unindexed. Runs at most once per process, lazily on first job-queue use.
+ *
+ * Single-instance assumption (matches the deployment): a multi-replica setup would
+ * need per-job claiming (SELECT ... FOR UPDATE SKIP LOCKED) so two instances don't
+ * re-drive the same job.
+ */
+export function recoverStaleJobsOnce(): void {
+  if (recoveryStarted) return;
+  recoveryStarted = true;
+  void recoverStaleJobs();
+}
+
+async function recoverStaleJobs(): Promise<void> {
+  try {
+    // A job actively progressing in THIS process keeps a fresh updated_at, so the
+    // stale window only catches jobs whose owning process is gone. processJob
+    // re-checks document liveness on entry, so re-driving is safe.
+    const result = await pool.query(
+      `SELECT id FROM ingestion_jobs
+        WHERE status IN ('pending', 'processing')
+          AND updated_at < NOW() - INTERVAL '2 minutes'
+        ORDER BY created_at ASC
+        LIMIT 100`,
+    );
+    if (result.rows.length === 0) return;
+    console.log(`[job-queue] re-driving ${result.rows.length} stale ingestion job(s) after restart`);
+    for (const row of result.rows as Array<{ id: string }>) {
+      processJobById(row.id).catch((err) =>
+        console.error(`[job-queue] stale-job recovery failed for ${row.id}:`, err),
+      );
+    }
+  } catch (err) {
+    console.error("[job-queue] stale-job recovery query failed:", err);
+  }
+}
+
 export async function createJob(userId: string, documentId: string, organizationId: string): Promise<string> {
+  recoverStaleJobsOnce();
   const result = await pool.query(
     `INSERT INTO ingestion_jobs (user_id, document_id, organization_id)
      VALUES ($1, $2, $3)
@@ -73,6 +116,7 @@ export async function getJobStatus(
   jobId: string,
   userId: string,
 ): Promise<IngestStatusResponse | null> {
+  recoverStaleJobsOnce();
   const result = await pool.query(
     `SELECT id, status, progress, error_message FROM ingestion_jobs
      WHERE id = $1 AND user_id = $2`,
