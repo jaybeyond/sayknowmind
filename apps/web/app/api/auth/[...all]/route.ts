@@ -17,7 +17,7 @@ const BLOCKED_PATHS = ["/sign-in/email", "/sign-up/email"];
 export async function POST(request: Request) {
   const path = new URL(request.url).pathname;
   if (isSaasAuth && BLOCKED_PATHS.some((p) => path.endsWith(p))) {
-    return new Response(JSON.stringify({ error: "Use SayKnowWork sign-in." }), {
+    return new Response(JSON.stringify({ error: "Use the sign-in page." }), {
       status: 404,
       headers: { "Content-Type": "application/json" },
     });

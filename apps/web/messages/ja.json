@@ -419,8 +419,6 @@
     "namePlaceholder": "あなたの名前",
     "emailNote": "メールアドレスは変更できません",
     "noName": "名前が設定されていません",
-    "managedBySayKnowWork": "アカウント（名前・メール・パスワード）は SayKnowWork で管理されます。プロフィールの変更やパスワード再設定は SayKnowWork でログインして行ってください。",
-    "manageOnSayKnowWork": "SayKnowWork でアカウント管理",
     "updated": "プロフィールを更新しました",
     "saveFailed": "保存に失敗しました",
     "changePassword": "パスワード変更",

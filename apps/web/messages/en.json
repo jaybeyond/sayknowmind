@@ -419,8 +419,6 @@
     "namePlaceholder": "Your name",
     "emailNote": "Email cannot be changed",
     "noName": "No name set",
-    "managedBySayKnowWork": "Your account — name, email and password — is managed in SayKnowWork. Sign in there to update your profile or reset your password.",
-    "manageOnSayKnowWork": "Manage account in SayKnowWork",
     "updated": "Profile updated",
     "saveFailed": "Failed to save",
     "changePassword": "Change password",
