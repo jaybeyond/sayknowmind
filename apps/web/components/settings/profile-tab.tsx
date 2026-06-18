@@ -30,6 +30,14 @@ export function ProfileTab() {
 
   const user = session?.user;
 
+  // The SaaS change-password endpoint (POST /v1/auth/change-password) is not
+  // live in every SayKnowWork deployment yet. In saas mode we only surface the
+  // password form once the operator confirms the endpoint exists by setting
+  // NEXT_PUBLIC_SAAS_PASSWORD_CHANGE=true — otherwise it would render a form
+  // that 404s. Open edition (local better-auth) always shows it.
+  const showPasswordChange =
+    !isSaasAuth || process.env.NEXT_PUBLIC_SAAS_PASSWORD_CHANGE === "true";
+
   useEffect(() => {
     if (user?.name) setName(user.name);
     if (user?.email) setEmail(user.email);
@@ -175,6 +183,8 @@ export function ProfileTab() {
         </Button>
       )}
 
+      {showPasswordChange && (
+      <>
       <hr className="border-border" />
 
       <div className="space-y-4">
@@ -209,6 +219,8 @@ export function ProfileTab() {
           {t("profile.changePassword")}
         </Button>
       </div>
+      </>
+      )}
     </div>
   );
 }
