@@ -131,7 +131,7 @@
     "showPassword": "パスワードを表示",
     "hidePassword": "パスワードを非表示",
     "forgotPassword": "パスワードをお忘れですか？",
-    "forgotPasswordSayKnowWork": "パスワードをお忘れですか？SayKnowWork で再設定してください",
+    "forgotPasswordSayKnowWork": "パスワードをお忘れですか？",
     "noAccount": "アカウントをお持ちでないですか？",
     "hasAccount": "すでにアカウントをお持ちですか？",
     "errors": {
@@ -148,7 +148,7 @@
       "UNKNOWN": "エラーが発生しました。もう一度お試しください。"
     },
     "rememberMe": "ログインを保持",
-    "useSayKnowWorkAccount": "SayKnowWork アカウントでログインしてください。"
+    "useSayKnowWorkAccount": "アカウントでログインしてください。"
   },
   "chat": {
     "placeholder": "ナレッジについて何でも聞いてください...",

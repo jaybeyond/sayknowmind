@@ -131,7 +131,7 @@
     "showPassword": "비밀번호 보기",
     "hidePassword": "비밀번호 숨기기",
     "forgotPassword": "비밀번호를 잊으셨나요?",
-    "forgotPasswordSayKnowWork": "비밀번호를 잊으셨나요? SayKnowWork에서 재설정하세요",
+    "forgotPasswordSayKnowWork": "비밀번호를 잊으셨나요?",
     "noAccount": "계정이 없으신가요?",
     "hasAccount": "이미 계정이 있으신가요?",
     "errors": {
@@ -148,7 +148,7 @@
       "UNKNOWN": "문제가 발생했습니다. 다시 시도해 주세요."
     },
     "rememberMe": "로그인 유지",
-    "useSayKnowWorkAccount": "SayKnowWork 계정으로 로그인하세요."
+    "useSayKnowWorkAccount": "계정으로 로그인하세요."
   },
   "chat": {
     "placeholder": "지식에 대해 무엇이든 물어보세요...",

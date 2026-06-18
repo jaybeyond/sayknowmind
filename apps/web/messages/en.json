@@ -131,7 +131,7 @@
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "forgotPassword": "Forgot password?",
-    "forgotPasswordSayKnowWork": "Forgot your password? Reset it in SayKnowWork",
+    "forgotPasswordSayKnowWork": "Forgot your password?",
     "noAccount": "Don't have an account?",
     "hasAccount": "Already have an account?",
     "errors": {
@@ -148,7 +148,7 @@
       "UNKNOWN": "Something went wrong. Please try again."
     },
     "rememberMe": "Keep me signed in",
-    "useSayKnowWorkAccount": "Sign in with your SayKnowWork account."
+    "useSayKnowWorkAccount": "Sign in with your account."
   },
   "chat": {
     "placeholder": "Ask anything about your knowledge...",
