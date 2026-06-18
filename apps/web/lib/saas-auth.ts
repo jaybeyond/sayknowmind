@@ -117,3 +117,83 @@ export async function loginToSaas(
     message: errBody.message || errBody.error,
   };
 }
+
+export interface SaasMutationResult {
+  ok: boolean;
+  status: number;
+  code?: string;
+  message?: string;
+}
+
+async function saasMutation(
+  path: string,
+  method: string,
+  body: Record<string, unknown>,
+  extraHeaders?: Record<string, string>,
+): Promise<SaasMutationResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${SAAS_BASE}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json", ...extraHeaders },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch (err) {
+    console.error(`[saas-auth] ${method} ${path} failed`, err);
+    return { ok: false, status: 502, code: "SAAS_UNREACHABLE", message: "Account service is unreachable" };
+  }
+  let resBody: unknown = null;
+  try {
+    resBody = await res.json();
+  } catch {
+    // non-JSON body
+  }
+  if (res.ok) return { ok: true, status: res.status };
+  const errBody = (resBody ?? {}) as { message?: string; error?: string; code?: string };
+  const code = res.status === 401 ? "INVALID_PASSWORD" : errBody.code || "SAAS_ERROR";
+  return { ok: false, status: res.status, code, message: errBody.message || errBody.error };
+}
+
+/**
+ * Change the user's SayKnowWork password. The current password authenticates the
+ * request server-to-server (no stored token), mirroring loginToSaas.
+ *
+ * SaaS contract: POST {SAAS_BASE}/v1/auth/change-password
+ *   body: { email, currentPassword, newPassword }
+ *   → 200 ok | 401 wrong current password | 4xx other
+ */
+export async function changeSaasPassword(
+  email: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<SaasMutationResult> {
+  return saasMutation("/v1/auth/change-password", "POST", {
+    email,
+    currentPassword,
+    newPassword,
+  });
+}
+
+/**
+ * Update the user's SayKnowWork profile (display name). Authenticated
+ * server-to-server with SAYKNOWWORK_SERVICE_TOKEN — the app is a trusted caller
+ * and there is no per-user SaaS token.
+ *
+ * SaaS contract: PATCH {SAAS_BASE}/v1/auth/profile
+ *   headers: Authorization: Bearer {SAYKNOWWORK_SERVICE_TOKEN}
+ *   body: { email, displayName }
+ *   → 200 ok | 4xx other
+ */
+export async function updateSaasProfile(
+  email: string,
+  displayName: string,
+): Promise<SaasMutationResult> {
+  const serviceToken = process.env.SAYKNOWWORK_SERVICE_TOKEN;
+  return saasMutation(
+    "/v1/auth/profile",
+    "PATCH",
+    { email, displayName },
+    serviceToken ? { Authorization: `Bearer ${serviceToken}` } : undefined,
+  );
+}

@@ -415,6 +415,7 @@
   },
   "profile": {
     "displayName": "显示名称",
+    "emailReadonly": "邮箱是您的登录 ID，无法在此更改。",
     "namePlaceholder": "你的名字",
     "emailNote": "邮箱不可更改",
     "noName": "未设置名称",

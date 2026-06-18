@@ -415,6 +415,7 @@
   },
   "profile": {
     "displayName": "Display name",
+    "emailReadonly": "Email is your login ID and can't be changed here.",
     "namePlaceholder": "Your name",
     "emailNote": "Email cannot be changed",
     "noName": "No name set",

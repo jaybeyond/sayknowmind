@@ -7,12 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Loader2, Eye, EyeOff, ExternalLink } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
-
-// Enterprise edition account portal — name/email/password are managed in
-// SayKnowWork, so editing them locally would only touch the shadow record.
-const SAYKNOWWORK_URL = "https://sayknowwork.ai-ops.click";
 
 export function ProfileTab() {
   const { data: session, isPending, refetch } = useSession();
@@ -50,13 +46,28 @@ export function ProfileTab() {
     }
     setChangingPassword(true);
     try {
-      const { error } = await authClient.changePassword({
-        currentPassword,
-        newPassword,
-        revokeOtherSessions: true,
-      });
-      if (error) {
-        toast.error(error.message ?? t("profile.passwordChangeFailed"));
+      let errMsg: string | null = null;
+      if (isSaasAuth) {
+        // Source of truth is SayKnowWork; proxy the change through our server.
+        const res = await fetch("/api/account/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          errMsg = data.error ?? t("profile.passwordChangeFailed");
+        }
+      } else {
+        const { error } = await authClient.changePassword({
+          currentPassword,
+          newPassword,
+          revokeOtherSessions: true,
+        });
+        if (error) errMsg = error.message ?? t("profile.passwordChangeFailed");
+      }
+      if (errMsg) {
+        toast.error(errMsg);
       } else {
         toast.success(t("profile.passwordChanged"));
         setCurrentPassword("");
@@ -73,13 +84,27 @@ export function ProfileTab() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updates: Record<string, string> = {};
-      if (name !== (user?.name ?? "")) updates.name = name;
-      if (email !== (user?.email ?? "")) updates.email = email;
-
-      const { error } = await authClient.updateUser(updates);
-      if (error) {
-        toast.error(error.message ?? t("profile.saveFailed"));
+      let errMsg: string | null = null;
+      if (isSaasAuth) {
+        // SayKnowWork owns the account; email is the login id and stays read-only.
+        const res = await fetch("/api/account/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayName: name }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          errMsg = data.error ?? t("profile.saveFailed");
+        }
+      } else {
+        const updates: Record<string, string> = {};
+        if (name !== (user?.name ?? "")) updates.name = name;
+        if (email !== (user?.email ?? "")) updates.email = email;
+        const { error } = await authClient.updateUser(updates);
+        if (error) errMsg = error.message ?? t("profile.saveFailed");
+      }
+      if (errMsg) {
+        toast.error(errMsg);
       } else {
         toast.success(t("profile.updated"));
         refetch?.();
@@ -120,25 +145,9 @@ export function ProfileTab() {
     </div>
   );
 
-  // Enterprise edition — read-only, manage account in SayKnowWork.
-  if (isSaasAuth) {
-    return (
-      <div className="space-y-6">
-        {header}
-        <div className="rounded-xl border border-border p-4 space-y-3">
-          <p className="text-sm text-muted-foreground">{t("profile.managedBySayKnowWork")}</p>
-          <Button asChild variant="outline">
-            <a href={SAYKNOWWORK_URL} target="_blank" rel="noopener noreferrer">
-              {t("profile.manageOnSayKnowWork")}
-              <ExternalLink className="size-4" />
-            </a>
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Open edition — editable profile + password change (built-in better-auth).
+  // Editable profile + password change. In the SaaS edition these proxy to
+  // SayKnowWork (the source of truth) via /api/account/*; in the open edition
+  // they use built-in better-auth directly.
   return (
     <div className="space-y-6">
       {header}
@@ -150,7 +159,10 @@ export function ProfileTab() {
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="settings-email">{t("settings.email")}</label>
-          <Input id="settings-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" />
+          <Input id="settings-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" disabled={isSaasAuth} />
+          {isSaasAuth && (
+            <p className="text-xs text-muted-foreground">{t("profile.emailReadonly")}</p>
+          )}
         </div>
       </div>
 

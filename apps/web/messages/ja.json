@@ -415,6 +415,7 @@
   },
   "profile": {
     "displayName": "表示名",
+    "emailReadonly": "メールはログインIDのため、ここでは変更できません。",
     "namePlaceholder": "あなたの名前",
     "emailNote": "メールアドレスは変更できません",
     "noName": "名前が設定されていません",

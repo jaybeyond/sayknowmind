@@ -415,6 +415,7 @@
   },
   "profile": {
     "displayName": "표시 이름",
+    "emailReadonly": "이메일은 로그인 ID라 여기서 변경할 수 없습니다.",
     "namePlaceholder": "이름을 입력하세요",
     "emailNote": "이메일은 변경할 수 없습니다",
     "noName": "이름 미설정",
