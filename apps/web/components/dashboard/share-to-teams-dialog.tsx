@@ -26,6 +26,8 @@ interface ShareToTeamsDialogProps {
   onOpenChange: (open: boolean) => void;
   memoryId: string;
   memoryName?: string;
+  /** Which resource kind to share — selects the /api/{documents|categories}/:id/teams endpoint. */
+  resourceType?: "document" | "category";
 }
 
 export function ShareToTeamsDialog({
@@ -33,8 +35,10 @@ export function ShareToTeamsDialog({
   onOpenChange,
   memoryId,
   memoryName,
+  resourceType = "document",
 }: ShareToTeamsDialogProps) {
   const { t } = useTranslation();
+  const apiBase = resourceType === "category" ? "categories" : "documents";
   const [teams, setTeams] = React.useState<TeamEntry[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [toggling, setToggling] = React.useState<string | null>(null);
@@ -43,7 +47,7 @@ export function ShareToTeamsDialog({
     if (!memoryId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/documents/${memoryId}/teams`);
+      const res = await fetch(`/api/${apiBase}/${memoryId}/teams`);
       if (!res.ok) {
         if (res.status !== 404) {
           toast.error(t("team.shareTeams.loadFailed"));
@@ -58,7 +62,7 @@ export function ShareToTeamsDialog({
     } finally {
       setLoading(false);
     }
-  }, [memoryId, t]);
+  }, [memoryId, apiBase, t]);
 
   React.useEffect(() => {
     if (open) {
@@ -79,7 +83,7 @@ export function ShareToTeamsDialog({
     setToggling(team.id);
 
     try {
-      const res = await fetch(`/api/documents/${memoryId}/teams`, {
+      const res = await fetch(`/api/${apiBase}/${memoryId}/teams`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ organizationId: team.id, shared: next }),

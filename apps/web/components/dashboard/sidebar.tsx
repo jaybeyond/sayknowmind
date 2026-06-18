@@ -54,8 +54,10 @@ import {
   Pencil,
   X,
   Share2,
+  Users,
 } from "lucide-react";
 import { TeamSwitcher } from "./team-switcher";
+import { ShareToTeamsDialog } from "./share-to-teams-dialog";
 import { Button } from "@/components/ui/button";
 import { Input as SidebarInput } from "@/components/ui/input";
 import { useMemoryStore } from "@/store/memory-store";
@@ -185,6 +187,7 @@ function FolderItem({
   const isActive = isHomePage && selectedCollection === category.id;
   const isRenaming = renamingId === category.id;
   const children = getChildren(category.id);
+  const [teamShareOpen, setTeamShareOpen] = React.useState(false);
 
   const renderChildren = () =>
     children.map((child) => (
@@ -302,6 +305,10 @@ function FolderItem({
                 <Pencil className="size-3.5 mr-2" />
                 {t("sidebar.rename")}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTeamShareOpen(true)}>
+                <Users className="size-3.5 mr-2" />
+                {t("memory.shareWithTeams")}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
@@ -325,6 +332,13 @@ function FolderItem({
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
+    <ShareToTeamsDialog
+      open={teamShareOpen}
+      onOpenChange={setTeamShareOpen}
+      memoryId={category.id}
+      memoryName={category.name}
+      resourceType="category"
+    />
     {renderChildren()}
     </>
   );
