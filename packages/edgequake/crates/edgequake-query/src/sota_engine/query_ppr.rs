@@ -7,11 +7,16 @@
 //! passages via each entity's `source_chunk_ids`, then fused with the dense
 //! chunk ranking via Reciprocal Rank Fusion.
 //!
-//! ISOLATION: like every other mode, this is NOT an isolation layer — the web
-//! `readableClause` re-filter remains the sole authority over which documents a
-//! caller may see. PPR can surface graph-connected foreign nodes; they are
-//! dropped downstream. The flag stays OFF in prod until per-tenant graph
-//! isolation lands and an AGE-backed recall/latency benchmark is run.
+//! ISOLATION: PPR inherits the dense (`query_naive`) and graph (`query_local`)
+//! lanes' tenant/workspace filtering (fail-closed `matches_tenant_filter*`). The
+//! PPR graph is built ONLY from the already-filtered local entities and the
+//! edges among them — an edge to an entity outside that set is dropped — so PPR
+//! adds no unfiltered graph expansion and cannot rank, or attribute mass to,
+//! foreign nodes; emitted chunks are only ever those the filtered lanes already
+//! returned. As with every mode, the web `readableClause` re-filter stays the
+//! ultimate authority. The flag remains OFF in prod until an AGE-backed recall
+//! benchmark justifies enabling it (latency is already benchmarked: ~3 ms at the
+//! 5k-node cap — see `benches/ppr_bench.rs`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -270,5 +275,22 @@ mod fuse_tests {
         let out = fuse_ppr_contexts(dense, local, cfg(), 60.0, 10);
         assert_eq!(out.entities.len(), 1);
         assert_eq!(out.relationships.len(), 1);
+    }
+
+    #[test]
+    fn edge_to_unknown_entity_is_ignored() {
+        // A relationship references an entity ("Ghost") absent from the filtered
+        // entity set (e.g. a neighbor that failed the tenant filter upstream). It
+        // must be silently dropped from the PPR graph — never indexed, never given
+        // mass, never panicking — so foreign nodes cannot influence the ranking.
+        let mut dense = QueryContext::new();
+        dense.add_chunk(chunk("c_self", 0.5));
+        let mut local = QueryContext::new();
+        local.add_entity(entity("Real", 1.0, &["c_self"]));
+        local.add_relationship(RetrievedRelationship::new("Real", "Ghost", "rel"));
+
+        let out = fuse_ppr_contexts(dense, local, cfg(), 60.0, 10);
+        let ids: Vec<&str> = out.chunks.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(ids, vec!["c_self"], "only in-tenant chunk surfaces: {ids:?}");
     }
 }
