@@ -58,6 +58,7 @@ pub mod error;
 pub mod helpers;
 pub mod keywords;
 pub mod modes;
+pub mod ppr;
 pub mod sota_engine;
 pub mod strategies;
 pub mod tokenizer;

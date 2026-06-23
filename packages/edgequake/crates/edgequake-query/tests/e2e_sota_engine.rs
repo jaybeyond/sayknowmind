@@ -283,6 +283,7 @@ mod sota_config_tests {
             enable_rerank: true,
             min_rerank_score: 0.3,
             rerank_top_k: 10,
+            ..Default::default()
         };
 
         assert_eq!(config.default_mode, QueryMode::Local);

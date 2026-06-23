@@ -73,6 +73,11 @@ pub enum QueryMode {
     /// Weighted combination of naive and graph-based.
     /// Most flexible, configurable weights.
     Mix,
+
+    /// HippoRAG-2-style Personalized PageRank multi-hop retrieval.
+    /// EXPERIMENTAL + default-OFF (gated by `SOTAQueryConfig::ppr_enabled`); not
+    /// returned by `all()` so it is never auto-selected.
+    Ppr,
 }
 
 impl QueryMode {
@@ -87,6 +92,14 @@ impl QueryMode {
         ]
     }
 
+    /// Like `all()` but including experimental/opt-in modes (e.g. `Ppr`).
+    /// Kept separate so `all()` stays the stable, default-advertised set.
+    pub fn all_including_experimental() -> Vec<Self> {
+        let mut modes = Self::all();
+        modes.push(Self::Ppr);
+        modes
+    }
+
     /// Get the mode name as a string.
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -95,6 +108,7 @@ impl QueryMode {
             Self::Global => "global",
             Self::Hybrid => "hybrid",
             Self::Mix => "mix",
+            Self::Ppr => "ppr",
         }
     }
 
@@ -106,12 +120,12 @@ impl QueryMode {
     /// Whether this mode uses vector search.
     pub fn uses_vector_search(&self) -> bool {
         // Hybrid should use BOTH vector search AND graph traversal
-        matches!(self, Self::Naive | Self::Local | Self::Hybrid | Self::Mix)
+        matches!(self, Self::Naive | Self::Local | Self::Hybrid | Self::Mix | Self::Ppr)
     }
 
     /// Whether this mode uses graph traversal.
     pub fn uses_graph(&self) -> bool {
-        matches!(self, Self::Local | Self::Global | Self::Hybrid | Self::Mix)
+        matches!(self, Self::Local | Self::Global | Self::Hybrid | Self::Mix | Self::Ppr)
     }
 }
 
@@ -127,6 +141,7 @@ impl FromStr for QueryMode {
             "global" => Ok(Self::Global),
             "hybrid" => Ok(Self::Hybrid),
             "mix" => Ok(Self::Mix),
+            "ppr" => Ok(Self::Ppr),
             other => Err(format!("Unknown query mode: {}", other)),
         }
     }
@@ -146,6 +161,23 @@ mod tests {
     fn test_query_mode_all() {
         let modes = QueryMode::all();
         assert_eq!(modes.len(), 5);
+    }
+
+    #[test]
+    fn test_ppr_is_experimental_not_in_all() {
+        // all() stays the stable 5; ppr is opt-in only.
+        assert_eq!(QueryMode::all().len(), 5);
+        assert!(!QueryMode::all().contains(&QueryMode::Ppr));
+        let exp = QueryMode::all_including_experimental();
+        assert_eq!(exp.len(), 6);
+        assert!(exp.contains(&QueryMode::Ppr));
+    }
+
+    #[test]
+    fn test_ppr_parse_roundtrip() {
+        assert_eq!(QueryMode::parse("ppr"), Some(QueryMode::Ppr));
+        assert_eq!(QueryMode::Ppr.as_str(), "ppr");
+        assert_eq!(format!("{}", QueryMode::Ppr), "ppr");
     }
 
     #[test]

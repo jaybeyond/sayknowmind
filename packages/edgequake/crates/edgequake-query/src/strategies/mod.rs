@@ -46,6 +46,10 @@ where
         QueryMode::Global => Box::new(GlobalStrategy::new(vector_storage, graph_storage)),
         QueryMode::Hybrid => Box::new(HybridStrategy::new(vector_storage, graph_storage)),
         QueryMode::Mix => Box::new(MixStrategy::new(vector_storage, graph_storage)),
+        // PPR lives on the live SOTAQueryEngine path, not this secondary strategy
+        // factory. Map it to Hybrid here so the factory stays total; the engine
+        // router dispatches the real query_ppr.
+        QueryMode::Ppr => Box::new(HybridStrategy::new(vector_storage, graph_storage)),
     }
 }
 

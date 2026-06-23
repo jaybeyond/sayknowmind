@@ -56,7 +56,7 @@ impl SOTAQueryEngine {
                 .await?;
 
         // Step 4: Mode-specific retrieval
-        let context = match mode {
+        let context = match self.effective_mode(mode) {
             QueryMode::Local => {
                 self.query_local(
                     &keywords,
@@ -95,6 +95,10 @@ impl SOTAQueryEngine {
             }
             QueryMode::Naive => {
                 self.query_naive(&embeddings, request.tenant_id(), request.workspace_id())
+                    .await?
+            }
+            QueryMode::Ppr => {
+                self.query_ppr(&keywords, &embeddings, request.tenant_id(), request.workspace_id())
                     .await?
             }
         };
@@ -378,7 +382,7 @@ impl SOTAQueryEngine {
                 .await?;
 
         // Step 4: Mode-specific retrieval using WORKSPACE-SPECIFIC vector storage
-        let context = match mode {
+        let context = match self.effective_mode(mode) {
             QueryMode::Local => {
                 self.query_local_with_vector_storage(
                     &keywords,
@@ -421,6 +425,16 @@ impl SOTAQueryEngine {
             }
             QueryMode::Naive => {
                 self.query_naive_with_vector_storage(
+                    &embeddings,
+                    request.tenant_id(),
+                    request.workspace_id(),
+                    &vector_storage,
+                )
+                .await?
+            }
+            QueryMode::Ppr => {
+                self.query_ppr_with_vector_storage(
+                    &keywords,
                     &embeddings,
                     request.tenant_id(),
                     request.workspace_id(),

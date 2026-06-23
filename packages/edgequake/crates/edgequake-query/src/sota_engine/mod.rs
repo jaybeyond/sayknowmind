@@ -131,6 +131,69 @@ pub struct SOTAQueryConfig {
 
     /// Top K results to keep after reranking.
     pub rerank_top_k: usize,
+
+    // ── PPR (HippoRAG-2 multi-hop) — default-OFF experimental mode ──
+    /// Enable `QueryMode::Ppr`. When false a ppr request is coerced to
+    /// `default_mode`, so no ppr branch runs and other modes are byte-identical.
+    #[serde(default)]
+    pub ppr_enabled: bool,
+    /// PPR restart/teleport probability (HippoRAG 0.15).
+    #[serde(default = "default_ppr_alpha")]
+    pub ppr_alpha: f32,
+    /// PPR power-iteration cap.
+    #[serde(default = "default_ppr_max_iter")]
+    pub ppr_max_iter: usize,
+    /// PPR L1 convergence threshold.
+    #[serde(default = "default_ppr_epsilon")]
+    pub ppr_epsilon: f32,
+    /// Reciprocal Rank Fusion constant.
+    #[serde(default = "default_ppr_rrf_k")]
+    pub ppr_rrf_k: f32,
+    /// Candidate pool size returned for the web visibility-aware top-up.
+    #[serde(default = "default_ppr_candidate_pool")]
+    pub ppr_candidate_pool: usize,
+}
+
+fn default_ppr_alpha() -> f32 {
+    0.15
+}
+fn default_ppr_max_iter() -> usize {
+    50
+}
+fn default_ppr_epsilon() -> f32 {
+    1e-6
+}
+fn default_ppr_rrf_k() -> f32 {
+    60.0
+}
+fn default_ppr_candidate_pool() -> usize {
+    60
+}
+
+impl SOTAQueryConfig {
+    /// Override PPR settings from `EQ_PPR_*` environment variables. Called once
+    /// at engine construction. Keeps PPR opt-in: only `EQ_PPR_ENABLED=true`
+    /// turns it on; the tunables fall back to the defaults above.
+    pub fn apply_ppr_env(&mut self) {
+        if let Ok(v) = std::env::var("EQ_PPR_ENABLED") {
+            self.ppr_enabled = v.eq_ignore_ascii_case("true") || v == "1";
+        }
+        if let Some(v) = std::env::var("EQ_PPR_ALPHA").ok().and_then(|s| s.parse().ok()) {
+            self.ppr_alpha = v;
+        }
+        if let Some(v) = std::env::var("EQ_PPR_MAX_ITER").ok().and_then(|s| s.parse().ok()) {
+            self.ppr_max_iter = v;
+        }
+        if let Some(v) = std::env::var("EQ_PPR_EPSILON").ok().and_then(|s| s.parse().ok()) {
+            self.ppr_epsilon = v;
+        }
+        if let Some(v) = std::env::var("EQ_PPR_RRF_K").ok().and_then(|s| s.parse().ok()) {
+            self.ppr_rrf_k = v;
+        }
+        if let Some(v) = std::env::var("EQ_PPR_CANDIDATE_POOL").ok().and_then(|s| s.parse().ok()) {
+            self.ppr_candidate_pool = v;
+        }
+    }
 }
 
 impl Default for SOTAQueryConfig {
@@ -170,6 +233,12 @@ impl Default for SOTAQueryConfig {
             min_rerank_score: 0.1,
             // WHY 20: Match max_chunks to keep all chunk candidates after reranking.
             rerank_top_k: 20,
+            ppr_enabled: false,
+            ppr_alpha: default_ppr_alpha(),
+            ppr_max_iter: default_ppr_max_iter(),
+            ppr_epsilon: default_ppr_epsilon(),
+            ppr_rrf_k: default_ppr_rrf_k(),
+            ppr_candidate_pool: default_ppr_candidate_pool(),
         }
     }
 }
@@ -263,6 +332,9 @@ impl SOTAQueryEngine {
         embedding_provider: Arc<dyn EmbeddingProvider>,
         llm_provider: Arc<dyn LLMProvider>,
     ) -> Self {
+        // PPR feature flag + tunables come from EQ_PPR_* env (default-OFF).
+        let mut config = config;
+        config.apply_ppr_env();
         // Create cached keyword extractor
         let base_extractor = Arc::new(LLMKeywordExtractor::new(llm_provider.clone()));
         let cache = Arc::new(InMemoryKeywordCache::new(1000));
@@ -336,6 +408,17 @@ impl SOTAQueryEngine {
     pub fn config(&self) -> &SOTAQueryConfig {
         &self.config
     }
+
+    /// Resolve the experimental PPR mode against the feature flag. When PPR is
+    /// disabled, a ppr request is coerced to the configured default mode so no
+    /// ppr branch executes and existing modes stay byte-identical.
+    pub(super) fn effective_mode(&self, mode: QueryMode) -> QueryMode {
+        if mode == QueryMode::Ppr && !self.config.ppr_enabled {
+            self.config.default_mode
+        } else {
+            mode
+        }
+    }
 }
 
 mod prompt;
@@ -343,6 +426,7 @@ mod query_entry;
 mod query_modes;
 mod reranking;
 mod vector_queries;
+mod query_ppr;
 
 #[cfg(test)]
 mod tests {
