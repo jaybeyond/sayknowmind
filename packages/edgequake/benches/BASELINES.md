@@ -44,6 +44,24 @@
 | upsert_single | ~305 ns | Single key-value upsert |
 | get_single    | ~117 ns | Single key-value lookup |
 
+## PPR Multi-Hop Retrieval (HippoRAG-2)
+
+In-memory `personalized_pagerank` (50 iters, alpha 0.15, avg degree 6) and
+`reciprocal_rank_fusion`. Answers the `EQ_PPR_MAX_NODES` query-time cost question.
+
+| Benchmark                | Time    | Notes                                  |
+| ------------------------ | ------- | -------------------------------------- |
+| ppr_power_iteration/100  | ~50 µs  | 100-node subgraph                      |
+| ppr_power_iteration/1000 | ~507 µs | 1,000-node subgraph                    |
+| ppr_power_iteration/5000 | ~3.0 ms | 5,000-node subgraph (EQ_PPR_MAX_NODES) |
+| rrf_fusion/50            | ~2.5 µs | Fuse two 50-item rankings              |
+| rrf_fusion/500           | ~27 µs  | Fuse two 500-item rankings             |
+
+Linear in nodes+edges; even at the 5,000-node cap the PPR math is ~3 ms — a
+negligible fraction of per-query DB/embedding latency. The live path adds no
+extra graph pull (it reuses the local lane's entity set), so this is the full
+added cost of `QueryMode::Ppr`.
+
 ## How to Run Benchmarks
 
 ```bash
@@ -54,6 +72,7 @@ cargo bench
 cargo bench --bench chunking_bench
 cargo bench --bench storage_bench
 cargo bench --bench query_bench
+cargo bench --bench ppr_bench
 
 # Run with filtering
 cargo bench -- "vector"

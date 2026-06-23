@@ -39,3 +39,8 @@ sqlx = { version = "0.8", features = [
 tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 reqwest = { version = "0.12", features = ["json"] }
 serde_json.workspace = true
+criterion = { workspace = true }
+
+[[bench]]
+name = "ppr_bench"
+harness = false

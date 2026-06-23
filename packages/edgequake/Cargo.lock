@@ -1177,6 +1177,7 @@ version = "0.5.4"
 dependencies = [
  "async-trait",
  "chrono",
+ "criterion",
  "edgequake-core",
  "edgequake-llm",
  "edgequake-storage",
