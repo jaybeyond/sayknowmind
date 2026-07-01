@@ -157,9 +157,10 @@ export function GraphCanvas({
   // Node currently being dragged (manual drag — see pointer handlers below).
   // prevFx/prevFy remember the pin state before grabbing so a pure click restores it.
   const dragNodeRef = useRef<{ node: FGNode; moved: boolean; prevFx?: number; prevFy?: number } | null>(null);
-  // Persisted manual layout, lazily loaded once on the client.
-  const savedPositionsRef = useRef<SavedPositions | null>(null);
-  if (savedPositionsRef.current === null) savedPositionsRef.current = loadSavedPositions();
+  // Persisted manual layout, lazily loaded once on the client. Kept in state
+  // (not a ref) so useMemo can seed node coords during render without tripping
+  // the React 19 react-hooks/refs rule; drag handlers update via setState.
+  const [savedPositions, setSavedPositions] = useState<SavedPositions>(() => loadSavedPositions());
   const [draggingNode, setDraggingNode] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [sizeMultiplier, setSizeMultiplier] = useState(1);
@@ -217,7 +218,7 @@ export function GraphCanvas({
       };
       // Restore a previously-dragged position: seed coords and pin it there so
       // the saved layout is honoured (unsaved nodes stay free for auto-layout).
-      const saved = savedPositionsRef.current?.[n.id];
+      const saved = savedPositions[n.id];
       if (saved) {
         fgNode.x = saved.x;
         fgNode.y = saved.y;
@@ -248,7 +249,7 @@ export function GraphCanvas({
     }
 
     return { nodes: fgNodes, links: fgLinks, nodeMap: fgNodeMap };
-  }, [nodes, edges]);
+  }, [nodes, edges, savedPositions]);
 
   // Sync nodeMapRef outside of render to satisfy React 19 rules-of-hooks
   useEffect(() => {
@@ -363,9 +364,13 @@ export function GraphCanvas({
     if (drag.moved) {
       // Real drag → keep the node pinned where dropped and persist the spot.
       const { node } = drag;
-      if (node.fx != null && node.fy != null && savedPositionsRef.current) {
-        savedPositionsRef.current[node.id] = { x: node.fx, y: node.fy };
-        persistSavedPositions(savedPositionsRef.current);
+      if (node.fx != null && node.fy != null) {
+        const pos = { x: node.fx, y: node.fy };
+        setSavedPositions((prev) => {
+          const next = { ...prev, [node.id]: pos };
+          persistSavedPositions(next);
+          return next;
+        });
       }
     } else {
       // Pure click → restore the pin state it had before grabbing (so clicking
