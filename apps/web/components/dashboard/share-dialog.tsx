@@ -30,7 +30,8 @@ const EXPIRY_OPTIONS: ExpiryOption[] = [
 interface ShareDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  memory: Memory | null;
+  /** Only `id` is used (POSTed as documentId), so editors can pass a bare { id }. */
+  memory: Pick<Memory, "id"> | null;
 }
 
 export function ShareDialog({ open, onOpenChange, memory }: ShareDialogProps) {

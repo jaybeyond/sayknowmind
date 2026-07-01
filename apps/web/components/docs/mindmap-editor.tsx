@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronDown, Circle, Smile, Image as ImageIcon, ArrowUp, ArrowDown, History } from "lucide-react";
+import { ChevronLeft, ChevronDown, Circle, Smile, Image as ImageIcon, ArrowUp, ArrowDown, History, Share2, Link2, Users } from "lucide-react";
 import type { MindElixirData, MindElixirInstance, Operation, Theme } from "mind-elixir";
 import { en as meEn, ko as meKo, ja as meJa, zh_CN as meZh, type LangPack } from "mind-elixir/i18n";
 import "mind-elixir/style.css";
@@ -11,6 +11,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "@/components/ui/dropdown-menu";
 import { SummaryButton } from "./summary-button";
 import { VersionHistoryPanel } from "./version-history-panel";
+import { ShareDialog } from "@/components/dashboard/share-dialog";
+import { ShareToTeamsDialog } from "@/components/dashboard/share-to-teams-dialog";
 
 // Built-in mind-elixir context-menu language packs, keyed by our app locales.
 const ME_LOCALE: Record<string, LangPack> = { en: meEn, ko: meKo, ja: meJa, zh: meZh };
@@ -77,6 +79,9 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
   const [title, setTitle] = React.useState(initialTitle);
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("saved");
   const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [shareMenuOpen, setShareMenuOpen] = React.useState(false);
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [teamShareOpen, setTeamShareOpen] = React.useState(false);
   const [colorOpen, setColorOpen] = React.useState(false);
   const [emojiOpen, setEmojiOpen] = React.useState(false);
   const [imageOpen, setImageOpen] = React.useState(false);
@@ -673,6 +678,45 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
           </span>
         </div>
 
+        {canEdit && (
+          <div className="relative">
+            <button
+              onClick={() => setShareMenuOpen((o) => !o)}
+              title={t("memory.share")}
+              aria-label={t("memory.share")}
+              aria-haspopup="menu"
+              aria-expanded={shareMenuOpen}
+              className="inline-flex items-center gap-1 shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Share2 className="size-4" />
+              <span className="hidden sm:inline">{t("memory.share")}</span>
+            </button>
+            {shareMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShareMenuOpen(false)} />
+                <div role="menu" className="absolute right-0 top-7 z-50 w-44 rounded-md border bg-popover shadow-md p-1">
+                  <button
+                    role="menuitem"
+                    onClick={() => { setShareMenuOpen(false); setShareOpen(true); }}
+                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-sm rounded-md text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Link2 className="size-4 text-muted-foreground" />
+                    {t("share.createLink")}
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => { setShareMenuOpen(false); setTeamShareOpen(true); }}
+                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-sm rounded-md text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Users className="size-4 text-muted-foreground" />
+                    {t("memory.shareWithTeams") ?? "Share with teams"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         <button
           onClick={() => setHistoryOpen(true)}
           title={t("docs.history.title")}
@@ -687,6 +731,8 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
       <div ref={containerRef} className="flex-1 w-full bg-background" />
 
       <VersionHistoryPanel docId={docId} open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={{ id: docId }} />
+      <ShareToTeamsDialog open={teamShareOpen} onOpenChange={setTeamShareOpen} memoryId={docId} memoryName={title} />
     </div>
   );
 }
