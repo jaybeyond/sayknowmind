@@ -161,11 +161,7 @@ pub(super) fn fuse_ppr_contexts(
 
     // Union of available chunks, keyed by id (dense lane wins on duplicates).
     let mut chunk_by_id: HashMap<String, RetrievedChunk> = HashMap::new();
-    for c in dense_ctx
-        .chunks
-        .into_iter()
-        .chain(local_ctx.chunks.into_iter())
-    {
+    for c in dense_ctx.chunks.into_iter().chain(local_ctx.chunks) {
         chunk_by_id.entry(c.id.clone()).or_insert(c);
     }
 

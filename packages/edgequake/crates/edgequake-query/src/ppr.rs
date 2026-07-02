@@ -77,9 +77,9 @@ pub fn personalized_pagerank(
         .filter(|x| *x > 0.0)
         .sum();
     if p_sum > 0.0 {
-        for i in 0..n {
+        for (i, si) in s.iter_mut().enumerate() {
             let v = personalization.get(i).copied().unwrap_or(0.0);
-            s[i] = if v > 0.0 { v / p_sum } else { 0.0 };
+            *si = if v > 0.0 { v / p_sum } else { 0.0 };
         }
     } else {
         let u = 1.0 / n as f32;
