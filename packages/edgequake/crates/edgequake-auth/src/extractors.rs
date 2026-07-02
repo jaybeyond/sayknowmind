@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_auth_user_permissions() {
-        let rbac = RbacService::default();
+        let rbac = RbacService;
 
         let admin_claims = Claims::new(Uuid::new_v4(), Role::Admin, 3600);
         let admin = AuthUser {
