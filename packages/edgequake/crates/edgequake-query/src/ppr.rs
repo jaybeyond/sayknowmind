@@ -61,12 +61,21 @@ pub fn personalized_pagerank(
     cfg: &PprConfig,
 ) -> PprResult {
     if n == 0 {
-        return PprResult { scores: Vec::new(), iterations: 0, converged: true };
+        return PprResult {
+            scores: Vec::new(),
+            iterations: 0,
+            converged: true,
+        };
     }
 
     // Normalize the personalization vector into a probability distribution `s`.
     let mut s = vec![0.0f32; n];
-    let p_sum: f32 = personalization.iter().take(n).copied().filter(|x| *x > 0.0).sum();
+    let p_sum: f32 = personalization
+        .iter()
+        .take(n)
+        .copied()
+        .filter(|x| *x > 0.0)
+        .sum();
     if p_sum > 0.0 {
         for i in 0..n {
             let v = personalization.get(i).copied().unwrap_or(0.0);
@@ -134,7 +143,11 @@ pub fn personalized_pagerank(
         }
     }
 
-    PprResult { scores: r, iterations, converged }
+    PprResult {
+        scores: r,
+        iterations,
+        converged,
+    }
 }
 
 /// Reciprocal Rank Fusion over multiple rankings.
@@ -206,11 +219,7 @@ mod tests {
     #[test]
     fn personalization_concentrates_mass_near_seed() {
         // Star: hub 0 connected (both ways) to leaves 1,2,3.
-        let edges = [
-            (0, 1), (1, 0),
-            (0, 2), (2, 0),
-            (0, 3), (3, 0),
-        ];
+        let edges = [(0, 1), (1, 0), (0, 2), (2, 0), (0, 3), (3, 0)];
         // Seed only node 1.
         let mut pers = vec![0.0; 4];
         pers[1] = 1.0;
@@ -218,7 +227,10 @@ mod tests {
         // The seeded leaf must outscore the other (symmetric) leaves.
         assert!(res.scores[1] > res.scores[2], "seed leaf should win");
         assert!(res.scores[1] > res.scores[3]);
-        assert!(approx(res.scores[2], res.scores[3], 1e-4), "non-seed leaves symmetric");
+        assert!(
+            approx(res.scores[2], res.scores[3], 1e-4),
+            "non-seed leaves symmetric"
+        );
         // NB: a bipartite star mixes slowly (oscillating component decays ~0.85^k
         // at alpha=0.15), so it may not hit the tight 1e-6 L1 delta within the
         // default 50 iters — the ranking is stable long before that. We assert the
@@ -234,7 +246,10 @@ mod tests {
         pers[0] = 1.0;
         let res = personalized_pagerank(4, &edges, &pers, &PprConfig::default());
         // The 2-hop-reachable node 2 must score above the unreachable node 3.
-        assert!(res.scores[2] > res.scores[3], "reachable 2-hop must beat unreachable");
+        assert!(
+            res.scores[2] > res.scores[3],
+            "reachable 2-hop must beat unreachable"
+        );
     }
 
     #[test]

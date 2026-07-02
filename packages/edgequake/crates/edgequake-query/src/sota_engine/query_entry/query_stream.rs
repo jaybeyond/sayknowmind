@@ -98,8 +98,13 @@ impl SOTAQueryEngine {
                     .await?
             }
             QueryMode::Ppr => {
-                self.query_ppr(&keywords, &embeddings, request.tenant_id(), request.workspace_id())
-                    .await?
+                self.query_ppr(
+                    &keywords,
+                    &embeddings,
+                    request.tenant_id(),
+                    request.workspace_id(),
+                )
+                .await?
             }
         };
 

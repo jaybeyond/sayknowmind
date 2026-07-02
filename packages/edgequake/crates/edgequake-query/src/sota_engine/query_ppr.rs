@@ -161,7 +161,11 @@ pub(super) fn fuse_ppr_contexts(
 
     // Union of available chunks, keyed by id (dense lane wins on duplicates).
     let mut chunk_by_id: HashMap<String, RetrievedChunk> = HashMap::new();
-    for c in dense_ctx.chunks.into_iter().chain(local_ctx.chunks.into_iter()) {
+    for c in dense_ctx
+        .chunks
+        .into_iter()
+        .chain(local_ctx.chunks.into_iter())
+    {
         chunk_by_id.entry(c.id.clone()).or_insert(c);
     }
 
@@ -231,7 +235,11 @@ mod fuse_tests {
 
         let out = fuse_ppr_contexts(dense, local, cfg(), 60.0, 10);
         let ids: Vec<&str> = out.chunks.iter().map(|c| c.id.as_str()).collect();
-        assert_eq!(ids.first(), Some(&"c_far"), "PPR-boosted chunk should lead: {ids:?}");
+        assert_eq!(
+            ids.first(),
+            Some(&"c_far"),
+            "PPR-boosted chunk should lead: {ids:?}"
+        );
         assert!(ids.contains(&"c_dense"));
     }
 
@@ -249,7 +257,10 @@ mod fuse_tests {
 
         let out = fuse_ppr_contexts(dense, local, cfg(), 60.0, 10);
         let ids: Vec<&str> = out.chunks.iter().map(|c| c.id.as_str()).collect();
-        assert!(!ids.contains(&"c_foreign"), "foreign chunk must be dropped: {ids:?}");
+        assert!(
+            !ids.contains(&"c_foreign"),
+            "foreign chunk must be dropped: {ids:?}"
+        );
         assert!(ids.contains(&"c_ok"));
     }
 
@@ -292,6 +303,10 @@ mod fuse_tests {
 
         let out = fuse_ppr_contexts(dense, local, cfg(), 60.0, 10);
         let ids: Vec<&str> = out.chunks.iter().map(|c| c.id.as_str()).collect();
-        assert_eq!(ids, vec!["c_self"], "only in-tenant chunk surfaces: {ids:?}");
+        assert_eq!(
+            ids,
+            vec!["c_self"],
+            "only in-tenant chunk surfaces: {ids:?}"
+        );
     }
 }

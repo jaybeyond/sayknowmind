@@ -88,9 +88,9 @@ async fn test_workspace_update_changes_provider_config() {
         embedding_dimension: Some(1536),
         max_documents: None,
         is_active: None,
-            vision_llm_provider: None,
+        vision_llm_provider: None,
         vision_llm_model: None,
-};
+    };
 
     let updated = state
         .workspace_service

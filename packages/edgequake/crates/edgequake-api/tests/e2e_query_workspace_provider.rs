@@ -54,9 +54,9 @@ async fn create_test_workspace(
         embedding_model: Some(embedding_model.to_string()),
         embedding_provider: Some(embedding_provider.to_string()),
         embedding_dimension: Some(embedding_dimension),
-            vision_llm_provider: None,
+        vision_llm_provider: None,
         vision_llm_model: None,
-};
+    };
 
     state
         .workspace_service
@@ -249,9 +249,9 @@ async fn test_workspace_provider_update_affects_query_config() {
         embedding_model: Some("updated-embedding".to_string()),
         embedding_dimension: Some(768), // Changed dimension
         is_active: None,
-            vision_llm_provider: None,
+        vision_llm_provider: None,
         vision_llm_model: None,
-};
+    };
 
     let updated = state
         .workspace_service

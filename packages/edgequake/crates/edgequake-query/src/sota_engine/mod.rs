@@ -178,19 +178,34 @@ impl SOTAQueryConfig {
         if let Ok(v) = std::env::var("EQ_PPR_ENABLED") {
             self.ppr_enabled = v.eq_ignore_ascii_case("true") || v == "1";
         }
-        if let Some(v) = std::env::var("EQ_PPR_ALPHA").ok().and_then(|s| s.parse().ok()) {
+        if let Some(v) = std::env::var("EQ_PPR_ALPHA")
+            .ok()
+            .and_then(|s| s.parse().ok())
+        {
             self.ppr_alpha = v;
         }
-        if let Some(v) = std::env::var("EQ_PPR_MAX_ITER").ok().and_then(|s| s.parse().ok()) {
+        if let Some(v) = std::env::var("EQ_PPR_MAX_ITER")
+            .ok()
+            .and_then(|s| s.parse().ok())
+        {
             self.ppr_max_iter = v;
         }
-        if let Some(v) = std::env::var("EQ_PPR_EPSILON").ok().and_then(|s| s.parse().ok()) {
+        if let Some(v) = std::env::var("EQ_PPR_EPSILON")
+            .ok()
+            .and_then(|s| s.parse().ok())
+        {
             self.ppr_epsilon = v;
         }
-        if let Some(v) = std::env::var("EQ_PPR_RRF_K").ok().and_then(|s| s.parse().ok()) {
+        if let Some(v) = std::env::var("EQ_PPR_RRF_K")
+            .ok()
+            .and_then(|s| s.parse().ok())
+        {
             self.ppr_rrf_k = v;
         }
-        if let Some(v) = std::env::var("EQ_PPR_CANDIDATE_POOL").ok().and_then(|s| s.parse().ok()) {
+        if let Some(v) = std::env::var("EQ_PPR_CANDIDATE_POOL")
+            .ok()
+            .and_then(|s| s.parse().ok())
+        {
             self.ppr_candidate_pool = v;
         }
     }
@@ -424,9 +439,9 @@ impl SOTAQueryEngine {
 mod prompt;
 mod query_entry;
 mod query_modes;
+mod query_ppr;
 mod reranking;
 mod vector_queries;
-mod query_ppr;
 
 #[cfg(test)]
 mod tests {
