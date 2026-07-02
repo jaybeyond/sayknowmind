@@ -13,6 +13,7 @@
  */
 
 import { enqueueAndWait, type RelayProvider } from "@/lib/llm-relay/queue";
+import { safeFetch } from "@/lib/ingest/url-fetcher";
 
 export interface CloudProviderConfig {
   /** Provider ID — required so the streaming path can decide whether
@@ -70,7 +71,9 @@ export async function cloudStreamChat(
   try {
     const url = `${config.baseUrl.replace(/\/$/, "")}/v1/chat/completions`;
 
-    const res = await fetch(url, {
+    // SSRF guard: baseUrl is user-supplied. safeFetch() validates it (and every
+    // redirect hop) against private/internal address ranges before connecting.
+    const res = await safeFetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

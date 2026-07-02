@@ -32,6 +32,30 @@ function copySetCookies(from: Response, to: NextResponse) {
 // Origin header (always sent by browsers on cross-origin POSTs) and fall back
 // to Referer.  Requests with no recognisable origin are rejected.
 
+function originMatches(candidate: string): boolean {
+  for (const trusted of TRUSTED_ORIGINS) {
+    // Exact match covers custom app schemes (tauri://localhost, sayknowmind://).
+    if (candidate === trusted) return true;
+    // Origin-level match for special schemes (http/https/ws/…) so a path-bearing
+    // Referer still matches. Custom schemes parse to the opaque origin "null",
+    // which is NOT distinguishing — every custom-scheme URL shares it — so a
+    // "null" === "null" comparison would trust ANY custom-scheme Origin
+    // (e.g. `Origin: evil://x`). Skip opaque origins; they're handled by the
+    // exact match above only.
+    let cOrigin: string;
+    let tOrigin: string;
+    try {
+      cOrigin = new URL(candidate).origin;
+      tOrigin = new URL(trusted).origin;
+    } catch {
+      continue; // unparseable — exact match already tried
+    }
+    if (cOrigin === "null" || tOrigin === "null") continue;
+    if (cOrigin === tOrigin) return true;
+  }
+  return false;
+}
+
 function originTrusted(req: Request): boolean {
   const origin = req.headers.get("origin");
   const referer = req.headers.get("referer");
@@ -45,19 +69,14 @@ function originTrusted(req: Request): boolean {
       return false;
     }
   }
-  if (!candidate) return false;
+  // No Origin AND no Referer → a non-browser client (SDK, curl, native/Flutter
+  // app). Browsers ALWAYS send Origin on cross-origin POSTs, so a CSRF attacker
+  // cannot produce this state from a victim's browser; only direct API clients
+  // can, and those aren't subject to CSRF. Allow it so credential-only clients
+  // aren't 403'd before their credentials are even read.
+  if (!candidate) return true;
 
-  for (const trusted of TRUSTED_ORIGINS) {
-    // Exact match (covers non-standard schemes like tauri:// or sayknowmind://)
-    if (candidate === trusted) return true;
-    // Origin-level match: strip path from both sides and compare
-    try {
-      if (new URL(candidate).origin === new URL(trusted).origin) return true;
-    } catch {
-      // Non-parseable scheme — already handled by exact match above
-    }
-  }
-  return false;
+  return originMatches(candidate);
 }
 
 // ---------------------------------------------------------------------------
@@ -67,24 +86,35 @@ function originTrusted(req: Request): boolean {
 // path and race: A writes passwordA, B writes passwordB, A tries to sign in
 // with passwordA but the DB now holds passwordB → SESSION_MINT_FAILED 500.
 //
-// Fix: acquire a PostgreSQL session-level advisory lock keyed on the user ID
-// before the rotation.  The lock spans both the write AND the sign-in call, so
-// the next concurrent request can only start its rotation after the current one
-// has successfully signed in and released the lock.
+// Earlier this used a PostgreSQL session-level advisory lock held on a pooled
+// client across the write AND signInEmail. That deadlocked the whole pool:
+// signInEmail needs its own pool connection, so N concurrent same-user logins
+// pinned N connections waiting on the lock and the winner could never get a
+// connection to sign in (pg pool default max=10, wait-forever). See CODE-REVIEW
+// C2.
+//
+// Fix: serialise with an in-process, per-user async mutex that holds NO database
+// connection while waiting. updatePassword/signInEmail acquire and release pool
+// connections normally, so there is no connection starvation. Cross-instance
+// caveat: this serialises within one server process; two processes racing the
+// same user can still (rarely) produce a retriable SESSION_MINT_FAILED, which is
+// vastly preferable to a permanent whole-pool deadlock.
 
-/** Maps a UUID string to two deterministic int4 values for pg_advisory_lock(int,int). */
-function userLockKey(userId: string): [number, number] {
-  // Two independent DJB2 hashes over the UUID string.  Using the two-int4
-  // overload of pg_advisory_lock avoids BigInt (requires ES2020+).
-  let h1 = 5381;
-  let h2 = 52711;
-  for (let i = 0; i < userId.length; i++) {
-    const c = userId.charCodeAt(i);
-    h1 = Math.imul(h1, 33) ^ c;
-    h2 = Math.imul(h2, 33) ^ c;
-  }
-  // Bitwise ops produce signed int32; pass as-is (pg accepts signed int4).
-  return [h1, h2];
+const userLoginChains = new Map<string, Promise<unknown>>();
+
+/** Run `fn` after any in-flight login for the same userId completes (per-process). */
+function withUserLoginLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = userLoginChains.get(userId) ?? Promise.resolve();
+  const run = prev.then(fn, fn); // run after prev settles (success OR failure)
+  // Tail swallows rejections so one failed login doesn't break the chain; the
+  // caller still observes `run`'s rejection.
+  const tail = run.catch(() => {});
+  userLoginChains.set(userId, tail);
+  // Drop the map entry once this is the last queued op, to bound memory.
+  tail.finally(() => {
+    if (userLoginChains.get(userId) === tail) userLoginChains.delete(userId);
+  });
+  return run;
 }
 
 export async function POST(req: Request) {
@@ -139,41 +169,28 @@ export async function POST(req: Request) {
         asResponse: true,
       });
     } else {
-      // ---- AUTH-2: serialised rotation via pg_advisory_lock ----
+      // ---- AUTH-2: serialised rotation via in-process per-user mutex ----
       // Existing local user → rotate the shadow password to a known value, then
       // sign in normally so the session.create.before hook (activeOrganizationId)
       // and cookie handling run exactly as for a real password login.
       //
-      // The advisory lock serialises concurrent logins for the same user so the
-      // "write password X → sign in with X" sequence is atomic from the
-      // perspective of other requests.  pg_advisory_lock is session-level (not
-      // transaction-level), so it spans the updatePassword call AND the
-      // signInEmail call before being released.
+      // withUserLoginLock() serialises concurrent same-user logins so the
+      // "write password X → sign in with X" sequence is atomic w.r.t. other
+      // requests, WITHOUT holding a pooled DB connection while waiting (which is
+      // what deadlocked the pool before — see CODE-REVIEW C2). The password hash
+      // is computed OUTSIDE the critical section since it touches no DB state.
       const userId = existing.rows[0].id as string;
-      const lockKey = userLockKey(userId);
-      const client = await pool.connect();
-      let lockAcquired = false;
-      try {
-        await client.query(`SELECT pg_advisory_lock($1::int, $2::int)`, lockKey);
-        lockAcquired = true;
+      const ctx = await auth.$context;
+      const hashed = await ctx.password.hash(localPassword);
 
-        const ctx = await auth.$context;
-        const hashed = await ctx.password.hash(localPassword);
+      authResponse = await withUserLoginLock(userId, async () => {
         await ctx.internalAdapter.updatePassword(userId, hashed);
-
-        authResponse = await auth.api.signInEmail({
+        return auth.api.signInEmail({
           body: { email, password: localPassword, rememberMe },
           headers: reqHeaders,
           asResponse: true,
         });
-      } finally {
-        if (lockAcquired) {
-          await client
-            .query(`SELECT pg_advisory_unlock($1::int, $2::int)`, lockKey)
-            .catch((e: unknown) => console.error("[external-login] advisory unlock failed", e));
-        }
-        client.release();
-      }
+      });
     }
 
     if (!authResponse.ok) {

@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
+import { SignatureGuard } from './auth/signature.guard';
 import { AIModule } from './ai/ai.module';
 import { OCRModule } from './ocr/ocr.module';
 import { SearchModule } from './search/search.module';
@@ -26,6 +28,13 @@ import { KnowledgeModule } from './knowledge/knowledge.module';
     OCRModule,
     SearchModule,
     HealthModule,
+  ],
+  providers: [
+    // Deny-by-default auth: SignatureGuard runs on EVERY route unless the route
+    // is marked @Public(). This replaces per-controller @UseGuards, so a newly
+    // added controller is authenticated automatically instead of shipping open
+    // (CODE-REVIEW C13). SignatureGuard is provided+exported by AuthModule.
+    { provide: APP_GUARD, useExisting: SignatureGuard },
   ],
 })
 export class AppModule {}

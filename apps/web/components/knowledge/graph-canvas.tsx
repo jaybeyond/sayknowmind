@@ -161,6 +161,10 @@ export function GraphCanvas({
   // (not a ref) so useMemo can seed node coords during render without tripping
   // the React 19 react-hooks/refs rule; drag handlers update via setState.
   const [savedPositions, setSavedPositions] = useState<SavedPositions>(() => loadSavedPositions());
+  // Mirror of savedPositions for writes from stable callbacks (which close over
+  // stale state), so drag-end can persist without reading a stale closure or
+  // running a side effect inside the state updater.
+  const savedPositionsRef = useRef<SavedPositions>(savedPositions);
   const [draggingNode, setDraggingNode] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [sizeMultiplier, setSizeMultiplier] = useState(1);
@@ -249,7 +253,14 @@ export function GraphCanvas({
     }
 
     return { nodes: fgNodes, links: fgLinks, nodeMap: fgNodeMap };
-  }, [nodes, edges, savedPositions]);
+    // savedPositions is intentionally NOT a dependency: it changes on every
+    // drag-end, and rebuilding here would hand force-graph a fresh node array,
+    // discarding the live simulation coords of unpinned nodes and re-heating the
+    // whole layout on every drag (CODE-REVIEW C16). The dragged node's position
+    // is already applied to its live object; this memo re-seeds saved positions
+    // only when nodes/edges actually change (reading the latest map then).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges]);
 
   // Sync nodeMapRef outside of render to satisfy React 19 rules-of-hooks
   useEffect(() => {
@@ -366,11 +377,10 @@ export function GraphCanvas({
       const { node } = drag;
       if (node.fx != null && node.fy != null) {
         const pos = { x: node.fx, y: node.fy };
-        setSavedPositions((prev) => {
-          const next = { ...prev, [node.id]: pos };
-          persistSavedPositions(next);
-          return next;
-        });
+        const next = { ...savedPositionsRef.current, [node.id]: pos };
+        savedPositionsRef.current = next;
+        persistSavedPositions(next);
+        setSavedPositions(next);
       }
     } else {
       // Pure click → restore the pin state it had before grabbing (so clicking

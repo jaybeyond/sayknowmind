@@ -96,6 +96,18 @@ type ChatResponse struct {
 	RelatedDocuments []string   `json:"relatedDocuments"`
 }
 
+// ChatOptions carries optional parameters for Chat. Pass nil to start a new
+// conversation with defaults.
+//
+// NOTE: Chat previously took a positional second string that meant `mode`; it
+// now means conversation. Options are a struct (not a bare string) so old
+// `Chat(msg, "simple")` call sites fail to COMPILE rather than silently sending
+// the wrong field (CODE-REVIEW C12).
+type ChatOptions struct {
+	// ConversationID resumes an existing conversation. Empty starts a new one.
+	ConversationID string
+}
+
 type Category struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -238,13 +250,13 @@ func (c *Client) IngestText(content, title string) (*IngestResponse, error) {
 // The server always returns text/event-stream; this method reads all
 // "answer" token events and joins them into Answer, collects sources into
 // Citations, and captures conversationId/messageId from the "done" event.
-// conversationId may be empty to start a new conversation.
-func (c *Client) Chat(message, conversationID string) (*ChatResponse, error) {
+// Pass nil opts (or an empty ConversationID) to start a new conversation.
+func (c *Client) Chat(message string, opts *ChatOptions) (*ChatResponse, error) {
 	payload := map[string]interface{}{
 		"message": message,
 	}
-	if conversationID != "" {
-		payload["conversationId"] = conversationID
+	if opts != nil && opts.ConversationID != "" {
+		payload["conversationId"] = opts.ConversationID
 	}
 
 	bodyBytes, err := json.Marshal(payload)
@@ -322,6 +334,14 @@ func (c *Client) Chat(message, conversationID string) (*ChatResponse, error) {
 		case "done":
 			convID = sseStrVal(ev, "conversationId")
 			msgID = sseStrVal(ev, "messageId")
+		case "error":
+			// Server-signalled failure mid-stream — return an error instead of a
+			// blank answer (CODE-REVIEW C14).
+			msg := sseStrVal(ev, "message")
+			if msg == "" {
+				msg = "chat stream error"
+			}
+			return nil, &APIError{Code: resp.StatusCode, Message: msg}
 		}
 	}
 	if err := scanner.Err(); err != nil {

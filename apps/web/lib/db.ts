@@ -18,6 +18,11 @@ function createPool() {
     connectionString:
       process.env.DATABASE_URL ??
       `postgres://${process.env.POSTGRES_USER ?? "postgres"}:${process.env.POSTGRES_PASSWORD ?? "changeme-in-production"}@localhost:${process.env.POSTGRES_PORT ?? "5432"}/sayknowmind`,
+    max: Number(process.env.PG_POOL_MAX ?? 10),
+    // Bound the wait for a free connection so connection pressure surfaces as a
+    // fast, retriable error instead of a permanent hang (pg's default is 0 =
+    // wait forever). Defensive backstop for pool-starvation regressions.
+    connectionTimeoutMillis: Number(process.env.PG_POOL_CONNECTION_TIMEOUT_MS ?? 10_000),
   });
 }
 

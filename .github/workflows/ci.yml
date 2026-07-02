@@ -168,6 +168,14 @@ jobs:
             # Enterprise edition for the registry image; the Dockerfile default
             # is "local" (open/Railway), so it must be set saas explicitly here.
             buildArgs: NEXT_PUBLIC_AUTH_MODE=saas
+          - name: web-local
+            context: ./apps/web
+            dockerfile: ./apps/web/Dockerfile
+            # Open (local-auth) edition. NEXT_PUBLIC_AUTH_MODE is baked into the
+            # client bundle at build time, so the local edition needs its own
+            # image; the Helm chart selects it when app.authMode=local so the
+            # client can't diverge from the runtime auth mode (CODE-REVIEW C11).
+            buildArgs: NEXT_PUBLIC_AUTH_MODE=local
           - name: ai-server
             context: ./apps/ai-server
             dockerfile: ./apps/ai-server/Dockerfile

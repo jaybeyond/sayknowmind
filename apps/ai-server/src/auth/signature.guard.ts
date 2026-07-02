@@ -5,8 +5,10 @@ import {
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { CryptoService } from './crypto.service';
+import { IS_PUBLIC_KEY } from './public.decorator';
 
 @Injectable()
 export class SignatureGuard implements CanActivate {
@@ -17,6 +19,7 @@ export class SignatureGuard implements CanActivate {
   constructor(
     private cryptoService: CryptoService,
     private configService: ConfigService,
+    private reflector: Reflector,
   ) {
     const skipAuthRequested = this.configService.get('SKIP_AUTH', 'false') === 'true';
     this.aiApiKey = this.configService.get('AI_API_KEY', '');
@@ -44,6 +47,13 @@ export class SignatureGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Endpoints explicitly marked @Public() (e.g. health probes) are exempt.
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) return true;
+
     const request = context.switchToHttp().getRequest();
 
     // Development mode: skip authentication

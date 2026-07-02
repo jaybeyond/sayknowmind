@@ -137,6 +137,11 @@ export class SayknowMindClient {
     const citations: Citation[] = [];
     let conversationId = "";
     let messageId = "";
+    // Server-signalled failure (e.g. all LLM providers errored). Captured here
+    // and thrown after the loop so it isn't swallowed by the malformed-line
+    // catch below (CODE-REVIEW C14) — otherwise chat() would resolve with an
+    // empty answer and no error.
+    let streamError: string | null = null;
 
     outer: while (true) {
       const { done, value } = await reader.read();
@@ -167,12 +172,17 @@ export class SayknowMindClient {
           } else if (ev.type === "done") {
             conversationId = ev.conversationId;
             messageId = ev.messageId;
+          } else if (ev.type === "error") {
+            streamError = ev.message || "Chat stream error";
+            break outer;
           }
         } catch {
           // Skip malformed SSE lines.
         }
       }
     }
+
+    if (streamError !== null) throw new Error(streamError);
 
     return {
       conversationId,

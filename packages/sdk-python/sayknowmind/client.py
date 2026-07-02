@@ -237,6 +237,14 @@ class SayknowMindClient:
                 elif ev_type == "done":
                     conversation_id_resp = ev.get("conversationId", "")
                     message_id = ev.get("messageId", "")
+                elif ev_type == "error":
+                    # Server-signalled failure mid-stream (e.g. all LLM
+                    # providers errored). Raise instead of returning a blank
+                    # answer with no error (CODE-REVIEW C14).
+                    raise SayknowMindError(
+                        response.status_code,
+                        ev.get("message") or "Chat stream error",
+                    )
 
         return ChatResponse(
             conversation_id=conversation_id_resp,

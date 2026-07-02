@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { getSession, requireAdmin } from "@/lib/admin";
-import { deleteDocument as deleteEdgeQuakeDocument } from "@/lib/edgequake/client";
+import { deindexDocuments } from "@/lib/edgequake/client";
 import { ensureEqDocumentIdColumn } from "@/lib/ingest/document-store";
 
 /** GET /api/admin/users/[id] — Get user detail + recent 10 documents */
@@ -82,14 +82,12 @@ export async function DELETE(
     const result = await client.query(`DELETE FROM "user" WHERE id = $1`, [id]);
     await client.query("COMMIT");
 
-    for (const row of docDel.rows) {
-      const eqDocId = row.eq_document_id as string | null;
-      if (eqDocId) {
-        deleteEdgeQuakeDocument(eqDocId).catch((eqErr) =>
-          console.warn("[admin] EdgeQuake de-index failed:", eqErr),
-        );
-      }
-    }
+    // Best-effort de-index of the deleted user's docs, bounded concurrency so a
+    // heavy account doesn't burst thousands of simultaneous EdgeQuake DELETEs.
+    void deindexDocuments(
+      docDel.rows.map((r: { eq_document_id: string | null }) => r.eq_document_id),
+      "admin",
+    );
 
     if (result.rowCount === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });

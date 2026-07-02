@@ -57,12 +57,14 @@ impl SOTAQueryEngine {
         tenant_id: Option<String>,
         workspace_id: Option<String>,
     ) -> Result<QueryContext> {
-        let dense = self
-            .query_naive(embeddings, tenant_id.clone(), workspace_id.clone())
-            .await?;
-        let local = self
-            .query_local(keywords, embeddings, tenant_id, workspace_id)
-            .await?;
+        // The dense (vector) and local (graph) lanes are independent — run them
+        // concurrently instead of serially so PPR latency is max(lanes), not the
+        // sum (CODE-REVIEW cleanup). try_join! polls both on this task (no spawn,
+        // so no Send bound) and short-circuits on the first error.
+        let (dense, local) = tokio::try_join!(
+            self.query_naive(embeddings, tenant_id.clone(), workspace_id.clone()),
+            self.query_local(keywords, embeddings, tenant_id, workspace_id),
+        )?;
         Ok(self.fuse_ppr(dense, local))
     }
 
@@ -75,23 +77,22 @@ impl SOTAQueryEngine {
         workspace_id: Option<String>,
         vector_storage: &Arc<dyn VectorStorage>,
     ) -> Result<QueryContext> {
-        let dense = self
-            .query_naive_with_vector_storage(
+        // Independent lanes — run concurrently (see query_ppr above).
+        let (dense, local) = tokio::try_join!(
+            self.query_naive_with_vector_storage(
                 embeddings,
                 tenant_id.clone(),
                 workspace_id.clone(),
                 vector_storage,
-            )
-            .await?;
-        let local = self
-            .query_local_with_vector_storage(
+            ),
+            self.query_local_with_vector_storage(
                 keywords,
                 embeddings,
                 tenant_id,
                 workspace_id,
                 vector_storage,
-            )
-            .await?;
+            ),
+        )?;
         Ok(self.fuse_ppr(dense, local))
     }
 }

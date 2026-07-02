@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 import { getUserProvidersMasked, saveUserProviders, isMaskedKey } from "@/lib/provider-db";
 import { getUserProviders } from "@/lib/provider-db";
+import { validateUrl } from "@/lib/ingest/url-fetcher";
+
+// Providers that route through the local webview relay (never fetched by
+// baseUrl), so their baseUrl is exempt from the SSRF URL check on save.
+const RELAY_PROVIDER_IDS = new Set(["ocp", "codex"]);
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +68,21 @@ export async function POST(request: NextRequest) {
       ...p,
       isActive: p.id === (activeProviderId ?? ""),
     }));
+
+  // SSRF: baseUrl is user-supplied and later used for server-side fetch()
+  // (cloud-ai / cloud-chat). Reject private/internal addresses up-front so they
+  // never get persisted. Relay providers don't fetch baseUrl — skip them.
+  for (const p of validProviders) {
+    if (RELAY_PROVIDER_IDS.has(p.id)) continue;
+    try {
+      await validateUrl(p.baseUrl);
+    } catch {
+      return NextResponse.json(
+        { message: `Invalid or disallowed provider URL for "${p.id}"` },
+        { status: 400 },
+      );
+    }
+  }
 
   try {
     await saveUserProviders(userId, validProviders);

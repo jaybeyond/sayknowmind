@@ -66,6 +66,13 @@ app.kubernetes.io/component: {{ .component }}
 {{- $tag := default $g.imageTag $cfg.tag -}}
 {{- if $cfg.image -}}
 {{ $cfg.image }}
+{{- else if and (eq $component "web") (eq (default "saas" .root.Values.app.authMode) "local") -}}
+{{- /* The web client bakes NEXT_PUBLIC_AUTH_MODE at BUILD time, so the open
+       (local-auth) edition needs a separately-built image. Derive it from
+       app.authMode so the client edition can never diverge from the runtime
+       NEXT_PUBLIC_AUTH_MODE the configmap injects (CODE-REVIEW C11). CI builds
+       both `-web` (saas) and `-web-local` (local). */ -}}
+{{ printf "%s/%s-web-local:%s" $g.registry $g.imagePrefix $tag }}
 {{- else -}}
 {{ printf "%s/%s-%s:%s" $g.registry $g.imagePrefix $component $tag }}
 {{- end -}}
