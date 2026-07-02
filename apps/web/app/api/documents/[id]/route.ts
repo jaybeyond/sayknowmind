@@ -6,7 +6,7 @@ import { readableClause, writableClause, editableViaShareClause } from "@/lib/vi
 import { emitDocumentEvent } from "@/lib/events";
 import { assignTags, clearDocumentTags, type Queryable } from "@/lib/tags/store";
 import { captureDocumentVersion } from "@/lib/versions/store";
-import { deleteDocument as deleteEdgeQuakeDocument } from "@/lib/edgequake/client";
+import { deindexDocumentIfUnreferenced as deleteEdgeQuakeDocument, reindexDocumentById } from "@/lib/edgequake/client";
 import { ensureEqDocumentIdColumn } from "@/lib/ingest/document-store";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -114,9 +114,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     // eq_document_id now so we can de-index it after the row is updated (the
     // UPDATE nulls indexed_at + eq_document_id so the reprocessor re-indexes).
     let staleEqDocId: string | null = null;
+    // Only reference the eq_document_id column in the UPDATE if we can confirm it
+    // exists. ensureEqDocumentIdColumn() self-heals it on no-migration deploys,
+    // but if that ALTER fails (restricted DDL / lock timeout) an unconditional
+    // `eq_document_id = NULL` would throw 42703 and 500 every content autosave
+    // (see CODE-REVIEW P18).
+    let eqColumnReady = false;
     if (content !== undefined) {
       try {
         await ensureEqDocumentIdColumn();
+        eqColumnReady = true;
         const prev = await pool.query(`SELECT eq_document_id FROM documents WHERE id = $1`, [id]);
         staleEqDocId = (prev.rows[0]?.eq_document_id as string | null) ?? null;
       } catch (prefetchErr) {
@@ -140,7 +147,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       params.push(content);
       paramIdx++;
       setClauses.push(`indexed_at = NULL`);
-      setClauses.push(`eq_document_id = NULL`);
+      if (eqColumnReady) setClauses.push(`eq_document_id = NULL`);
     }
 
     if (summary !== undefined) {
@@ -266,11 +273,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       await client.query("COMMIT");
       emitDocumentEvent({ type: "document:updated", documentId: id, userId: ctx.userId, title: result.rows[0].title ?? undefined });
 
-      // Best-effort de-index of the now-stale EdgeQuake doc (shared corpus);
-      // the reprocessor re-indexes the new content. Never blocks the save.
-      if (staleEqDocId) {
-        deleteEdgeQuakeDocument(staleEqDocId).catch((eqErr) =>
-          console.warn("[documents] EdgeQuake de-index on edit failed:", eqErr),
+      // On a content edit: de-index the now-stale EdgeQuake doc, then re-index
+      // the new content immediately in the background so the document stays in
+      // RAG search/chat instead of disappearing until the periodic reprocessor
+      // runs (see CODE-REVIEW C8). Both are best-effort and never block the save.
+      if (content !== undefined) {
+        if (staleEqDocId) {
+          deleteEdgeQuakeDocument(staleEqDocId).catch((eqErr) =>
+            console.warn("[documents] EdgeQuake de-index on edit failed:", eqErr),
+          );
+        }
+        reindexDocumentById(id).catch((eqErr) =>
+          console.warn("[documents] EdgeQuake re-index on edit failed:", eqErr),
         );
       }
 

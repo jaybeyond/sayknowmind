@@ -1,6 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
 import { HealthService, HealthStatus } from './health.service';
+import { Public } from '../auth/public.decorator';
 
+@Public() // health probes must be reachable without auth (global guard exempt)
 @Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}

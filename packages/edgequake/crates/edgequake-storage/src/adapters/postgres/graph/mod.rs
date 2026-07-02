@@ -1403,18 +1403,12 @@ impl GraphStorage for PostgresAGEGraphStorage {
             // stamps tenant_id/workspace_id into edge properties), and the node
             // filter is already strict. Dropping the `IS NULL OR` escape stops
             // null-/cross-tenant edges leaking into a tenant-scoped query.
-            conditions.push(format!(
-                "r.tenant_id = '{}'",
-                escaped_tid
-            ));
+            conditions.push(format!("r.tenant_id = '{}'", escaped_tid));
         }
 
         if let Some(wid) = workspace_id {
             let escaped_wid = Self::escape_cypher_string(wid);
-            conditions.push(format!(
-                "r.workspace_id = '{}'",
-                escaped_wid
-            ));
+            conditions.push(format!("r.workspace_id = '{}'", escaped_wid));
         }
 
         let cypher = format!(

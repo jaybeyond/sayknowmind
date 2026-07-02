@@ -20,6 +20,14 @@ export interface FetchedContent {
 
 const FETCH_TIMEOUT = 30_000;
 
+// Numeric app ErrorCode values, used to tell OUR tagged errors apart from
+// errors that merely happen to carry a numeric `.code`. DOMException (thrown by
+// AbortSignal.timeout) has a legacy numeric code (TimeoutError=23, AbortError=20)
+// that must NOT be mistaken for an app ErrorCode (see CODE-REVIEW C17).
+const APP_ERROR_CODES = new Set(
+  Object.values(ErrorCode).filter((v): v is number => typeof v === "number"),
+);
+
 /** Returns true if the IPv4 address is in a private/internal range. */
 function isPrivateIp(ip: string): boolean {
   // IPv6 loopback / link-local
@@ -203,8 +211,11 @@ export async function fetchUrl(url: string): Promise<FetchedContent> {
     });
   } catch (err) {
     // Preserve SSRF/validation errors (private-network redirect, invalid URL)
-    // instead of masking them as a generic fetch failure.
-    if ((err as { code?: number }).code !== undefined) throw err;
+    // instead of masking them as a generic fetch failure — but ONLY when the
+    // code is a real app ErrorCode. A DOMException timeout carries `.code` 23,
+    // which must be wrapped as INGEST_FETCH_FAILED, not leaked raw.
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === "number" && APP_ERROR_CODES.has(code)) throw err;
     throw Object.assign(
       new Error(`Failed to fetch URL: ${url} - ${(err as Error).message}`),
       { code: ErrorCode.INGEST_FETCH_FAILED },

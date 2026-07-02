@@ -93,7 +93,18 @@ function reconstructNodeData(
   structure: NodeStructure,
 ): MindElixirData["nodeData"] | null {
   const allChildIds = new Set(Object.values(structure).flat());
-  const rootId = Object.keys(flatNodes).find((id) => !allChildIds.has(id));
+  // Root = the node in the STRUCTURE that is nobody's child. Derive it from the
+  // structure blob (written atomically as one LWW value, so it always describes
+  // one coherent tree with exactly one root) — NOT from flatNodes iteration
+  // order. A concurrent merge can leave an orphan entry in the node map with no
+  // parent; picking the first such flatNodes key as root is nondeterministic
+  // across peers and can render just the orphan subtree, after which the next
+  // local edit's writeToYDoc delete-loop prunes every real node from the shared
+  // doc (permanent multi-peer data loss). Structure keys always include every
+  // real node (extractStructure walks the whole tree), so orphans that aren't in
+  // structure can never be chosen here.
+  const rootId =
+    Object.keys(structure).find((id) => !allChildIds.has(id) && flatNodes[id]) ?? null;
   if (!rootId) return null;
   const build = (id: string): MindElixirData["nodeData"] | null => {
     const raw = flatNodes[id];
@@ -464,9 +475,26 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
           if (ymeta.has("structure")) {
             applyRemote();
           } else if (session!.canWrite) {
-            // First writer seeds the shared doc from local data.
-            const seedData = JSON.parse(lastJsonRef.current) as MindElixirData;
-            writeToYDoc(seedData);
+            // No new-format state yet. Before seeding from local data, migrate a
+            // legacy single-blob mindmap (the old `getMap("mindmap").data` key)
+            // into the per-node maps so existing collaborated docs don't discard
+            // their persisted CRDT state on the format switch (CODE-REVIEW C10).
+            let seeded = false;
+            const legacyMap = ydoc.getMap<unknown>("mindmap");
+            const legacyRaw = legacyMap.get("data");
+            if (typeof legacyRaw === "string") {
+              try {
+                writeToYDoc(JSON.parse(legacyRaw) as MindElixirData);
+                legacyMap.delete("data"); // drop the migrated blob
+                seeded = true;
+              } catch {
+                /* malformed legacy blob — fall through to local seed */
+              }
+            }
+            if (!seeded) {
+              // First writer seeds the shared doc from local data.
+              writeToYDoc(JSON.parse(lastJsonRef.current) as MindElixirData);
+            }
           }
         });
         provider.on("status", (e: { status: string }) =>

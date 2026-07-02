@@ -4,7 +4,7 @@ import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { writableClause, editableViaShareClause } from "@/lib/visibility";
 import { emitDocumentEvent } from "@/lib/events";
-import { deleteDocument as deleteEdgeQuakeDocument } from "@/lib/edgequake/client";
+import { deindexDocuments } from "@/lib/edgequake/client";
 import { ensureEqDocumentIdColumn } from "@/lib/ingest/document-store";
 
 // DELETE /api/documents/trash — empty the trash: permanently hard-delete every
@@ -32,13 +32,13 @@ export async function DELETE() {
 
     for (const row of result.rows) {
       emitDocumentEvent({ type: "document:deleted", documentId: row.id as string, userId: ctx.userId });
-      const eqDocId = row.eq_document_id as string | null;
-      if (eqDocId) {
-        deleteEdgeQuakeDocument(eqDocId).catch((eqErr) =>
-          console.warn("[documents] EdgeQuake de-index (trash) failed:", eqErr),
-        );
-      }
     }
+    // Bounded-concurrency de-index so emptying a large trash doesn't burst
+    // thousands of simultaneous EdgeQuake DELETEs.
+    void deindexDocuments(
+      result.rows.map((r: { eq_document_id: string | null }) => r.eq_document_id),
+      "documents/trash",
+    );
 
     return NextResponse.json({ deleted: true, count: result.rows.length });
   } catch (err) {

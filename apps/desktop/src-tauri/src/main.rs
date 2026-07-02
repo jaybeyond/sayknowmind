@@ -59,24 +59,32 @@ struct ServerState;
 /// user's machine via `provision_ocp_key`, `ocp_install`, `exec_codex_login`,
 /// etc.
 ///
-/// Returns `Ok(())` when the calling webview is locally-served (full build) or
-/// otherwise not the cloud host. Returns `Err` for the remote cloud origin.
+/// ALLOWLIST (fail-closed): privileged commands may run ONLY from the local app
+/// shell. The Tauri shell serves assets from the `tauri` scheme
+/// (tauri://localhost, or https://tauri.localhost on Windows) or, for the full
+/// build / dev, from http(s)://localhost / 127.0.0.1. Everything else — the
+/// remote cloud webview, OAuth redirect origins, and host-less/opaque URLs
+/// (where the old denylist returned "" and fell through to trusted) — is
+/// rejected. A new or unexpected origin can therefore never silently become
+/// trusted (CODE-REVIEW C7).
 fn assert_trusted_webview(window: &tauri::WebviewWindow) -> Result<(), String> {
     let url = window
         .url()
         .map_err(|e| format!("webview origin check failed: {}", e))?;
+    let scheme = url.scheme();
     let host = url.host_str().unwrap_or("");
-    // Reject any call originating from the configured remote cloud host
-    // (or any subdomain of it) so privileged commands stay local-only.
-    if host == REMOTE_HOST || host.ends_with(&format!(".{}", REMOTE_HOST)) {
-        return Err(format!(
-            "SECURITY: privileged command rejected — caller is the remote \
-             cloud webview (origin: {}). This command may only be invoked \
-             from the local app shell.",
-            host
-        ));
+    let trusted = scheme == "tauri"
+        || matches!(host, "localhost" | "127.0.0.1" | "::1" | "tauri.localhost");
+    if trusted {
+        Ok(())
+    } else {
+        Err(format!(
+            "SECURITY: privileged command rejected — caller is not the local app \
+             shell (origin scheme: {}, host: {}). This command may only be \
+             invoked from the local desktop shell.",
+            scheme, host
+        ))
     }
-    Ok(())
 }
 
 #[tauri::command]
@@ -612,12 +620,14 @@ fn run_codex_exec(app: &tauri::AppHandle, prompt: &str, model: Option<&str>) -> 
 /// transcript prompt and let Codex reply as the assistant.
 #[tauri::command]
 async fn chat_via_codex(
-    window: tauri::WebviewWindow,
+    // No assert_trusted_webview here: like chat_via_ocp, this is an LLM-relay
+    // data-path command the lite webview (served from the remote host) legitimately
+    // invokes. Guarding it broke all Codex relay jobs in the lite build; only the
+    // exec/install/key commands are privileged and stay guarded (CODE-REVIEW C7).
     app: tauri::AppHandle,
     messages: Vec<ChatMessage>,
     model: Option<String>,
 ) -> Result<ChatReply, String> {
-    assert_trusted_webview(&window)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<ChatReply, String> {
 
         // Codex `exec` is single-turn — no thread resume — so we collapse
@@ -651,13 +661,13 @@ async fn chat_via_codex(
 /// through OCP → Codex without restructuring the caller.
 #[tauri::command]
 async fn complete_via_codex(
-    window: tauri::WebviewWindow,
+    // Unguarded for the same reason as complete_via_ocp / chat_via_codex — this
+    // is an LLM-relay data-path command, not a privileged one (CODE-REVIEW C7).
     app: tauri::AppHandle,
     system: String,
     user: String,
     model: Option<String>,
 ) -> Result<ChatReply, String> {
-    assert_trusted_webview(&window)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<ChatReply, String> {
 
         let prompt = if system.trim().is_empty() {

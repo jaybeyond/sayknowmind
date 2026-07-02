@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { ollamaListModels } from "@/lib/ollama/client";
+import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 
 export async function GET() {
+  const userId = await getUserIdFromRequest();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const models = await ollamaListModels();
     return NextResponse.json({ models });

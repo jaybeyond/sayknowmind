@@ -3,7 +3,9 @@ import { getDocument } from "@/lib/ingest/document-store";
 import { getFile, downloadOgImage } from "@/lib/ingest/file-storage";
 import { updateDocument } from "@/lib/ingest/document-store";
 import { validateUrl, safeFetch } from "@/lib/ingest/url-fetcher";
-import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
+import { getOrgContext } from "@/lib/org-context";
+import { pool } from "@/lib/db";
+import { readableClause } from "@/lib/visibility";
 
 /** SSRF guard: true only if the URL is well-formed and resolves to a public address. */
 async function isSafeUrl(url: string | null): Promise<boolean> {
@@ -44,8 +46,18 @@ export async function GET(
   const isShared = (doc as { privacy_level?: string }).privacy_level === "shared";
   let authorized = isShared;
   if (!authorized) {
-    const userId = await getUserIdFromRequest();
-    authorized = !!userId && (doc as { user_id?: string }).user_id === userId;
+    // An authenticated viewer with read access — owner, org-visible, per-user
+    // share, or team share — may see the thumbnail. Mirror the dashboard feed's
+    // readableClause so a private doc shared to a teammate doesn't render a
+    // placeholder for them (CODE-REVIEW C15).
+    const ctx = await getOrgContext();
+    if (ctx) {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM documents d WHERE d.id = $3 AND ${readableClause("d", 2, 1, "document")} LIMIT 1`,
+        [ctx.userId, ctx.organizationId, documentId],
+      );
+      authorized = rows.length > 0;
+    }
   }
   if (!authorized) {
     trace.error = "document not shared";

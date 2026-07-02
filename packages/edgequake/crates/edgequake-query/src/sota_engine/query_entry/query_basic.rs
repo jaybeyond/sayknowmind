@@ -135,8 +135,13 @@ impl SOTAQueryEngine {
                     .await?
             }
             QueryMode::Ppr => {
-                self.query_ppr(&keywords, &embeddings, request.tenant_id(), request.workspace_id())
-                    .await?
+                self.query_ppr(
+                    &keywords,
+                    &embeddings,
+                    request.tenant_id(),
+                    request.workspace_id(),
+                )
+                .await?
             }
         };
         stats.retrieval_time_ms = retrieval_start.elapsed().as_millis() as u64;
@@ -322,8 +327,13 @@ impl SOTAQueryEngine {
                     .await?
             }
             QueryMode::Ppr => {
-                self.query_ppr(&keywords, &embeddings, request.tenant_id(), request.workspace_id())
-                    .await?
+                self.query_ppr(
+                    &keywords,
+                    &embeddings,
+                    request.tenant_id(),
+                    request.workspace_id(),
+                )
+                .await?
             }
         };
         stats.retrieval_time_ms = retrieval_start.elapsed().as_millis() as u64;
@@ -498,8 +508,13 @@ impl SOTAQueryEngine {
                     .await?
             }
             QueryMode::Ppr => {
-                self.query_ppr(&keywords, &embeddings, request.tenant_id(), request.workspace_id())
-                    .await?
+                self.query_ppr(
+                    &keywords,
+                    &embeddings,
+                    request.tenant_id(),
+                    request.workspace_id(),
+                )
+                .await?
             }
         };
         stats.retrieval_time_ms = retrieval_start.elapsed().as_millis() as u64;
@@ -649,8 +664,13 @@ impl SOTAQueryEngine {
                     .await?
             }
             QueryMode::Ppr => {
-                self.query_ppr(&keywords, &embeddings, request.tenant_id(), request.workspace_id())
-                    .await?
+                self.query_ppr(
+                    &keywords,
+                    &embeddings,
+                    request.tenant_id(),
+                    request.workspace_id(),
+                )
+                .await?
             }
         };
 

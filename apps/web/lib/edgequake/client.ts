@@ -233,22 +233,86 @@ export async function indexDocument(request: EQIndexRequest): Promise<EQIndexRes
  * Postgres hard-deletes leave EdgeQuake vectors + graph nodes orphaned in the
  * shared corpus forever. Tolerates 404 (already gone) so callers can treat it
  * as best-effort cleanup that never blocks the user-facing delete.
+ *
+ * EdgeQuake returns 409 for a document still in `pending`/`processing` — the
+ * normal state right after an async sync. Deleting seconds after upload would
+ * otherwise throw and leak the vectors once processing finishes, so we retry
+ * with backoff to let processing complete before giving up.
  */
 export async function deleteDocument(
   eqDocumentId: string,
   scope?: EdgeQuakeScope,
 ): Promise<void> {
-  const response = await fetch(
-    `${EDGEQUAKE_URL}/api/v1/documents/${encodeURIComponent(eqDocumentId)}`,
-    {
-      method: "DELETE",
-      headers: headers(scope),
-      signal: AbortSignal.timeout(EDGEQUAKE_TIMEOUT),
-    },
-  );
-  if (!response.ok && response.status !== 404) {
+  const MAX_ATTEMPTS = 4;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await fetch(
+      `${EDGEQUAKE_URL}/api/v1/documents/${encodeURIComponent(eqDocumentId)}`,
+      {
+        method: "DELETE",
+        headers: headers(scope),
+        signal: AbortSignal.timeout(EDGEQUAKE_TIMEOUT),
+      },
+    );
+    if (response.ok || response.status === 404) return; // deleted, or already gone
+    if (response.status === 409 && attempt < MAX_ATTEMPTS) {
+      // Still pending/processing — wait for it to finish, then retry so its
+      // vectors/graph nodes don't get orphaned.
+      await new Promise((r) => setTimeout(r, 500 * 2 ** (attempt - 1)));
+      continue;
+    }
     throw new Error(`EdgeQuake delete failed: ${response.status} - ${await response.text()}`);
   }
+}
+
+/**
+ * De-index a document ONLY if no other Postgres row still references the same
+ * eq_document_id. EdgeQuake dedups by content hash, so one EQ document can back
+ * several `documents` rows; deleting the EQ doc for one row would strip the
+ * index from its duplicates. Callers delete the PG row FIRST (RETURNING
+ * eq_document_id), then call this — so a remaining reference count of 0 means
+ * this was the last row and the EQ doc is safe to remove.
+ */
+export async function deindexDocumentIfUnreferenced(
+  eqDocumentId: string,
+  scope?: EdgeQuakeScope,
+): Promise<void> {
+  const { pool } = await import("@/lib/db");
+  const { rows } = await pool.query(
+    `SELECT 1 FROM documents WHERE eq_document_id = $1 LIMIT 1`,
+    [eqDocumentId],
+  );
+  if (rows.length > 0) return; // still referenced by a deduped row — keep it
+  await deleteDocument(eqDocumentId, scope);
+}
+
+/**
+ * Drain a batch of eq_document_ids through deindexDocumentIfUnreferenced with
+ * BOUNDED concurrency, then return. Hard-deleting a user or emptying a large
+ * trash otherwise fired one un-awaited DELETE per document all at once, bursting
+ * Node's socket pool and hammering EdgeQuake in a single spike (CODE-REVIEW
+ * cleanup). Best-effort: individual failures are logged, never thrown.
+ */
+export async function deindexDocuments(
+  eqDocumentIds: Array<string | null | undefined>,
+  label = "documents",
+  concurrency = 5,
+): Promise<void> {
+  const ids = eqDocumentIds.filter((v): v is string => !!v);
+  if (ids.length === 0) return;
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < ids.length) {
+      const id = ids[cursor++];
+      try {
+        await deindexDocumentIfUnreferenced(id);
+      } catch (err) {
+        console.warn(`[${label}] EdgeQuake de-index failed:`, err);
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, ids.length) }, worker),
+  );
 }
 
 export async function healthCheck(): Promise<boolean> {
@@ -317,7 +381,7 @@ export async function syncUnindexedToEdgeQuake(
   const { pool } = await import("@/lib/db");
 
   const result = await pool.query(
-    `SELECT id, title, content, metadata FROM documents
+    `SELECT id, title, content, metadata, user_id FROM documents
      WHERE organization_id = $1
        AND indexed_at IS NULL
        AND content IS NOT NULL AND content != ''
@@ -331,14 +395,19 @@ export async function syncUnindexedToEdgeQuake(
 
   for (const doc of result.rows) {
     try {
+      // Attribute the index to the document's TRUE owner, not the caller who
+      // triggered the sync — EdgeQuake scopes retrieval per user, so stamping
+      // the caller's id would reassign every teammate's content to them. Fall
+      // back to the caller only if the row somehow has no owner.
+      const ownerId = (doc.user_id as string | null) ?? userId;
       const eqRes = await indexDocument({
         content: doc.content,
         title: doc.title ?? undefined,
         document_id: doc.id,
-        userId,
+        userId: ownerId,
         metadata: {
           language: doc.metadata?.language,
-          user_id: userId,
+          user_id: ownerId,
           organization_id: organizationId,
           synced_at: new Date().toISOString(),
         },
@@ -360,6 +429,45 @@ export async function syncUnindexedToEdgeQuake(
   }
 
   return { synced, failed, errors };
+}
+
+/**
+ * Re-index a single document into EdgeQuake immediately (best-effort, meant to
+ * be fired in the background after a content edit). Without this, a content
+ * PATCH/relay-sync leaves the doc with indexed_at = NULL and it only gets picked
+ * up by the periodic reprocessor's `not_indexed` bucket — which requires the doc
+ * be > 1h old — so freshly edited docs silently drop out of RAG search/chat
+ * until then (see CODE-REVIEW C8/C9). Attributes to the document's true owner.
+ */
+export async function reindexDocumentById(documentId: string): Promise<void> {
+  const { pool } = await import("@/lib/db");
+  const { ensureEqDocumentIdColumn } = await import("@/lib/ingest/document-store");
+  const { rows } = await pool.query(
+    `SELECT id, title, content, metadata, user_id, organization_id FROM documents
+     WHERE id = $1 AND content IS NOT NULL AND content != ''`,
+    [documentId],
+  );
+  const doc = rows[0];
+  if (!doc) return; // deleted, or emptied — nothing to index
+  const ownerId = (doc.user_id as string | null) ?? undefined;
+  const eqRes = await indexDocument({
+    content: doc.content,
+    title: doc.title ?? undefined,
+    document_id: doc.id,
+    userId: ownerId,
+    metadata: {
+      language: doc.metadata?.language,
+      ...(ownerId ? { user_id: ownerId } : {}),
+      ...(doc.organization_id ? { organization_id: doc.organization_id } : {}),
+      reindexed_at: new Date().toISOString(),
+    },
+    async_processing: true,
+  });
+  await ensureEqDocumentIdColumn();
+  await pool.query(
+    `UPDATE documents SET indexed_at = NOW(), eq_document_id = $2 WHERE id = $1`,
+    [doc.id, eqRes.document_id ?? null],
+  );
 }
 
 /** Test whether an embedding provider config is valid by pinging EdgeQuake */

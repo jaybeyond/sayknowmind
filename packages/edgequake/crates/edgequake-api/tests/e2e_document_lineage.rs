@@ -59,9 +59,9 @@ async fn create_test_workspace(
         embedding_model: Some(embedding_model.to_string()),
         embedding_provider: Some(embedding_provider.to_string()),
         embedding_dimension: Some(embedding_dimension),
-            vision_llm_provider: None,
+        vision_llm_provider: None,
         vision_llm_model: None,
-};
+    };
 
     state
         .workspace_service
@@ -312,9 +312,9 @@ async fn test_provider_switch_updates_lineage_config() {
         embedding_model: Some("mock-embed-v2".to_string()), // Updated model
         embedding_dimension: Some(1536),
         is_active: None,
-            vision_llm_provider: None,
+        vision_llm_provider: None,
         vision_llm_model: None,
-};
+    };
 
     let updated = state
         .workspace_service

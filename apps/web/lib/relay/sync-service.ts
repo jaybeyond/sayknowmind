@@ -9,7 +9,7 @@ import { RelayClient } from "./client";
 import { detectConflict, resolveConflict } from "./conflict-resolver";
 import { isRelayConfigured, getRelayUrl, issueRelayToken, getDeviceId } from "./token";
 import type { SyncPayload } from "./types";
-import { deleteDocument as deleteEdgeQuakeDocument } from "@/lib/edgequake/client";
+import { deindexDocumentIfUnreferenced as deleteEdgeQuakeDocument, reindexDocumentById } from "@/lib/edgequake/client";
 import { ensureEqDocumentIdColumn } from "@/lib/ingest/document-store";
 
 /** Raw row shape from sync_ledger SQL query (snake_case). */
@@ -309,11 +309,13 @@ async function applyUpdate(
   const params: unknown[] = [data.id, userId];
   let idx = 3;
 
+  let contentChanged = false;
   for (const field of ["title", "content", "summary", "url", "privacy_level"] as const) {
     if (field in data) {
       sets.push(`${field} = $${idx}`);
       params.push((data as Record<string, unknown>)[field]);
       idx++;
+      if (field === "content") contentChanged = true;
     }
   }
 
@@ -323,11 +325,45 @@ async function applyUpdate(
     idx++;
   }
 
+  // A relay-synced content edit makes the EdgeQuake index stale, exactly like a
+  // PATCH edit. Invalidate it here too (null indexed_at + eq_document_id), then
+  // de-index the old vector and re-index the new content — otherwise this write
+  // path left a permanently stale index that the reprocessor (indexed_at IS
+  // NULL) would never re-select (see CODE-REVIEW C9).
+  let staleEqDocId: string | null = null;
+  let eqColumnReady = false;
+  if (contentChanged) {
+    try {
+      await ensureEqDocumentIdColumn();
+      eqColumnReady = true;
+      const prev = await pool.query(
+        `SELECT eq_document_id FROM documents WHERE id = $1 AND user_id = $2`,
+        [data.id, userId],
+      );
+      staleEqDocId = (prev.rows[0]?.eq_document_id as string | null) ?? null;
+    } catch (prefetchErr) {
+      console.warn("[relay] eq_document_id prefetch failed:", prefetchErr);
+    }
+    sets.push("indexed_at = NULL");
+    if (eqColumnReady) sets.push("eq_document_id = NULL");
+  }
+
   if (sets.length > 0) {
     sets.push("updated_at = NOW()");
     await pool.query(
       `UPDATE documents SET ${sets.join(", ")} WHERE id = $1 AND user_id = $2`,
       params,
+    );
+  }
+
+  if (contentChanged) {
+    if (staleEqDocId) {
+      deleteEdgeQuakeDocument(staleEqDocId).catch((eqErr) =>
+        console.warn("[relay] EdgeQuake de-index on edit failed:", eqErr),
+      );
+    }
+    reindexDocumentById(data.id).catch((eqErr) =>
+      console.warn("[relay] EdgeQuake re-index on edit failed:", eqErr),
     );
   }
 

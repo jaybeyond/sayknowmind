@@ -11,6 +11,7 @@ import { getOrderedProviders, type ProviderEntry } from "@/lib/provider-config";
 import { getUserProviders } from "@/lib/provider-db";
 import { enqueueAndWait, hasActiveWebview, type RelayProvider } from "@/lib/llm-relay/queue";
 import { codexRelayModel } from "@/lib/codex-models";
+import { safeFetch } from "@/lib/ingest/url-fetcher";
 
 const AI_SERVER_URL = process.env.AI_SERVER_URL ?? "http://localhost:4000";
 const AI_TIMEOUT = 60_000;
@@ -116,7 +117,9 @@ async function callCloudProvider(
 
   const url = `${provider.baseUrl.replace(/\/$/, "")}/v1/chat/completions`;
 
-  const res = await fetch(url, {
+  // SSRF guard: baseUrl is user-supplied. safeFetch() validates it (and every
+  // redirect hop) against private/internal address ranges before connecting.
+  const res = await safeFetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

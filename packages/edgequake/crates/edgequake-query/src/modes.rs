@@ -120,12 +120,18 @@ impl QueryMode {
     /// Whether this mode uses vector search.
     pub fn uses_vector_search(&self) -> bool {
         // Hybrid should use BOTH vector search AND graph traversal
-        matches!(self, Self::Naive | Self::Local | Self::Hybrid | Self::Mix | Self::Ppr)
+        matches!(
+            self,
+            Self::Naive | Self::Local | Self::Hybrid | Self::Mix | Self::Ppr
+        )
     }
 
     /// Whether this mode uses graph traversal.
     pub fn uses_graph(&self) -> bool {
-        matches!(self, Self::Local | Self::Global | Self::Hybrid | Self::Mix | Self::Ppr)
+        matches!(
+            self,
+            Self::Local | Self::Global | Self::Hybrid | Self::Mix | Self::Ppr
+        )
     }
 }
 

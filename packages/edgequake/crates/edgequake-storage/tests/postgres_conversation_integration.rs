@@ -629,7 +629,14 @@ mod full_workflow_tests {
 
         // 4. Update folder
         let updated = storage
-            .update_folder(tenant_id, user_id, folder_id, Some("Renamed Folder"), None, None)
+            .update_folder(
+                tenant_id,
+                user_id,
+                folder_id,
+                Some("Renamed Folder"),
+                None,
+                None,
+            )
             .await
             .expect("Failed to update folder");
 
@@ -787,7 +794,16 @@ mod full_workflow_tests {
 
         // Pin conv2
         storage
-            .update_conversation(tenant_id, user_id, conv2.conversation_id, None, None, Some(true), None, None)
+            .update_conversation(
+                tenant_id,
+                user_id,
+                conv2.conversation_id,
+                None,
+                None,
+                Some(true),
+                None,
+                None,
+            )
             .await
             .expect("Failed to pin");
 
@@ -805,7 +821,16 @@ mod full_workflow_tests {
 
         // Archive conv3
         storage
-            .update_conversation(tenant_id, user_id, conv3.conversation_id, None, None, None, Some(true), None)
+            .update_conversation(
+                tenant_id,
+                user_id,
+                conv3.conversation_id,
+                None,
+                None,
+                None,
+                Some(true),
+                None,
+            )
             .await
             .expect("Failed to archive");
 

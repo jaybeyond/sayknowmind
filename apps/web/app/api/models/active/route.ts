@@ -1,14 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readModelConfig, writeModelConfig, type ModelRole } from "@/lib/model-config";
+import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 
 const VALID_ROLES: ModelRole[] = ["chat", "ocr", "embedding"];
 
 export async function GET() {
+  // The model config is process-global; require a resolved user so a junk
+  // `Authorization: Bearer x` (which the edge middleware defers, not validates)
+  // can't read it.
+  const userId = await getUserIdFromRequest();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const config = readModelConfig();
   return NextResponse.json(config);
 }
 
 export async function POST(req: NextRequest) {
+  // writeModelConfig mutates process-global config — require real auth. The edge
+  // middleware only checks a Bearer token is *present*, deferring validation here.
+  const userId = await getUserIdFromRequest();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await req.json();
   const { model, role, ollamaEnabled } = body as {
     model?: string;
