@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { getSession, requireAdmin } from "@/lib/admin";
+import { deleteDocument as deleteEdgeQuakeDocument } from "@/lib/edgequake/client";
+import { ensureEqDocumentIdColumn } from "@/lib/ingest/document-store";
 
 /** GET /api/admin/users/[id] — Get user detail + recent 10 documents */
 export async function GET(
@@ -63,16 +65,31 @@ export async function DELETE(
     return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
   }
 
+  // Capture EdgeQuake doc ids before deletion so the shared corpus can be
+  // de-indexed after commit (best-effort; never blocks the user deletion).
+  await ensureEqDocumentIdColumn();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query(`DELETE FROM documents WHERE user_id = $1`, [id]);
+    const docDel = await client.query(
+      `DELETE FROM documents WHERE user_id = $1 RETURNING eq_document_id`,
+      [id],
+    );
     await client.query(`DELETE FROM categories WHERE user_id = $1`, [id]);
     await client.query(`DELETE FROM conversations WHERE user_id = $1`, [id]);
     await client.query(`DELETE FROM session WHERE "userId" = $1`, [id]);
     await client.query(`DELETE FROM account WHERE "userId" = $1`, [id]);
     const result = await client.query(`DELETE FROM "user" WHERE id = $1`, [id]);
     await client.query("COMMIT");
+
+    for (const row of docDel.rows) {
+      const eqDocId = row.eq_document_id as string | null;
+      if (eqDocId) {
+        deleteEdgeQuakeDocument(eqDocId).catch((eqErr) =>
+          console.warn("[admin] EdgeQuake de-index failed:", eqErr),
+        );
+      }
+    }
 
     if (result.rowCount === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });

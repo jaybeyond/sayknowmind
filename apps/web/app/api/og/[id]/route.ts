@@ -3,6 +3,7 @@ import { getDocument } from "@/lib/ingest/document-store";
 import { getFile, downloadOgImage } from "@/lib/ingest/file-storage";
 import { updateDocument } from "@/lib/ingest/document-store";
 import { validateUrl, safeFetch } from "@/lib/ingest/url-fetcher";
+import { getUserIdFromRequest } from "@/lib/ingest/session-helper";
 
 /** SSRF guard: true only if the URL is well-formed and resolves to a public address. */
 async function isSafeUrl(url: string | null): Promise<boolean> {
@@ -36,14 +37,26 @@ export async function GET(
     return servePlaceholder();
   }
 
-  // OG images are fetched unauthenticated by crawlers/unfurlers, so only expose
-  // them for documents the owner explicitly shared. Private documents return a
-  // placeholder — this also avoids using the endpoint as a document-existence oracle.
-  if ((doc as { privacy_level?: string }).privacy_level !== "shared") {
+  // OG images are fetched unauthenticated by crawlers/unfurlers, so for those we
+  // only expose documents the owner explicitly shared — this avoids using the
+  // endpoint as a document-existence oracle. An authenticated owner may also view
+  // their own (private) document thumbnails, which the dashboard feed relies on.
+  const isShared = (doc as { privacy_level?: string }).privacy_level === "shared";
+  let authorized = isShared;
+  if (!authorized) {
+    const userId = await getUserIdFromRequest();
+    authorized = !!userId && (doc as { user_id?: string }).user_id === userId;
+  }
+  if (!authorized) {
     trace.error = "document not shared";
     if (debug) return NextResponse.json(trace);
     return servePlaceholder();
   }
+
+  // Shared images may live in a public/CDN cache; owner-only (private) ones must not.
+  const cacheControl = isShared
+    ? "public, max-age=86400, immutable"
+    : "private, max-age=86400, immutable";
 
   const meta = (doc.metadata ?? {}) as Record<string, unknown>;
   trace.docUrl = doc.url;
@@ -63,7 +76,7 @@ export async function GET(
       headers: {
         "Content-Type": contentType,
         "Content-Length": String(file.size),
-        "Cache-Control": "public, max-age=86400, immutable",
+        "Cache-Control": cacheControl,
       },
     });
   }
@@ -78,7 +91,7 @@ export async function GET(
       headers: {
         "Content-Type": contentType,
         "Content-Length": String(buffer.length),
-        "Cache-Control": "public, max-age=86400, immutable",
+        "Cache-Control": cacheControl,
       },
     });
   }
@@ -97,7 +110,7 @@ export async function GET(
 
   if (externalUrl && (await isSafeUrl(externalUrl))) {
     try {
-      const result = await downloadOgImage(documentId, externalUrl);
+      const result = await downloadOgImage(documentId, externalUrl, docUrl ?? undefined);
       trace.downloadResult = result ? { contentType: result.contentType, size: result.base64.length } : null;
 
       if (result) {
@@ -119,7 +132,7 @@ export async function GET(
           headers: {
             "Content-Type": result.contentType,
             "Content-Length": String(buffer.length),
-            "Cache-Control": "public, max-age=86400, immutable",
+            "Cache-Control": cacheControl,
           },
         });
       }

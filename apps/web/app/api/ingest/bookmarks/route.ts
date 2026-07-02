@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       // Download OG image (non-blocking)
       const ogImage = fetchedMeta.ogImage as string | undefined;
       if (ogImage) {
-        downloadOgImage(documentId, ogImage).then(async (result) => {
+        downloadOgImage(documentId, ogImage, bookmark.url).then(async (result) => {
           if (result) {
             await updateDocument(documentId, {
               metadata: {

@@ -18,3 +18,19 @@ export const AUTH_MODE: AuthMode =
 
 /** True for the Enterprise edition (login via SayKnowWork SaaS). */
 export const isSaasAuth = AUTH_MODE === "saas";
+
+/**
+ * SayKnowWork SaaS stores employee numbers as synthesized emails
+ * (see sayknowwork-server/src/api/v1/auth.ts synthesizeEmail):
+ *   employeeNumber → lowercase → non-alphanumeric → dash → `${slug}@sayknow.local`
+ *
+ * Mirrors that transformation so an employee number typed into the invite
+ * form resolves to the same email the user logs in with.
+ */
+export function synthesizeSaasEmail(employeeNumber: string): string {
+  const slug = employeeNumber
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${slug || "user"}@sayknow.local`;
+}

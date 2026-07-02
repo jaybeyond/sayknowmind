@@ -27,6 +27,16 @@ use std::process::Child;
 const SERVER_PORT: u16 = 3457;
 const REMOTE_URL: &str = "https://sayknowmind.ypai.click";
 const REMOTE_HOST: &str = "sayknowmind.ypai.click";
+/// SECURITY (DESK-2): Pin the OCP repo to an audited commit so `ocp_install`
+/// never silently executes code that was not reviewed. Replace the placeholder
+/// below with the specific commit SHA (or tag) you have audited, then bump it
+/// intentionally for each update. The installer REFUSES to run while this is
+/// the placeholder value.
+///
+/// How to obtain the current HEAD SHA after a manual audit:
+///   git -C ~/.sayknowmind/ocp log -1 --format='%H'
+const OCP_PINNED_REF: &str = "REPLACE_WITH_AUDITED_SHA_BEFORE_DEPLOY";
+
 
 // ---------------------------------------------------------------------------
 // State
@@ -41,6 +51,33 @@ struct ServerState;
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
+
+/// SECURITY (DESK-1): Reject privileged command invocations from the remote
+/// cloud webview. The lite build loads `sayknowmind.ypai.click` and must never
+/// be able to trigger install, exec, or key-provisioning commands — an XSS on
+/// that origin would otherwise give an attacker arbitrary code execution on the
+/// user's machine via `provision_ocp_key`, `ocp_install`, `exec_codex_login`,
+/// etc.
+///
+/// Returns `Ok(())` when the calling webview is locally-served (full build) or
+/// otherwise not the cloud host. Returns `Err` for the remote cloud origin.
+fn assert_trusted_webview(window: &tauri::WebviewWindow) -> Result<(), String> {
+    let url = window
+        .url()
+        .map_err(|e| format!("webview origin check failed: {}", e))?;
+    let host = url.host_str().unwrap_or("");
+    // Reject any call originating from the configured remote cloud host
+    // (or any subdomain of it) so privileged commands stay local-only.
+    if host == REMOTE_HOST || host.ends_with(&format!(".{}", REMOTE_HOST)) {
+        return Err(format!(
+            "SECURITY: privileged command rejected — caller is the remote \
+             cloud webview (origin: {}). This command may only be invoked \
+             from the local app shell.",
+            host
+        ));
+    }
+    Ok(())
+}
 
 #[tauri::command]
 fn get_app_info() -> serde_json::Value {
@@ -575,11 +612,14 @@ fn run_codex_exec(app: &tauri::AppHandle, prompt: &str, model: Option<&str>) -> 
 /// transcript prompt and let Codex reply as the assistant.
 #[tauri::command]
 async fn chat_via_codex(
+    window: tauri::WebviewWindow,
     app: tauri::AppHandle,
     messages: Vec<ChatMessage>,
     model: Option<String>,
 ) -> Result<ChatReply, String> {
+    assert_trusted_webview(&window)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<ChatReply, String> {
+
         // Codex `exec` is single-turn — no thread resume — so we collapse
         // the conversation history into one prompt. Mark each turn with a
         // role prefix so the model can tell who said what.
@@ -611,12 +651,15 @@ async fn chat_via_codex(
 /// through OCP → Codex without restructuring the caller.
 #[tauri::command]
 async fn complete_via_codex(
+    window: tauri::WebviewWindow,
     app: tauri::AppHandle,
     system: String,
     user: String,
     model: Option<String>,
 ) -> Result<ChatReply, String> {
+    assert_trusted_webview(&window)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<ChatReply, String> {
+
         let prompt = if system.trim().is_empty() {
             user
         } else {
@@ -717,8 +760,10 @@ async fn list_ocp_models() -> Result<Vec<String>, String> {
 /// Open `claude auth login` on the user's machine. The Claude CLI opens its
 /// own OAuth flow in the system browser; we just kick it off and detach.
 #[tauri::command]
-fn claude_auth_login() -> Result<u32, String> {
+fn claude_auth_login(window: tauri::WebviewWindow) -> Result<u32, String> {
+    assert_trusted_webview(&window)?;
     let claude = which_in_shell_path("claude")
+
         .ok_or_else(|| "Claude CLI not on PATH. Install it first (npm install -g @anthropic-ai/claude-code).".to_string())?;
     Command::new(&claude)
         .args(["auth", "login"])
@@ -733,8 +778,10 @@ fn claude_auth_login() -> Result<u32, String> {
 /// Best-effort `npm install -g @anthropic-ai/claude-code`. Used by the
 /// preflight UI's "Fix automatically" button when the CLI is missing.
 #[tauri::command]
-async fn install_claude_cli() -> Result<String, String> {
+async fn install_claude_cli(window: tauri::WebviewWindow) -> Result<String, String> {
+    assert_trusted_webview(&window)?;
     tauri::async_runtime::spawn_blocking(|| -> Result<String, String> {
+
         run_capture(
             "npm",
             &["install", "-g", "@anthropic-ai/claude-code"],
@@ -779,8 +826,10 @@ struct OcpStatus {
 /// Returns once the child has been spawned — callers should poll
 /// `codex_status()` for completion via the `~/.codex/auth.json` file.
 #[tauri::command]
-fn exec_codex_login(app: tauri::AppHandle) -> Result<u32, String> {
+fn exec_codex_login(window: tauri::WebviewWindow, app: tauri::AppHandle) -> Result<u32, String> {
+    assert_trusted_webview(&window)?;
     // 1) Try the bundled sidecar first. This is the only path that "just
+
     //    works" for users who haven't installed Codex on their machine.
     if let Ok(cmd) = app.shell().sidecar("codex") {
         match cmd.args(["login"]).spawn() {
@@ -833,8 +882,10 @@ struct OcpProvisionResult {
 /// using the admin-key file. Caller persists the key wherever it needs to
 /// (typically the cloud DB via /api/integrations/ocp/status).
 #[tauri::command]
-fn provision_ocp_key() -> Result<OcpProvisionResult, String> {
+fn provision_ocp_key(window: tauri::WebviewWindow) -> Result<OcpProvisionResult, String> {
+    assert_trusted_webview(&window)?;
     let admin = read_ocp_admin_key().ok_or_else(|| {
+
         "OCP admin-key not found at ~/.ocp/admin-key — install and start OCP first".to_string()
     })?;
 
@@ -999,8 +1050,10 @@ fn run_capture(program: &str, args: &[&str], cwd: Option<&PathBuf>) -> Result<St
 /// poll `ocp_status()` for readiness. Tokio's blocking pool keeps the IPC
 /// runtime responsive.
 #[tauri::command]
-async fn ocp_install() -> Result<OcpInstallResult, String> {
+async fn ocp_install(window: tauri::WebviewWindow) -> Result<OcpInstallResult, String> {
+    assert_trusted_webview(&window)?;
     tauri::async_runtime::spawn_blocking(ocp_install_sync)
+
         .await
         .map_err(|e| format!("ocp_install join: {}", e))?
 }
@@ -1016,6 +1069,17 @@ fn ocp_install_sync() -> Result<OcpInstallResult, String> {
         message: msg.to_string(),
         admin_key_path: admin_key_path.clone(),
     };
+    // SECURITY (DESK-2): Refuse to proceed with an unaudited OCP ref.
+    // Replace the OCP_PINNED_REF constant before any production deploy.
+    if OCP_PINNED_REF == "REPLACE_WITH_AUDITED_SHA_BEFORE_DEPLOY" {
+        return Err(
+            "OCP_PINNED_REF has not been set — edit the OCP_PINNED_REF constant \
+             in main.rs and replace the placeholder with an audited commit SHA \
+             or tag before deploying."
+                .to_string(),
+        );
+    }
+
 
     // 1) preflight — pick a Node ≥22.5 across fnm/nvm/volta/brew. The user's
     //    shell default may be an older version (e.g. v20) even if 22+ is
@@ -1051,23 +1115,34 @@ fn ocp_install_sync() -> Result<OcpInstallResult, String> {
         fs::create_dir_all(parent).map_err(|e| format!("create ~/.sayknowmind: {}", e))?;
     }
 
-    // 2) clone or update
+    // 2) Clone or check out the pinned ref — intentionally NEVER float to
+    //    upstream HEAD (DESK-2).  Only the constant OCP_PINNED_REF controls
+    //    which code runs; bump it explicitly after auditing the new version.
     if ocp_dir.join(".git").exists() {
-        run_capture("git", &["pull", "--ff-only"], Some(&ocp_dir))
-            .map_err(|e| format!("git pull failed: {}", e))?;
+        // Fetch so the pinned ref is locally resolvable, then hard-switch
+        // to it.  Do NOT `git pull --ff-only` — that would silently advance
+        // to whatever HEAD the remote published.
+        run_capture("git", &["fetch", "origin"], Some(&ocp_dir))
+            .map_err(|e| format!("git fetch failed: {}", e))?;
+        run_capture("git", &["checkout", OCP_PINNED_REF], Some(&ocp_dir))
+            .map_err(|e| format!("git checkout {} failed: {}", OCP_PINNED_REF, e))?;
     } else {
+        // Fresh clone — no --depth=1 so an arbitrary SHA or tag can be
+        // checked out from full history after the fetch.
         run_capture(
             "git",
             &[
                 "clone",
-                "--depth=1",
                 "https://github.com/dtzp555-max/ocp.git",
                 ocp_dir.to_string_lossy().as_ref(),
             ],
             None,
         )
         .map_err(|e| format!("git clone failed: {}", e))?;
+        run_capture("git", &["checkout", OCP_PINNED_REF], Some(&ocp_dir))
+            .map_err(|e| format!("git checkout {} failed: {}", OCP_PINNED_REF, e))?;
     }
+
 
     // 3) npm install
     run_capture("npm", &["install", "--no-audit", "--no-fund"], Some(&ocp_dir))
@@ -1176,7 +1251,8 @@ fn ocp_install_sync() -> Result<OcpInstallResult, String> {
 
 /// Revoke the SayKnowMind-named key at OCP. Idempotent — silent on 404.
 #[tauri::command]
-fn revoke_ocp_key() -> Result<(), String> {
+fn revoke_ocp_key(window: tauri::WebviewWindow) -> Result<(), String> {
+    assert_trusted_webview(&window)?;
     let admin = match read_ocp_admin_key() {
         Some(k) => k,
         None => return Ok(()),

@@ -98,8 +98,15 @@ function documentToMemory(row: Record<string, unknown>): Memory {
     docType,
     fileType,
     fileName: typeof metadata.fileName === "string" ? metadata.fileName : undefined,
+    // Never hand a raw external CDN URL (e.g. Instagram `scontent`, which is
+    // signed, short-lived and hotlink-protected → 403 in the browser) straight
+    // to <img>. Always route through our own proxy: /api/og/{id} serves the
+    // cached/downloaded bytes (or a placeholder), and authenticates the owner
+    // for private docs. Already-proxied paths are passed through as-is.
     ogImage: typeof metadata.ogImage === "string"
-      ? (metadata.ogImageBase64 ? `/api/og/${String(row.id)}` : metadata.ogImage)
+      ? (metadata.ogImage.startsWith("/api/og/") || metadata.ogImage.startsWith("/api/files/")
+          ? metadata.ogImage
+          : `/api/og/${String(row.id)}`)
       : (isImage && hasFile ? `/api/files/${String(row.id)}` : undefined),
     jobStatus: typeof row.job_status === "string" ? row.job_status as Memory["jobStatus"] : undefined,
   };

@@ -113,7 +113,9 @@ mod postgres_rebuild_tests {
             embedding_model: Some("mock-embed-pg-v1".to_string()),
             embedding_provider: Some("mock".to_string()),
             embedding_dimension: Some(768),
-        };
+                    vision_llm_provider: None,
+            vision_llm_model: None,
+};
 
         let workspace = state
             .workspace_service
@@ -240,7 +242,9 @@ mod postgres_rebuild_tests {
             embedding_model: Some("mock-embed-pg".to_string()),
             embedding_provider: Some("mock".to_string()),
             embedding_dimension: Some(1536),
-        };
+                    vision_llm_provider: None,
+            vision_llm_model: None,
+};
 
         let workspace = state
             .workspace_service
@@ -361,7 +365,9 @@ mod postgres_rebuild_tests {
             embedding_model: Some("mock-embed-a".to_string()),
             embedding_provider: Some("mock".to_string()),
             embedding_dimension: Some(768),
-        };
+                    vision_llm_provider: None,
+            vision_llm_model: None,
+};
 
         let workspace_a = state
             .workspace_service
@@ -381,7 +387,9 @@ mod postgres_rebuild_tests {
             embedding_model: Some("mock-embed-b".to_string()),
             embedding_provider: Some("mock".to_string()),
             embedding_dimension: Some(1024),
-        };
+                    vision_llm_provider: None,
+            vision_llm_model: None,
+};
 
         let workspace_b = state
             .workspace_service
@@ -503,7 +511,9 @@ mod postgres_rebuild_tests {
                 embedding_model: Some("mock-embed-persisted".to_string()),
                 embedding_provider: Some("mock".to_string()),
                 embedding_dimension: Some(1536),
-            };
+                            vision_llm_provider: None,
+                vision_llm_model: None,
+};
 
             let workspace = state1
                 .workspace_service
@@ -618,7 +628,9 @@ mod postgres_rebuild_tests {
             embedding_model: Some("mock-embed".to_string()),
             embedding_provider: Some("mock".to_string()),
             embedding_dimension: Some(768),
-        };
+                    vision_llm_provider: None,
+            vision_llm_model: None,
+};
 
         let workspace = state
             .workspace_service
@@ -761,7 +773,9 @@ mod postgres_rebuild_tests {
             embedding_model: Some("mock-embed-768".to_string()),
             embedding_provider: Some("mock".to_string()),
             embedding_dimension: Some(768),
-        };
+                    vision_llm_provider: None,
+            vision_llm_model: None,
+};
 
         let workspace = state
             .workspace_service

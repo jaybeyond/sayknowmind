@@ -960,7 +960,11 @@ impl GraphStorage for PostgresAGEGraphStorage {
             StorageError::Connection(format!("Failed to acquire connection: {}", e))
         })?;
 
-        let query_lower = query.to_lowercase();
+        // Lowercase for case-insensitive match, then escape single quotes to
+        // prevent SQL injection through the LIKE pattern. The sibling
+        // tenant/workspace/entity_type fields below use escape_sql_string for
+        // the same reason; search_labels() does too.
+        let query_lower = Self::escape_sql_string(&query.to_lowercase());
         tracing::debug!(query = %query, "search_nodes starting");
 
         // Build WHERE conditions for tenant/workspace filtering
@@ -1395,8 +1399,12 @@ impl GraphStorage for PostgresAGEGraphStorage {
 
         if let Some(tid) = tenant_id {
             let escaped_tid = Self::escape_cypher_string(tid);
+            // Fail-CLOSED: edges are tenant-stamped at creation (file_upload.rs
+            // stamps tenant_id/workspace_id into edge properties), and the node
+            // filter is already strict. Dropping the `IS NULL OR` escape stops
+            // null-/cross-tenant edges leaking into a tenant-scoped query.
             conditions.push(format!(
-                "(r.tenant_id IS NULL OR r.tenant_id = '{}')",
+                "r.tenant_id = '{}'",
                 escaped_tid
             ));
         }
@@ -1404,7 +1412,7 @@ impl GraphStorage for PostgresAGEGraphStorage {
         if let Some(wid) = workspace_id {
             let escaped_wid = Self::escape_cypher_string(wid);
             conditions.push(format!(
-                "(r.workspace_id IS NULL OR r.workspace_id = '{}')",
+                "r.workspace_id = '{}'",
                 escaped_wid
             ));
         }

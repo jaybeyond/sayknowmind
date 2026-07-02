@@ -240,13 +240,13 @@ export class SemanticMemoryService {
     // 사용자 메시지에서 Extract important information
     const importantPatterns = [
       // 자기소개
-      { pattern: /(?:제 name은|저는|I'm|my name is) .{2,30}/i, type: 'fact' as const },
+      { pattern: /(?:제 name은|저는|I'm|my name is|私は|僕は|私の名前|我叫|我是|我的名字) .{2,30}/i, type: 'fact' as const },
       // preference도
-      { pattern: /(?:좋아|싫어|prefer|like|hate) .{2,50}/i, type: 'preference' as const },
+      { pattern: /(?:좋아|싫어|prefer|like|hate|好き|嫌い|喜欢|讨厌|不喜欢) .{2,50}/i, type: 'preference' as const },
       // 요청/목표
-      { pattern: /(?:하고 싶|want to|need to|해줘|도와줘) .{5,100}/i, type: 'keypoint' as const },
+      { pattern: /(?:하고 싶|want to|need to|해줘|도와줘|したい|してほしい|手伝って|想要|需要|帮我) .{5,100}/i, type: 'keypoint' as const },
       // important information
-      { pattern: /(?:during요|important|기억해|remember) .{5,100}/i, type: 'fact' as const },
+      { pattern: /(?:중요|important|기억해|remember|重要|大事|覚えて|记住|记得) .{5,100}/i, type: 'fact' as const },
     ];
 
     for (const { pattern, type } of importantPatterns) {

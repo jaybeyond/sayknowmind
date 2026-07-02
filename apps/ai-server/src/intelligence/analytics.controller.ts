@@ -3,8 +3,10 @@ import {
   Get,
   Query,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
+import { SignatureGuard } from '../auth/signature.guard';
 import {
   TimeWindow,
   DashboardData,
@@ -23,6 +25,7 @@ import {
  * 
  * Requirements: 6.1, 6.2, 6.4
  */
+@UseGuards(SignatureGuard)
 @Controller('intelligence/analytics')
 export class AnalyticsController {
   private readonly logger = new Logger(AnalyticsController.name);

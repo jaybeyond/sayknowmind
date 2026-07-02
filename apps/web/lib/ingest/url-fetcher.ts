@@ -190,7 +190,9 @@ export async function fetchUrl(url: string): Promise<FetchedContent> {
 
   let response: Response;
   try {
-    response = await fetch(parsedUrl.toString(), {
+    // safeFetch re-validates every redirect hop (redirect: "manual"), closing
+    // SSRF-via-redirect where a public URL 302s to a private/internal address.
+    response = await safeFetch(parsedUrl.toString(), {
       signal: AbortSignal.timeout(FETCH_TIMEOUT),
       headers: {
         "User-Agent":
@@ -198,9 +200,11 @@ export async function fetchUrl(url: string): Promise<FetchedContent> {
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9,ko;q=0.8,ja;q=0.7,zh;q=0.6",
       },
-      redirect: "follow",
     });
   } catch (err) {
+    // Preserve SSRF/validation errors (private-network redirect, invalid URL)
+    // instead of masking them as a generic fetch failure.
+    if ((err as { code?: number }).code !== undefined) throw err;
     throw Object.assign(
       new Error(`Failed to fetch URL: ${url} - ${(err as Error).message}`),
       { code: ErrorCode.INGEST_FETCH_FAILED },

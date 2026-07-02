@@ -118,7 +118,7 @@ export class ContextBuilderService {
     if (params.basePrompt) {
       parts.push(params.basePrompt);
     } else {
-      parts.push('당신은 SayKnowAI의 AI 어시스턴트is. 친절하고 도움이 되는 답변을 제공please do.');
+      parts.push('당신은 SayKnowAI의 AI 어시스턴트입니다. 친절하고 도움이 되는 답변을 제공하세요.');
     }
 
     // 2. 사용자 커스텀 지시
@@ -129,7 +129,7 @@ export class ContextBuilderService {
     // 3. user memory (개인화된 response above해)
     if (params.userMemorySummary) {
       parts.push(`\n${params.userMemorySummary}`);
-      parts.push('above user info를 참고하여 개인화된 response 제공please do.');
+      parts.push('위 사용자 정보를 참고하여 개인화된 답변을 제공하세요.');
     }
 
     // 4. conversation summary (맥락 유지를 above해)
@@ -243,20 +243,20 @@ export class ContextBuilderService {
 
     if (existingSummary) {
       // 점진적 요약 업데이트
-      return `existing conversation summary:
+      return `기존 대화 요약:
 ${existingSummary}
 
-recent conversation:
+최근 대화:
 ${conversationText}
 
-above existing 요약과 recent conversation를 통합하여 3-4문장으로 업데이트된 요약을 작성please do.
-포함할 content: 주요 주제, 사용자 요청, 해결된 content, important information
-JSON format 없이 자연스러운 문장으로 작성please do.`;
+위 기존 요약과 최근 대화를 통합하여 3-4문장으로 업데이트된 요약을 작성하세요.
+포함할 내용: 주요 주제, 사용자 요청, 해결된 내용, 중요한 정보
+JSON 형식 없이 자연스러운 문장으로 작성하세요.`;
     }
 
     // new Generate summary
-    return `next 대화를 3-4문장으로 요약please do.
-포함할 content: 주요 주제, 사용자 요청, 해결된 content, important information
+    return `다음 대화를 3-4문장으로 요약하세요.
+포함할 내용: 주요 주제, 사용자 요청, 해결된 내용, 중요한 정보
 
 대화:
 ${conversationText}

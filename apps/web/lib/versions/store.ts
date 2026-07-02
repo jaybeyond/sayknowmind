@@ -53,7 +53,7 @@ export async function captureDocumentVersion(
   // restore to the current state is a no-op worth skipping too.)
   const last = await db.query(
     `SELECT title, content FROM document_versions
-      WHERE document_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      WHERE document_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`,
     [documentId],
   );
   if (
@@ -78,7 +78,7 @@ export async function captureDocumentVersion(
         AND id NOT IN (
           SELECT id FROM document_versions
            WHERE document_id = $1
-           ORDER BY created_at DESC
+           ORDER BY created_at DESC, id DESC
            LIMIT $2
         )`,
     [documentId, MAX_VERSIONS],

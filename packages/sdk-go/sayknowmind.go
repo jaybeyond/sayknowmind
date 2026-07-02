@@ -2,11 +2,13 @@
 package sayknowmind
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -64,6 +66,20 @@ type SearchResponse struct {
 	Results    []SearchResult `json:"results"`
 	TotalCount int            `json:"totalCount"`
 	Took       int            `json:"took"`
+}
+
+// DateRange is an inclusive date range filter for search.
+type DateRange struct {
+	Start string `json:"start"`
+	End   string `json:"end"`
+}
+
+// SearchFilters groups optional search filter fields that the server expects
+// nested under the "filters" key in the request body.
+type SearchFilters struct {
+	CategoryIDs []string   `json:"categoryIds,omitempty"`
+	DateRange   *DateRange `json:"dateRange,omitempty"`
+	Tags        []string   `json:"tags,omitempty"`
 }
 
 type IngestResponse struct {
@@ -142,10 +158,27 @@ func (c *Client) doRequest(method, path string, body interface{}) ([]byte, error
 	return respBody, nil
 }
 
+// sseStrVal extracts a string value from an unmarshalled SSE event map.
+func sseStrVal(m map[string]interface{}, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// sseFloatVal extracts a float64 value from an unmarshalled SSE event map.
+func sseFloatVal(m map[string]interface{}, key string) float64 {
+	if v, ok := m[key].(float64); ok {
+		return v
+	}
+	return 0
+}
+
 // --- API Methods ---
 
 // Search executes a search query against the knowledge base.
-func (c *Client) Search(query string, mode string, limit int) (*SearchResponse, error) {
+// filters may be nil when no filtering is needed.
+func (c *Client) Search(query string, mode string, limit int, filters *SearchFilters) (*SearchResponse, error) {
 	if mode == "" {
 		mode = "hybrid"
 	}
@@ -157,6 +190,9 @@ func (c *Client) Search(query string, mode string, limit int) (*SearchResponse, 
 		"query": query,
 		"mode":  mode,
 		"limit": limit,
+	}
+	if filters != nil {
+		body["filters"] = filters
 	}
 
 	data, err := c.doRequest("POST", "/api/search", body)
@@ -198,21 +234,107 @@ func (c *Client) IngestText(content, title string) (*IngestResponse, error) {
 	return &result, nil
 }
 
-// Chat sends a message and gets a response.
-func (c *Client) Chat(message, mode string) (*ChatResponse, error) {
-	if mode == "" {
-		mode = "simple"
+// Chat sends a message and aggregates the SSE stream into a ChatResponse.
+// The server always returns text/event-stream; this method reads all
+// "answer" token events and joins them into Answer, collects sources into
+// Citations, and captures conversationId/messageId from the "done" event.
+// conversationId may be empty to start a new conversation.
+func (c *Client) Chat(message, conversationID string) (*ChatResponse, error) {
+	payload := map[string]interface{}{
+		"message": message,
 	}
-	body := map[string]string{"message": message, "mode": mode}
-	data, err := c.doRequest("POST", "/api/chat", body)
+	if conversationID != "" {
+		payload["conversationId"] = conversationID
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", c.BaseURL+"/api/chat", bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, err
 	}
-	var result ChatResponse
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal chat response: %w", err)
+	req.Header.Set("Content-Type", "application/json")
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
 	}
-	return &result, nil
+
+	// Use a longer timeout for streaming responses.
+	streamClient := *c.HTTPClient
+	if streamClient.Timeout < 90*time.Second {
+		streamClient.Timeout = 90 * time.Second
+	}
+	resp, err := streamClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		b, _ := io.ReadAll(resp.Body)
+		var apiErr APIError
+		if json.Unmarshal(b, &apiErr) == nil && apiErr.Message != "" {
+			return nil, &apiErr
+		}
+		return nil, &APIError{Code: resp.StatusCode, Message: string(b)}
+	}
+
+	var answerParts []string
+	var citations []Citation
+	var convID, msgID string
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			break
+		}
+		var ev map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &ev); err != nil {
+			continue
+		}
+		switch ev["type"] {
+		case "answer":
+			if tok := sseStrVal(ev, "token"); tok != "" {
+				answerParts = append(answerParts, tok)
+			}
+		case "sources":
+			srcs, _ := ev["sources"].([]interface{})
+			for _, s := range srcs {
+				sm, ok := s.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				citations = append(citations, Citation{
+					DocumentID:     sseStrVal(sm, "id"),
+					Title:          sseStrVal(sm, "title"),
+					URL:            sseStrVal(sm, "url"),
+					Excerpt:        sseStrVal(sm, "excerpt"),
+					RelevanceScore: sseFloatVal(sm, "score"),
+				})
+			}
+		case "done":
+			convID = sseStrVal(ev, "conversationId")
+			msgID = sseStrVal(ev, "messageId")
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("reading SSE stream: %w", err)
+	}
+
+	return &ChatResponse{
+		ConversationID:   convID,
+		MessageID:        msgID,
+		Answer:           strings.Join(answerParts, ""),
+		Citations:        citations,
+		RelatedDocuments: []string{},
+	}, nil
 }
 
 // GetCategories lists all categories.
@@ -231,6 +353,7 @@ func (c *Client) GetCategories() ([]Category, error) {
 }
 
 // CreateCategory creates a new category.
+// The server responds with {categoryId, name, path: []string}; this maps to Category.
 func (c *Client) CreateCategory(name string, parentID string) (*Category, error) {
 	body := map[string]string{"name": name}
 	if parentID != "" {
@@ -240,9 +363,23 @@ func (c *Client) CreateCategory(name string, parentID string) (*Category, error)
 	if err != nil {
 		return nil, err
 	}
-	var result Category
-	if err := json.Unmarshal(data, &result); err != nil {
+	// Server returns {categoryId, name, path: string[]} — not {id, path: string}.
+	var raw struct {
+		CategoryID string   `json:"categoryId"`
+		Name       string   `json:"name"`
+		Path       []string `json:"path"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("unmarshal category: %w", err)
 	}
-	return &result, nil
+	depth := 0
+	if len(raw.Path) > 0 {
+		depth = len(raw.Path) - 1
+	}
+	return &Category{
+		ID:    raw.CategoryID,
+		Name:  raw.Name,
+		Path:  strings.Join(raw.Path, "/"),
+		Depth: depth,
+	}, nil
 }

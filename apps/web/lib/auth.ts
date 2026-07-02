@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { organization } from "better-auth/plugins";
+import { organization, bearer } from "better-auth/plugins";
 import { pool } from "@/lib/db";
 
 function resolveAuthSecret(): string {
@@ -54,6 +54,23 @@ async function resolveActiveOrg(userId: string): Promise<string | null> {
   );
   return (result.rows[0]?.organizationId as string | undefined) ?? null;
 }
+
+// Exported so external-login's hand-written CSRF check can reuse the same
+// allow-list without duplicating it.
+export const TRUSTED_ORIGINS: string[] = [
+  "http://localhost:5400",
+  "http://localhost:5401",
+  "http://127.0.0.1:3457",
+  "http://localhost:3457",
+  "tauri://localhost",
+  // Native mobile app (Flutter, iOS + Android) — deep-link scheme used as the
+  // Origin for better-auth's CSRF check on sign-in/sign-up POSTs.
+  "sayknowmind://",
+  "https://mind.sayknow.ai",
+  "https://sayknowmind-production.up.railway.app",
+  "https://sayknowmind.ypai.click",
+  ...(process.env.TRUSTED_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean) ?? []),
+];
 
 export const auth = betterAuth({
   database: pool,
@@ -131,25 +148,18 @@ export const auth = betterAuth({
 
   // `organization` is the unit of a "team": members share a knowledge pool.
   // The nested `teams` sub-feature is intentionally left disabled.
-  // `nextCookies()` must stay last in the plugin list.
-  plugins: [organization(), nextCookies()],
+  // `bearer()` lets non-browser clients (the native Flutter app) authenticate
+  // with `Authorization: Bearer <token>` instead of cookies — sign-in/session
+  // responses also expose the token via the `set-auth-token` header. It must sit
+  // before `nextCookies()`, which has to stay last in the plugin list.
+  plugins: [organization(), bearer(), nextCookies()],
 
   // better-auth rejects auth POSTs whose Origin isn't trusted (CSRF guard). The
   // app answers on more than one host (branded custom domain + Railway-default
   // *.up.railway.app + the EC2 domain), so all of them must be listed or login
   // breaks on whichever host isn't the baked baseURL. Always include the known
   // production origins; TRUSTED_ORIGINS (if set) is merged on top, not replaced.
-  trustedOrigins: [
-    "http://localhost:5400",
-    "http://localhost:5401",
-    "http://127.0.0.1:3457",
-    "http://localhost:3457",
-    "tauri://localhost",
-    "https://mind.sayknow.ai",
-    "https://sayknowmind-production.up.railway.app",
-    "https://sayknowmind.ypai.click",
-    ...(process.env.TRUSTED_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean) ?? []),
-  ],
+  trustedOrigins: TRUSTED_ORIGINS,
 });
 
 export type Auth = typeof auth;

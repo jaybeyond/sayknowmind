@@ -34,3 +34,8 @@ ollama:
 # Enable IPFS only if shared/decentralized mode is in use
 ipfs:
   enabled: false
+
+# Login edition — Enterprise (사원번호 로그인, SayKnowWork SaaS 위임)
+app:
+  authMode: saas
+  saasAuthUrl: https://sayknowwork.ai-ops.click

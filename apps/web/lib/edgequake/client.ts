@@ -227,6 +227,30 @@ export async function indexDocument(request: EQIndexRequest): Promise<EQIndexRes
   return response.json();
 }
 
+/**
+ * De-index a document from EdgeQuake by the id EdgeQuake returned at ingest
+ * (documents.eq_document_id). Closes the dual-write delete seam: without this,
+ * Postgres hard-deletes leave EdgeQuake vectors + graph nodes orphaned in the
+ * shared corpus forever. Tolerates 404 (already gone) so callers can treat it
+ * as best-effort cleanup that never blocks the user-facing delete.
+ */
+export async function deleteDocument(
+  eqDocumentId: string,
+  scope?: EdgeQuakeScope,
+): Promise<void> {
+  const response = await fetch(
+    `${EDGEQUAKE_URL}/api/v1/documents/${encodeURIComponent(eqDocumentId)}`,
+    {
+      method: "DELETE",
+      headers: headers(scope),
+      signal: AbortSignal.timeout(EDGEQUAKE_TIMEOUT),
+    },
+  );
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`EdgeQuake delete failed: ${response.status} - ${await response.text()}`);
+  }
+}
+
 export async function healthCheck(): Promise<boolean> {
   try {
     const response = await fetch(`${EDGEQUAKE_URL}/health`, {
@@ -307,7 +331,7 @@ export async function syncUnindexedToEdgeQuake(
 
   for (const doc of result.rows) {
     try {
-      await indexDocument({
+      const eqRes = await indexDocument({
         content: doc.content,
         title: doc.title ?? undefined,
         document_id: doc.id,
@@ -320,9 +344,13 @@ export async function syncUnindexedToEdgeQuake(
         },
         async_processing: true,
       });
+      // Persist the EdgeQuake-assigned id so this document can later be
+      // de-indexed on delete/edit (migration 064 / self-heal).
+      const { ensureEqDocumentIdColumn } = await import("@/lib/ingest/document-store");
+      await ensureEqDocumentIdColumn();
       await pool.query(
-        `UPDATE documents SET indexed_at = NOW() WHERE id = $1`,
-        [doc.id],
+        `UPDATE documents SET indexed_at = NOW(), eq_document_id = $2 WHERE id = $1`,
+        [doc.id, eqRes.document_id ?? null],
       );
       synced++;
     } catch (err) {

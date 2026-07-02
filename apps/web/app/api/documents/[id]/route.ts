@@ -6,6 +6,8 @@ import { readableClause, writableClause, editableViaShareClause } from "@/lib/vi
 import { emitDocumentEvent } from "@/lib/events";
 import { assignTags, clearDocumentTags, type Queryable } from "@/lib/tags/store";
 import { captureDocumentVersion } from "@/lib/versions/store";
+import { deleteDocument as deleteEdgeQuakeDocument } from "@/lib/edgequake/client";
+import { ensureEqDocumentIdColumn } from "@/lib/ingest/document-store";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -108,6 +110,20 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     };
     const metadataTouchesTags = hasTagPatch(metadata);
 
+    // If content is changing, the EdgeQuake index becomes stale. Capture the old
+    // eq_document_id now so we can de-index it after the row is updated (the
+    // UPDATE nulls indexed_at + eq_document_id so the reprocessor re-indexes).
+    let staleEqDocId: string | null = null;
+    if (content !== undefined) {
+      try {
+        await ensureEqDocumentIdColumn();
+        const prev = await pool.query(`SELECT eq_document_id FROM documents WHERE id = $1`, [id]);
+        staleEqDocId = (prev.rows[0]?.eq_document_id as string | null) ?? null;
+      } catch (prefetchErr) {
+        console.warn("[documents] PATCH eq_document_id prefetch failed:", prefetchErr);
+      }
+    }
+
     // Build SET clauses dynamically
     const setClauses: string[] = ["updated_at = NOW()"];
     const params: unknown[] = [];
@@ -123,6 +139,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       setClauses.push(`content = $${paramIdx}`);
       params.push(content);
       paramIdx++;
+      setClauses.push(`indexed_at = NULL`);
+      setClauses.push(`eq_document_id = NULL`);
     }
 
     if (summary !== undefined) {
@@ -248,6 +266,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       await client.query("COMMIT");
       emitDocumentEvent({ type: "document:updated", documentId: id, userId: ctx.userId, title: result.rows[0].title ?? undefined });
 
+      // Best-effort de-index of the now-stale EdgeQuake doc (shared corpus);
+      // the reprocessor re-indexes the new content. Never blocks the save.
+      if (staleEqDocId) {
+        deleteEdgeQuakeDocument(staleEqDocId).catch((eqErr) =>
+          console.warn("[documents] EdgeQuake de-index on edit failed:", eqErr),
+        );
+      }
+
       // Checkpoint editable content (notes/sheets/mindmaps) into version history.
       // Throttled + best-effort: a versioning hiccup must never fail the save.
       const isContentSave =
@@ -292,9 +318,10 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   try {
+    await ensureEqDocumentIdColumn();
     // params: $1 = id, $2 = ctx.userId, $3 = ctx.organizationId
     const result = await pool.query(
-      `DELETE FROM documents WHERE id = $1 AND (${writableClause("documents", 3, 2, isOrgAdmin(ctx.role))} OR ${editableViaShareClause("documents", 2, "document")}) RETURNING id`,
+      `DELETE FROM documents WHERE id = $1 AND (${writableClause("documents", 3, 2, isOrgAdmin(ctx.role))} OR ${editableViaShareClause("documents", 2, "document")}) RETURNING id, eq_document_id`,
       [id, ctx.userId, ctx.organizationId],
     );
 
@@ -306,6 +333,14 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     }
 
     emitDocumentEvent({ type: "document:deleted", documentId: id, userId: ctx.userId });
+
+    // Best-effort EdgeQuake de-index (shared corpus) — never block the delete.
+    const eqDocId = result.rows[0]?.eq_document_id as string | null;
+    if (eqDocId) {
+      deleteEdgeQuakeDocument(eqDocId).catch((eqErr) =>
+        console.warn("[documents] EdgeQuake de-index failed:", eqErr),
+      );
+    }
 
     return NextResponse.json({ deleted: true, id });
   } catch (err) {

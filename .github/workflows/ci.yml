@@ -14,6 +14,20 @@ jobs:
   # ── Stage 1: Lint + Test + Build (Web) ─────────────────────
   lint-test-build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sayknowmind_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -37,6 +51,8 @@ jobs:
 
       - name: Test
         working-directory: apps/web
+        env:
+          DATABASE_URL: postgresql://postgres:testpass@localhost:5432/sayknowmind_test
         run: pnpm test
 
       - name: Build
@@ -51,9 +67,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install and build
+      - name: Install, build and test
         working-directory: apps/ai-server
-        run: npm ci && npm run build
+        run: npm ci && npm run build && npm test
 
   build-mcp-server:
     runs-on: ubuntu-latest
@@ -62,9 +78,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install and build
+      - name: Install, build and test
         working-directory: packages/mcp-server
-        run: npm ci && npm run build
+        run: npm ci && npm run build && npm test
 
   build-dashboard:
     runs-on: ubuntu-latest
@@ -81,6 +97,59 @@ jobs:
       - name: Install and build
         working-directory: apps/dashboard
         run: pnpm install --frozen-lockfile && pnpm build
+
+
+  # ── Stage 1c: Relay-server typecheck ───────────────────────────
+  typecheck-relay-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install and typecheck
+        working-directory: packages/relay-server
+        run: npm ci && npm run lint
+        # relay-server has no test script; tsc --noEmit via `npm run lint`
+        # is the only static gate available. Add tests when written.
+
+  # ── Stage 1d: EdgeQuake Rust (fmt + clippy + unit tests) ───────
+  test-edgequake-rust:
+    runs-on: ubuntu-latest
+    env:
+      SQLX_OFFLINE: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/edgequake/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/edgequake/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: cargo fmt --check
+        working-directory: packages/edgequake
+        run: cargo fmt --all --check
+
+      - name: cargo clippy -D warnings
+        working-directory: packages/edgequake
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: cargo test (lib unit tests only)
+        working-directory: packages/edgequake
+        # --lib runs only the inline #[test] functions in src/; the e2e
+        # integration tests under tests/ require a live Postgres with the
+        # Apache AGE extension and external LLM credentials — excluded here.
+        run: cargo test --lib --workspace --locked
 
   # ── Stage 2: Docker Build + Push ───────────────────────────
   docker-images:

@@ -51,7 +51,9 @@ async fn create_workspace_with_providers(
         embedding_model: Some(embedding_model.to_string()),
         embedding_provider: Some(embedding_provider.to_string()),
         embedding_dimension: Some(embedding_dimension),
-    };
+            vision_llm_provider: None,
+        vision_llm_model: None,
+};
 
     state
         .workspace_service
@@ -113,7 +115,9 @@ async fn test_complete_ollama_to_openai_switch() {
         embedding_model: Some("text-embedding-3-small".to_string()),
         embedding_provider: Some("openai".to_string()),
         embedding_dimension: Some(1536),
-    };
+            vision_llm_provider: None,
+        vision_llm_model: None,
+};
 
     state
         .workspace_service
@@ -169,7 +173,9 @@ async fn test_complete_openai_to_ollama_switch() {
         embedding_model: Some("nomic-embed-text".to_string()),
         embedding_provider: Some("ollama".to_string()),
         embedding_dimension: Some(768),
-    };
+            vision_llm_provider: None,
+        vision_llm_model: None,
+};
 
     state
         .workspace_service
@@ -220,7 +226,9 @@ async fn test_complete_switch_to_lmstudio() {
         embedding_model: Some("text-embedding-nomic-embed-text-v1.5".to_string()),
         embedding_provider: Some("lmstudio".to_string()),
         embedding_dimension: Some(768),
-    };
+            vision_llm_provider: None,
+        vision_llm_model: None,
+};
 
     state
         .workspace_service

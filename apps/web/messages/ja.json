@@ -903,6 +903,7 @@
       "you": "（自分）",
       "inviteHeading": "メンバーを招待",
       "invitePlaceholder": "colleague@example.com",
+      "invitePlaceholderSaas": "社員番号またはメールアドレス",
       "inviteButton": "招待",
       "pendingHeading": "招待中",
       "invitedAs": "{role}として招待中 · 承認待ち",

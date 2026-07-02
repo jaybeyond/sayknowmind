@@ -2,6 +2,13 @@
 
 use std::time::Duration;
 
+/// Publicly-known placeholder JWT signing key. Tokens signed with it are
+/// forgeable, so it must never reach a network-exposed deployment.
+pub const PLACEHOLDER_JWT_SECRET: &str = "change-me-in-production-256-bit-secret-key";
+
+/// Minimum acceptable JWT secret length in bytes (256-bit).
+pub const MIN_JWT_SECRET_BYTES: usize = 32;
+
 /// Authentication service configuration.
 #[derive(Debug, Clone)]
 pub struct AuthConfig {
@@ -48,7 +55,7 @@ pub struct AuthConfig {
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
-            jwt_secret: "change-me-in-production-256-bit-secret-key".to_string(),
+            jwt_secret: PLACEHOLDER_JWT_SECRET.to_string(),
             jwt_expiry: Duration::from_secs(24 * 60 * 60), // 24 hours
             refresh_token_expiry: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
             api_key_prefix: "sk_".to_string(),
@@ -125,8 +132,32 @@ impl AuthConfig {
 
     /// Create configuration from environment variables.
     pub fn from_env() -> Self {
-        let jwt_secret = std::env::var("JWT_SECRET")
-            .unwrap_or_else(|_| "change-me-in-production-256-bit-secret-key".to_string());
+        // Resolve the JWT signing secret and refuse to run with a weak one.
+        // Previously this silently fell back to a publicly-known placeholder, so
+        // even an operator who set JWT_SECRET got forgeable tokens if the value
+        // was short — and the real server never called from_env() at all. Now a
+        // configured-but-weak secret aborts startup; an unset secret keeps the
+        // placeholder only with a loud warning (acceptable for local dev only).
+        let jwt_secret = match std::env::var("JWT_SECRET") {
+            Ok(s) if !s.trim().is_empty() => {
+                let s = s.trim().to_string();
+                if s == PLACEHOLDER_JWT_SECRET || s.len() < MIN_JWT_SECRET_BYTES {
+                    panic!(
+                        "JWT_SECRET is set but insecure (placeholder or shorter than {MIN_JWT_SECRET_BYTES} bytes). \
+                         Generate a strong random value (e.g. `openssl rand -hex 32`) and set JWT_SECRET to it."
+                    );
+                }
+                s
+            }
+            _ => {
+                tracing::warn!(
+                    "JWT_SECRET is not set — falling back to a publicly-known placeholder signing key. \
+                     EdgeQuake-issued JWTs are FORGEABLE. Set JWT_SECRET (>= {} bytes) before exposing this server.",
+                    MIN_JWT_SECRET_BYTES
+                );
+                PLACEHOLDER_JWT_SECRET.to_string()
+            }
+        };
 
         let jwt_expiry_hours: u64 = std::env::var("JWT_EXPIRY_HOURS")
             .ok()

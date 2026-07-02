@@ -26,25 +26,23 @@ export function isOrgAdmin(role: string): boolean {
 }
 
 /**
- * Default visibility for a newly created resource, based on whether the active
- * org is the caller's personal org or a real team.
+ * Default visibility for a newly created resource.
  *
- * A user's personal org has the deterministic slug `personal-{userId}` (minted
- * in migration 053). Anything created there stays `private` — it's a solo
- * vault. Anything created inside a team org is `shared` by default, so every
- * teammate sees it without an explicit per-person grant. A missing org id is
- * treated as personal (private) to fail safe.
+ * DB-10 (privacy-by-default): new resources are `private` (owner-only) until the
+ * user explicitly shares them — even inside a team org. Previously team-org
+ * resources defaulted to `shared`, so every teammate saw new content without an
+ * explicit grant; that auto-exposure is the privacy violation the audit flagged.
+ * Existing rows are untouched; this only governs the default for new inserts.
+ * (Matches migration 065 flipping the column default to 'private'.)
+ *
+ * NOTE: this makes team collaboration opt-in per resource. If the product wants
+ * team-shared-by-default, revert this to the personal-vs-team check.
  */
 export async function resolveDefaultPrivacy(
-  organizationId: string | null | undefined,
-  userId: string,
+  _organizationId: string | null | undefined,
+  _userId: string,
 ): Promise<"private" | "shared"> {
-  if (!organizationId) return "private";
-  const res = await pool.query(
-    `SELECT 1 FROM organization WHERE id = $1 AND slug = $2 LIMIT 1`,
-    [organizationId, `personal-${userId}`],
-  );
-  return res.rows.length > 0 ? "private" : "shared";
+  return "private";
 }
 
 /**

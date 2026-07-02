@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Loader2, Mail, Shield, User, X } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { isSaasAuth, synthesizeSaasEmail } from "@/lib/auth-mode";
 
 type Role = "owner" | "admin" | "member";
 
@@ -89,8 +90,10 @@ export function TeamTab() {
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    const email = inviteEmail.trim();
-    if (!email) return;
+    const raw = inviteEmail.trim();
+    if (!raw) return;
+    // 사원번호(이메일 아님) → saas 에디션에서 SaaS 합성 이메일로 변환
+    const email = raw.includes("@") ? raw : (isSaasAuth ? synthesizeSaasEmail(raw) : raw);
     setInviting(true);
     try {
       const result = await authClient.organization.inviteMember({
@@ -101,7 +104,7 @@ export function TeamTab() {
         toast.error(result.error.message ?? t("team.settings.inviteFailed"));
         return;
       }
-      toast.success(t("team.settings.inviteSuccess").replace("{email}", email));
+      toast.success(t("team.settings.inviteSuccess").replace("{email}", raw));
       setInviteEmail("");
       void loadOrgData();
     } catch {
@@ -278,8 +281,8 @@ export function TeamTab() {
             <div className="relative flex-1">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
               <Input
-                type="email"
-                placeholder={t("team.settings.invitePlaceholder")}
+                type={isSaasAuth ? "text" : "email"}
+                placeholder={t(isSaasAuth ? "team.settings.invitePlaceholderSaas" : "team.settings.invitePlaceholder")}
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 className="pl-9"

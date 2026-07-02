@@ -222,7 +222,9 @@ async fn test_delete_folder_nonexistent() {
     let pool = create_test_pool(&config).await;
     let storage = PostgresConversationStorage::new(pool);
 
-    let result = storage.delete_folder(Uuid::new_v4()).await;
+    let result = storage
+        .delete_folder(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())
+        .await;
     assert!(result.is_err());
 }
 
@@ -452,6 +454,8 @@ mod full_workflow_tests {
         // 3. Update the conversation
         let updated = storage
             .update_conversation(
+                tenant_id,
+                user_id,
                 conv_id,
                 Some("Updated Title".to_string()),
                 None,
@@ -625,7 +629,7 @@ mod full_workflow_tests {
 
         // 4. Update folder
         let updated = storage
-            .update_folder(folder_id, Some("Renamed Folder"), None, None)
+            .update_folder(tenant_id, user_id, folder_id, Some("Renamed Folder"), None, None)
             .await
             .expect("Failed to update folder");
 
@@ -648,7 +652,7 @@ mod full_workflow_tests {
 
         // 6. Delete folder (should move conversation out)
         storage
-            .delete_folder(folder_id)
+            .delete_folder(tenant_id, user_id, folder_id)
             .await
             .expect("Failed to delete folder");
 
@@ -783,7 +787,7 @@ mod full_workflow_tests {
 
         // Pin conv2
         storage
-            .update_conversation(conv2.conversation_id, None, None, Some(true), None, None)
+            .update_conversation(tenant_id, user_id, conv2.conversation_id, None, None, Some(true), None, None)
             .await
             .expect("Failed to pin");
 
@@ -801,7 +805,7 @@ mod full_workflow_tests {
 
         // Archive conv3
         storage
-            .update_conversation(conv3.conversation_id, None, None, None, Some(true), None)
+            .update_conversation(tenant_id, user_id, conv3.conversation_id, None, None, None, Some(true), None)
             .await
             .expect("Failed to archive");
 

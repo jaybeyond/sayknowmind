@@ -81,6 +81,13 @@ export async function updateDocument(
   if (updates.content !== undefined) {
     setClauses.push(`content = $${idx++}`);
     values.push(updates.content);
+    // Content changed → the EdgeQuake index is now stale. Reset indexed_at so the
+    // reprocessor re-indexes (it selects indexed_at IS NULL), and drop the stale
+    // eq_document_id mapping. (Callers that hold the old eq_document_id should
+    // de-index it from EdgeQuake first to avoid an orphan; see the PATCH route.)
+    await ensureEqDocumentIdColumn();
+    setClauses.push(`indexed_at = NULL`);
+    setClauses.push(`eq_document_id = NULL`);
   }
   if (updates.summary !== undefined) {
     setClauses.push(`summary = $${idx++}`);
@@ -136,6 +143,25 @@ function ensureEntitiesSchema(): Promise<void> {
     });
   }
   return entitiesSchemaReady;
+}
+
+// Self-heal for migration 064 (documents.eq_document_id) on no-migration
+// deploys (Railway), mirroring ensureEntitiesSchema above. Cached so the
+// idempotent DDL runs once per process; a real 064 run makes it a no-op.
+let eqDocIdSchemaReady: Promise<void> | null = null;
+export function ensureEqDocumentIdColumn(): Promise<void> {
+  if (!eqDocIdSchemaReady) {
+    eqDocIdSchemaReady = (async () => {
+      await pool.query(`ALTER TABLE documents ADD COLUMN IF NOT EXISTS eq_document_id TEXT`);
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_documents_eq_document_id ON documents (eq_document_id)`,
+      );
+    })().catch((err) => {
+      eqDocIdSchemaReady = null;
+      throw err;
+    });
+  }
+  return eqDocIdSchemaReady;
 }
 
 export async function insertEntities(entities: InsertEntityParams[]): Promise<string[]> {

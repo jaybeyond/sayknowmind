@@ -1,0 +1,447 @@
+{
+  "contracts": [
+    {
+      "area": "Auth + Session + User contracts (better-auth, apps/web)",
+      "summary": "Auth is better-auth v1.5.6 (apps/web/lib/auth.ts) mounted via a catch-all Next route at /api/auth/* (apps/web/app/api/auth/[...all]/route.ts). It uses email+password with autoSignIn, a 30-day sliding session, and the organization plugin (every user owns a \"personal\" org). Auth state is normally carried by an HttpOnly session cookie (better-auth.session_token), so a browser/web client just relies on cookies; a native client today must persist and replay that Set-Cookie. The codebase ships in two editions gated by NEXT_PUBLIC_AUTH_MODE: in \"local\" (Open) edition the built-in /api/auth/sign-in/email and /sign-up/email work; in \"saas\" (Enterprise) edition those two POST paths are hard-blocked (404) and login goes through the custom POST /api/auth/external-login which validates against SayKnowWork SaaS and then mints a normal better-auth session. The active org lives on the SESSION object as session.activeOrganizationId (set by a session.create.before hook in auth.ts), NOT on the user object. The user object returned by better-auth (sign-in / get-session) is only the core better-auth user (id,name,email,emailVerified,image,createdAt,updatedAt) — custom columns locale and role are NOT in it and must be fetched from GET /api/user/me. The bearer plugin is not yet enabled (better-auth/dist/plugins/bearer exists but is absent from the plugins:[organization(), nextCookies()] array); once added, sign-in/sign-up/external-login responses will include a set-auth-token header carrying the session token, and clients authenticate by sending Authorization: Bearer <token> (validated by the same getSession path), which is the recommended cookieless flow for the native app.",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/auth/sign-in/email",
+          "auth": "none (this IS the login). On success establishes the session. Returns Set-Cookie: better-auth.session_token=<token>; HttpOnly. Once the bearer plugin is added, also returns a set-auth-token: <token> response header the native client should store. NOTE: hard-blocked with 404 {\"error\":\"Use the sign-in page.\"} when NEXT_PUBLIC_AUTH_MODE=saas (Enterprise/EC2). Works only in local/Open edition.",
+          "request": "JSON body: { \"email\": string, \"password\": string, \"rememberMe\"?: boolean (default true keeps 30-day cookie; false => session-only cookie), \"callbackURL\"?: string }. Content-Type: application/json. CSRF: Origin header must be in trustedOrigins (see notes).",
+          "response": "200 JSON: { \"redirect\": boolean, \"token\": string (session token), \"url\": string|null, \"user\": { \"id\": string, \"name\": string, \"email\": string, \"emailVerified\": boolean, \"image\": string|null, \"createdAt\": string(ISO), \"updatedAt\": string(ISO) } }. Errors: 401 { \"code\": \"INVALID_EMAIL_OR_PASSWORD\", \"message\": string }; 403 if requireEmailVerification and unverified; 429 when rate limit exceeded (max 20 / 15min on this path).",
+          "file": "apps/web/app/api/auth/[...all]/route.ts (handler from toNextJsHandler(auth)); config in apps/web/lib/auth.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/sign-up/email",
+          "auth": "none. autoSignIn:true => on success immediately establishes a session (Set-Cookie session_token; future set-auth-token header once bearer plugin added). Triggers user.create.after hook that creates the user's personal organization. NOTE: hard-blocked with 404 when NEXT_PUBLIC_AUTH_MODE=saas; works only in local/Open edition.",
+          "request": "JSON body: { \"email\": string, \"password\": string (8-128 chars), \"name\": string, \"image\"?: string, \"callbackURL\"?: string }. Content-Type: application/json.",
+          "response": "200 JSON: { \"token\": string|null, \"user\": { \"id\": string, \"name\": string, \"email\": string, \"emailVerified\": boolean, \"image\": string|null, \"createdAt\": string(ISO), \"updatedAt\": string(ISO) } }. Errors: 422/400 { \"code\": \"USER_ALREADY_EXISTS\" | \"PASSWORD_TOO_SHORT\" | ... , \"message\": string }; 429 (max 10 / 60s on this path).",
+          "file": "apps/web/app/api/auth/[...all]/route.ts; hooks/config in apps/web/lib/auth.ts (createPersonalOrg)"
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/sign-out",
+          "auth": "required: session cookie better-auth.session_token (or Authorization: Bearer <token> once bearer plugin enabled). Invalidates the current session server-side and clears the cookie (Set-Cookie with empty/expired value).",
+          "request": "Empty/no JSON body required. Content-Type: application/json.",
+          "response": "200 JSON: { \"success\": true }. If no valid session, still returns 200 with { \"success\": true } (idempotent) in better-auth.",
+          "file": "apps/web/app/api/auth/[...all]/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/get-session",
+          "auth": "required: session cookie better-auth.session_token (or Authorization: Bearer <token> once bearer plugin enabled). userId/org derived from the session token. This is THE endpoint a native client calls to validate the stored token and read session+user+activeOrg.",
+          "request": "No body. Optional query: ?disableCookieCache=true to bypass the 5-min cookieCache and re-read from DB.",
+          "response": "200 JSON when authenticated: { \"session\": { \"id\": string, \"token\": string, \"userId\": string, \"expiresAt\": string(ISO), \"createdAt\": string(ISO), \"updatedAt\": string(ISO), \"ipAddress\": string|null, \"userAgent\": string|null, \"activeOrganizationId\": string|null }, \"user\": { \"id\": string, \"name\": string, \"email\": string, \"emailVerified\": boolean, \"image\": string|null, \"createdAt\": string(ISO), \"updatedAt\": string(ISO) } }. 200 with body null when NOT authenticated (better-auth returns null, not 401). ORG LIVES AT session.activeOrganizationId. user does NOT include locale or role.",
+          "file": "apps/web/app/api/auth/[...all]/route.ts; activeOrganizationId injected by session.create.before hook in apps/web/lib/auth.ts and column added in db/migrations/053_add_organization_tables.sql"
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/external-login",
+          "auth": "none (this IS login for the Enterprise/saas edition). Validates loginId/email+password against SayKnowWork SaaS (POST {SAYKNOWWORK_AUTH_URL}/v1/auth/login), provisions/looks up a local better-auth user, then mints a normal better-auth session and forwards its Set-Cookie headers. This is the canonical login path when NEXT_PUBLIC_AUTH_MODE=saas. Once bearer plugin is added the minted set-auth-token header would also be forwarded via copySetCookies-equivalent (currently only set-cookie is copied — see notes).",
+          "request": "JSON body: { \"loginId\"?: string, \"email\"?: string, \"password\": string, \"rememberMe\"?: boolean (default true) }. Provide loginId (employee number) OR email; an '@'-containing value is routed to SaaS email field, otherwise to loginId. Content-Type: application/json.",
+          "response": "200 JSON: { \"ok\": true, \"user\": { \"email\": string, \"displayName\": string }, \"tenant\": { \"id\": string, \"name\": string|undefined, \"role\": string|undefined } | null } plus Set-Cookie session_token. Errors: 400 { \"code\": \"BAD_REQUEST\" }; 401 { \"code\": \"INVALID_EMAIL_OR_PASSWORD\", \"message\"?: string }; 403 { \"code\": \"ACCOUNT_NOT_ACTIVE\" }; 502 { \"code\": \"SAAS_UNREACHABLE\" | \"SAAS_BAD_RESPONSE\" }; 500 { \"code\": \"SESSION_MINT_FAILED\" | \"INTERNAL_ERROR\" }.",
+          "file": "apps/web/app/api/auth/external-login/route.ts (uses apps/web/lib/saas-auth.ts loginToSaas, auth.api.signUpEmail/signInEmail)"
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/me",
+          "auth": "required: session cookie (resolved via auth.api.getSession on request headers). 401 { \"error\": \"Unauthorized\" } if no session.user.id. This is the endpoint to get app-level profile fields (locale) not present in the better-auth user object.",
+          "request": "No body, no params.",
+          "response": "200 JSON (raw DB row): { \"id\": string, \"name\": string, \"email\": string, \"image\": string|null, \"locale\": string|null ('en'|'ko'|'ja'|'zh'), \"createdAt\": string(ISO) }. NOTE: role column exists on user but is NOT returned here. 404 { \"error\": \"User not found\" } if row missing; 401 unauthorized.",
+          "file": "apps/web/app/api/user/me/route.ts"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/user/me",
+          "auth": "required: session cookie (auth.api.getSession). 401 if unauthenticated. Updates the local better-auth user row directly. (In saas edition prefer /api/account/profile which writes through to SaaS.)",
+          "request": "JSON body, all optional, at least one valid required: { \"name\"?: string (trimmed, max 100), \"locale\"?: 'en'|'ko'|'ja'|'zh', \"email\"?: string (must contain '@', lowercased; checked for uniqueness) }.",
+          "response": "200 JSON (updated row): { \"id\": string, \"name\": string, \"email\": string, \"image\": string|null, \"locale\": string|null }. Errors: 400 { \"error\": \"No valid fields to update\" }; 409 { \"error\": \"Email already in use\" }; 401 unauthorized.",
+          "file": "apps/web/app/api/user/me/route.ts"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/account/profile",
+          "auth": "required: session cookie (getSession from apps/web/lib/admin.ts; uses session.user.email). 401 { \"error\": \"Unauthorized\" }. Enterprise/saas edition: updates displayName on SayKnowWork (source of truth) then mirrors name onto local shadow via auth.api.updateUser.",
+          "request": "JSON body: { \"displayName\": string (trimmed, required-nonempty) }.",
+          "response": "200 JSON: { \"ok\": true }. Errors: 400 { \"error\": \"Name required\" }; 400/502 { \"error\": string, \"code\": string } on SaaS failure (502 when SaaS status>=500); 401 unauthorized.",
+          "file": "apps/web/app/api/account/profile/route.ts (uses apps/web/lib/saas-auth.ts updateSaasProfile)"
+        },
+        {
+          "method": "POST",
+          "path": "/api/account/change-password",
+          "auth": "required: session cookie (getSession, uses session.user.email). 401 { \"error\": \"Unauthorized\" }. Enterprise/saas edition only meaningful path: changes password on SayKnowWork (re-auths with currentPassword to mint a SaaS token, then calls SaaS change-password). Local shadow password is ignored (rotated each login).",
+          "request": "JSON body: { \"currentPassword\": string, \"newPassword\": string (>=8 chars) }.",
+          "response": "200 JSON: { \"ok\": true }. Errors: 400 { \"error\": \"Invalid password\" } (missing currentPassword or newPassword<8); 401 { \"error\": string, \"code\": \"INVALID_PASSWORD\"|... } when current password wrong; 502 on SaaS unreachable/5xx; 400 other SaaS errors.",
+          "file": "apps/web/app/api/account/change-password/route.ts (uses apps/web/lib/saas-auth.ts changeSaasPassword)"
+        },
+        {
+          "method": "POST",
+          "path": "/api/user/mcp-key",
+          "auth": "required: resolved via getUserIdFromRequest() which accepts EITHER the session cookie OR an existing Authorization: Bearer sk-mcp-... key. 401 { \"error\": \"Unauthorized\" }. Generates/rotates the user's long-lived MCP API key — this is the existing cookieless token mechanism a native client can use TODAY (before the better-auth bearer plugin lands).",
+          "request": "No body.",
+          "response": "200 JSON: { \"apiKey\": string } where apiKey is 'sk-mcp-<64 hex chars>'. Shown once on generation; stored hashed (sha256) + encrypted, never plaintext. Errors: 401 unauthorized.",
+          "file": "apps/web/app/api/user/mcp-key/route.ts; validation logic in apps/web/lib/ingest/session-helper.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/user/mcp-key",
+          "auth": "required: getUserIdFromRequest() (session cookie or Bearer sk-mcp key). 401 if unauthenticated. Returns the current key decrypted for its owner.",
+          "request": "No body.",
+          "response": "200 JSON: { \"apiKey\": string | null } (null if no key generated yet or decryption fails).",
+          "file": "apps/web/app/api/user/mcp-key/route.ts"
+        }
+      ],
+      "notes": [
+        "Edition gating is critical: NEXT_PUBLIC_AUTH_MODE controls login. Default/unset = 'saas' (Enterprise) which 404-blocks POST /api/auth/sign-in/email and /sign-up/email — those native flows ONLY work when the deployment is the 'local'/Open edition (apps/web/lib/auth-mode.ts). For saas deployments the native client must use POST /api/auth/external-login. Detect edition by probing /api/auth/sign-in/email (404 => saas).",
+        "Bearer plugin is NOT yet wired: apps/web/lib/auth.ts plugins array is [organization(), nextCookies()]. The dependency exists (better-auth/dist/plugins/bearer). Once added: (1) sign-in/sign-up responses include a 'set-auth-token' response header containing the session token; the native client reads and persists it. (2) Authenticate subsequent requests with header 'Authorization: Bearer <token>' — better-auth's bearer plugin resolves it through the same getSession path the cookie uses, so GET /api/auth/get-session, /api/user/me, etc. all work cookielessly. (3) The token value is the same session token, so it still respects the 30-day expiry / sliding updateAge. Recommend the native client store it in secure storage (Keychain) not a cookie jar.",
+        "GOTCHA — external-login currently forwards only Set-Cookie (copySetCookies in apps/web/app/api/auth/external-login/route.ts copies from.headers.getSetCookie()). When the bearer plugin lands, the minted set-auth-token header from the inner auth.api.signInEmail/signUpEmail call is NOT forwarded by this function — it must be patched to also copy 'set-auth-token' for native saas-edition login to get a bearer token.",
+        "CSRF/Origin: better-auth rejects auth POSTs whose Origin isn't trusted. trustedOrigins (auth.ts) includes localhost:5400/5401, 127.0.0.1:3457, localhost:3457, tauri://localhost, mind.sayknow.ai, the Railway and ypai.click prod hosts, plus anything in env TRUSTED_ORIGINS. A native client must send an Origin header matching one of these (tauri://localhost is already whitelisted for the desktop build) or POSTs may be rejected. Add the mobile app's scheme/host to TRUSTED_ORIGINS.",
+        "Session object carries the org, not the user: session.activeOrganizationId (nullable) is where the team/org context lives. It is set on session creation by resolveActiveOrg() (first member row by createdAt). To switch orgs the org plugin exposes POST /api/auth/organization/set-active ({ organizationId }); to enumerate orgs use the organization plugin endpoints (e.g. GET /api/auth/organization/list). Every user always has at least one 'personal' org (created via user.create.after hook / backfilled in migration 053).",
+        "User object split: better-auth's user (from get-session/sign-in) only has id,name,email,emailVerified,image,createdAt,updatedAt. App-specific fields locale ('en'|'ko'|'ja'|'zh', migration 044) and role ('user'|'admin', migration 035, default 'user') are NOT on it — locale comes from GET /api/user/me; role is not exposed by any read endpoint shown (used server-side via requireAdmin in apps/web/lib/admin.ts).",
+        "get-session returns 200 with a null body (not 401) when unauthenticated — native client must treat (status 200 && body===null) as logged-out.",
+        "Rate limits (auth.ts, database-backed): global 100 req / 15min; /sign-in/email 20 / 15min; /sign-up/email 10 / 60s. Expect HTTP 429 with a retry — back off accordingly.",
+        "Session lifetime: expiresIn 30 days, updateAge 1 day (sliding), cookieCache 5 min. rememberMe:false makes the cookie session-only. Cookie name prefix is 'better-auth.session_token' (HttpOnly, Secure in prod, SameSite=Lax).",
+        "All request bodies are application/json; all error bodies are JSON. Custom routes (external-login, user/me, account/*) use { error: string } or { code: string, message?: string }; core better-auth routes use { code: string, message: string } shapes.",
+        "MCP API key (sk-mcp-...) from /api/user/mcp-key is the only cookieless bearer mechanism that works TODAY and is accepted by getUserIdFromRequest (apps/web/lib/ingest/session-helper.ts) on app data routes — viable interim auth for the native client until the better-auth bearer plugin is enabled. It is long-lived and not tied to session expiry."
+      ]
+    },
+    {
+      "area": "Documents / Memories feed + detail + CRUD (apps/web/app/api/documents)",
+      "summary": "The \"Memories\" UI is backed by the `documents` table exposed under /api/documents. Listing is offset-paginated (page+limit, NOT cursor), with server-side filters for search (q), category, sourceType, favorite, and lifecycle status. Detail/update/delete live at /api/documents/[id]; \"empty trash\" is a static DELETE /api/documents/trash. There is NO create endpoint here — documents are created via the ingest pipeline elsewhere. Every endpoint requires auth (better-auth cookie session OR `Authorization: Bearer sk-mcp-...` MCP key) and is scoped to the caller's active organization via getOrgContext(); unauthenticated calls return 401 with `{code:\"AUTH_TOKEN_EXPIRED\",message,timestamp}`. Soft delete (archive/trash) is done by PATCHing `metadata.status`; the DELETE verb is a hard delete. The client-facing Memory shape is assembled client-side in store/memory-store.ts (documentToMemory) — favicon and ogImage are derived/proxied client-side, tags and AI summary fields are pulled out of the `metadata` JSON blob, and category is taken from the row's `categories` array.",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/documents?page=1&limit=50&q=&categoryId=&sourceType=&isFavorite=true&status=active",
+          "auth": "Required. better-auth session cookie OR `Authorization: Bearer sk-mcp-...` MCP key. userId = session.user.id or SHA-256(token) lookup in user_mcp_keys; organizationId+role resolved by getOrgContext() from session.activeOrganizationId (falls back to oldest membership). Rows are org+visibility scoped (own rows always visible; shared/team-shared/explicitly-shared rows added). 401 {code:AUTH_TOKEN_EXPIRED} if no identity.",
+          "request": "Query params (all optional, strings): page (number, default 1, clamped min 1); limit (number, default 50, clamped 1..100 — note the web client sends 20 as PAGE_SIZE, 100 for archive/trash lazy loads); q (search string, trimmed; matches title/summary/url via ILIKE %q%); categoryId (uuid; EXISTS filter against document_categories, category must also be readable); sourceType (exact match on documents.source_type, e.g. 'url'|'file'|'text'|'doc'|'mindmap'|'sheet' — NOTE: the web store does NOT send this, it filters docType client-side); isFavorite ('true' => metadata->>'isFavorite' = true; any other value ignored); status (default 'active'; 'all' disables the filter; otherwise COALESCE(metadata->>'status','active') = status — used values: 'active','archived','trashed'). Pagination is OFFSET-based (offset = (page-1)*limit); there is NO cursor.",
+          "response": "200 JSON: {\"documents\": Row[], \"pagination\": {\"page\":number,\"limit\":number,\"total\":number,\"totalPages\":number,\"hasMore\":boolean,\"nextPage\":number|null}}. Row = {id:string(uuid), title:string, content:string, summary:string|null, url:string|null, source_type:string, metadata:object(jsonb), privacy_level:\"private\"|\"shared\", created_at:string(ISO), updated_at:string(ISO), indexed_at:string(ISO)|null, categories: Array<{id:string,name:string,color:string}> (defaults to []), job_status: string|null (status of newest ingestion_jobs row, e.g. 'pending'|'processing'|'completed'|'failed')}. Errors: 401 {code:AUTH_TOKEN_EXPIRED,...}; 500 {code:SYSTEM_INTERNAL_ERROR,...}. All error bodies: {code:string, message:string, timestamp:string(ISO)}.",
+          "file": "apps/web/app/api/documents/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/documents/[id]",
+          "auth": "Required (same as list). Read scope via readableClause: own row, or org-shared (non-private), or team-shared, or explicitly resource-shared with caller. 404 if not readable.",
+          "request": "Path param id (uuid). No query/body.",
+          "response": "200 JSON single Row WITHOUT job_status: {id, title, content, summary, url, source_type, metadata, privacy_level, created_at, updated_at, indexed_at, categories: Array<{id,name,color}>}. Errors: 401 {code:AUTH_TOKEN_EXPIRED}; 404 {code:SEARCH_NO_RESULTS,message:'Document not found'}; 500 {code:SYSTEM_INTERNAL_ERROR}.",
+          "file": "apps/web/app/api/documents/[id]/route.ts"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/documents/[id]",
+          "auth": "Required. Write scope: writableClause (creator, or org admin/owner for any row in org) OR editableViaShareClause (explicit 'edit' resource_share). 404 if not writable. categoryId changes additionally require the target category to be writable/edit-shared (else 404 {code:CATEGORY_NOT_FOUND}).",
+          "request": "JSON body, all fields optional: {title?:string, summary?:string, content?:string, metadata?:object, privacyLevel?:'private'|'shared', categoryId?:string|null}. metadata is SHALLOW-MERGED into existing (SQL `metadata || $::jsonb`) — send only the keys you change, e.g. {metadata:{isFavorite:true}}, {metadata:{userTags:[...]}}, {metadata:{status:'archived'|'trashed'|'active'}} (this is how archive/trash/restore are done — NOT the DELETE verb). categoryId: a uuid REPLACES all categories (deletes existing document_categories rows then inserts one), null CLEARS categories, undefined leaves them. If metadata touches aiTags/userTags/tags, normalized tag tables are re-synced (best-effort, savepoint-guarded). privacyLevel invalid => 400. If nothing to update (no fields and categoryId undefined) => 400.",
+          "response": "200 JSON. If ONLY categoryId changed (no documents-table columns touched): {id:string, categoryUpdated:true}. Otherwise RETURNING subset: {id:string, title:string, summary:string|null, metadata:object, privacy_level:'private'|'shared', updated_at:string(ISO)}. Errors: 400 {code:SYSTEM_VALIDATION_ERROR, message:'privacyLevel must be ...'|'No fields to update'}; 401 {code:AUTH_TOKEN_EXPIRED}; 404 {code:SEARCH_NO_RESULTS,'Document not found'} or {code:CATEGORY_NOT_FOUND,'Category not found'}; 500 {code:SYSTEM_INTERNAL_ERROR}. Emits internal 'document:updated' event; content/docTabs/mindmap saves also checkpoint a version (throttled, best-effort).",
+          "file": "apps/web/app/api/documents/[id]/route.ts"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/documents/[id]",
+          "auth": "Required. HARD delete; write scope = writableClause OR editableViaShareClause (same as PATCH). 404 if not writable.",
+          "request": "Path param id (uuid). No body. NOTE: this is a permanent DELETE FROM documents — soft delete (trash/archive) is done via PATCH metadata.status, not here. The web store calls this only from permanentlyDelete().",
+          "response": "200 JSON {deleted:true, id:string}. Errors: 401 {code:AUTH_TOKEN_EXPIRED}; 404 {code:SEARCH_NO_RESULTS,'Document not found'}; 500 {code:SYSTEM_INTERNAL_ERROR}. Emits 'document:deleted'.",
+          "file": "apps/web/app/api/documents/[id]/route.ts"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/documents/trash",
+          "auth": "Required. Hard-deletes every document with COALESCE(metadata->>'status','active')='trashed' that the caller may delete (writableClause OR editableViaShareClause). Static segment — does not collide with /[id].",
+          "request": "No path/query/body.",
+          "response": "200 JSON {deleted:true, count:number}. Errors: 401 {code:AUTH_TOKEN_EXPIRED}; 500 {code:SYSTEM_INTERNAL_ERROR}. Emits one 'document:deleted' per removed id.",
+          "file": "apps/web/app/api/documents/trash/route.ts"
+        }
+      ],
+      "notes": [
+        "NO create endpoint under /api/documents — documents are created by the ingest pipeline. There is also no PUT; updates are PATCH only.",
+        "Pagination is OFFSET/page based, NOT cursor. Use page+limit; the response gives total, totalPages, hasMore, nextPage. limit is hard-capped server-side at 100 (and floored at 1). The web client uses PAGE_SIZE=20 for the feed, limit=100 for archived/trashed lazy loads.",
+        "Param NAMES differ from generic guesses: search is `q` (not `search`), favorite is `isFavorite=true` (not `favorite`). status/sourceType/categoryId are as named. Empty-string param values are treated as 'unset'.",
+        "Lifecycle is driven by metadata.status, not by HTTP verbs: active/archived/trashed are PATCH {metadata:{status:...}}. The DELETE verb (/[id]) is a permanent hard delete; /trash empties all trashed rows. List defaults to status='active'; pass status='all' to ignore status, or status='archived'/'trashed' for those views.",
+        "metadata is a free-form jsonb blob and is shallow-merged on PATCH (`metadata || $::jsonb`) — you cannot delete a key by PATCH, only overwrite. Known keys the client reads: isFavorite(bool), status(string), aiTags(string[]), userTags(string[]), tags(legacy string[]), summary, what_it_solves, key_points(string[]), reading_time_minutes(number), fileType, filePath, fileName, ogImage. Tag patches (aiTags/userTags/tags) also trigger a normalized-tag table resync server-side.",
+        "Memory.tags is a client-side DEDUPED MERGE of metadata.userTags + metadata.aiTags + legacy metadata.tags. Memory.aiTags / Memory.userTags are passed through separately. A native client must merge these itself; the API returns them only inside metadata.",
+        "Category mapping: the row's `categories` array (each {id,name,color}) is the source. Client sets collectionId = categories[0]?.id ?? 'all' and categoryIds = categories.map(c=>c.id). To CHANGE category, PATCH {categoryId} (single uuid replaces all, null clears) — the list/detail responses do not accept multiple categories on write here.",
+        "favicon is NOT returned by the API — the client derives it from the row url: `https://www.google.com/s2/favicons?domain={hostname}&sz=64` (empty string when no url). A native client must build this itself.",
+        "ogImage is NOT served raw. Client logic: if metadata.ogImage starts with /api/og/ or /api/files/ use as-is; else if metadata.ogImage is any other (external) URL, rewrite to `/api/og/{id}` (proxy that handles signed/short-lived CDN urls and auth); else if it's an image file doc (docType==='file' && metadata.fileType==='image' && metadata.filePath present) use `/api/files/{id}`; else undefined. Always go through the proxy, never hotlink external CDN urls.",
+        "docType is derived from source_type (DB column, authoritative) not metadata: file/text/doc/mindmap/sheet map 1:1, everything else => 'url'.",
+        "job_status is ONLY on the list response (newest ingestion_jobs row); the detail GET does NOT include it. Values: pending|processing|completed|failed (or null).",
+        "Auth dual-mode: cookie session via better-auth, OR `Authorization: Bearer <token>` where token starts with `sk-mcp-` (looked up as SHA-256 hex in user_mcp_keys). MCP-key callers have no session, so org falls back to their oldest/first membership. A pinned activeOrganizationId the user isn't a member of is ignored.",
+        "Uniform error body for ALL non-2xx: {code:string, message:string, timestamp:string(ISO)}. Codes seen: AUTH_TOKEN_EXPIRED (401), SYSTEM_VALIDATION_ERROR (400), SEARCH_NO_RESULTS (404 doc), CATEGORY_NOT_FOUND (404 category), SYSTEM_INTERNAL_ERROR (500). Note 401 uses AUTH_TOKEN_EXPIRED even for missing/invalid creds, and 404 'not found' is also returned when a row exists but is not visible/writable to the caller (visibility, not existence).",
+        "All routes are `export const dynamic = 'force-dynamic'` (no caching). Content-Type for writes must be application/json."
+      ]
+    },
+    {
+      "area": "INGEST / CAPTURE (save-to-second-brain) API contracts — apps/web/app/api/ingest/*",
+      "summary": "Five capture entry points, all under /api/ingest, all POST, all require auth. URL/text/extension take JSON; file/bookmarks take multipart/form-data. Every single-item endpoint synchronously creates a `documents` row, kicks off a fire-and-forget AI processing job (ingestion_jobs), and returns `{ documentId, jobId, title, status: \"pending\" }` immediately — the AI summary/entities/embeddings/RAG-index happen asynchronously. Auth is via better-auth session cookie OR `Authorization: Bearer sk-mcp-...` MCP key; userId+organizationId are derived server-side by getOrgContext (never passed by the client). Async progress is reported two ways: poll GET /api/ingest/status/{jobId}, or subscribe to the SSE stream GET /api/events/stream. Key gotchas for a native client: duplicate detection returns HTTP 409 (not an error code) with an `existingId`, content-type differs per endpoint, a User-Agent header is mandatory (missing or bot-like UA → 403), and the daily free-tier limit is enforced inside the async job (not at POST time) so it surfaces as a FAILED job, not an HTTP error.",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/ingest/url",
+          "auth": "Required. better-auth session cookie OR `Authorization: Bearer sk-mcp-<key>`. userId + organizationId resolved server-side via getOrgContext() — client never sends them. 401 {code:1002} if unauthenticated.",
+          "request": "Content-Type: application/json. Body: { url: string (required), categoryId?: string (uuid of collection), tags?: string[], locale?: string (one of \"ko\"|\"en\"|\"ja\"|\"zh\"; anything else ignored and language auto-detected), force?: boolean (default false; true bypasses duplicate check and saves a renamed copy) }",
+          "response": "200 application/json: { documentId: string(uuid), jobId: string(uuid), title: string, url: string, status: \"pending\" }. 409 on duplicate (only when force!==true): { duplicate: true, existingId: string, existingTitle: string, message: string }. 400 invalid url: {code:2001,message,timestamp}. 400 fetch failed: {code:2002,message,timestamp}. 401: {code:1002,...}. 500: {code:9003,...}. 429/403 anti-bot: {code:9003,message,timestamp}.",
+          "file": "apps/web/app/api/ingest/url/route.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/ingest/text",
+          "auth": "Required. Same as /url (session cookie or Bearer MCP key). 401 {code:1002} otherwise.",
+          "request": "Content-Type: application/json. Body: { content: string (required, non-empty after trim), title?: string (auto-derived from first 80 chars of content if omitted), tags?: string[], categoryId?: string, locale?: string (ko|en|ja|zh else auto-detect) }. Note: NO force/duplicate handling on this endpoint.",
+          "response": "200 application/json: { documentId: string, jobId: string, title: string, status: \"pending\" } (no url field). 400 empty content: {code:2003,message:\"Content is required\",timestamp}. 401 {code:1002}. 500 {code:9003}. 403/429 anti-bot {code:9003}.",
+          "file": "apps/web/app/api/ingest/text/route.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/ingest/file",
+          "auth": "Required. Same as others (session cookie or Bearer MCP key). 401 {code:1002}.",
+          "request": "Content-Type: multipart/form-data (NOT JSON). Fields: file (required, the binary File; field name literally \"file\"; max 50MB), categoryId?: string, locale?: string (ko|en|ja|zh), force?: string — send the string \"true\" to bypass duplicate check (any other value treated as not-forcing). Parser infers fileType (pdf/image/video/etc) from file.type + file.name; images/videos <=10MB get base64-stashed in metadata for async vision analysis.",
+          "response": "200 application/json: { documentId: string, jobId: string, title: string, status: \"pending\" }. 409 duplicate filename (when force!=\"true\"): { duplicate: true, existingId: string, existingTitle: string, message:\"File already saved\" }. 400 no file: {code:2003,message:\"No file provided\"}. 400 too big: {code:2003,message:\"File exceeds 50MB limit\"}. 400 parse failure: {code:2003 (or parser code),message,timestamp}. 401 {code:1002}. 500 {code:9003}. 403/429 anti-bot {code:9003}.",
+          "file": "apps/web/app/api/ingest/file/route.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/ingest/extension",
+          "auth": "Required (session cookie or Bearer MCP key). 401 {code:1002}. Built for the browser extension / share flows that already have the page HTML.",
+          "request": "Content-Type: application/json. Body: { url: string (required), title?: string, content?: string, html?: string, tags?: string[] }. If `html` present it is parsed with Mozilla Readability (preferred); else falls back to `content`. NO categoryId, NO locale (language always auto-detected), NO force/duplicate check.",
+          "response": "200 application/json: { documentId: string, jobId: string, title: string, url: string, status: \"pending\" }. 400 missing url: {code:2001,message:\"URL is required\"}. 400 no extractable content: {code:2003,message:\"No content could be extracted\"}. 401 {code:1002}. 500 {code:9003}. 403/429 anti-bot {code:9003}.",
+          "file": "apps/web/app/api/ingest/extension/route.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/ingest/bookmarks",
+          "auth": "Required (session cookie or Bearer MCP key). 401 {code:1002}. Bulk import of a Netscape bookmark-export HTML file.",
+          "request": "Content-Type: multipart/form-data. Fields: file (required, the bookmarks .html export; field name \"file\"; max 20MB), categoryId?: string (fallback collection), locale?: string, skipDuplicates?: string (defaults to true; send the literal string \"false\" to import duplicates). Folder names in the file are auto-mapped to / created as categories.",
+          "response": "200 application/json: { total: number, imported: number, skipped: number, folders: string[], jobIds: string[] } — NOTE different shape: this returns an ARRAY of jobIds (one per imported bookmark), no single documentId. 400 not a file: {code:9004,message:\"File is required\"}. 400 too large: {code:9004,message:\"File too large (max 20 MB)\"}. 400 not bookmark html: {code:2004,message:\"Not a valid bookmark HTML file\"}. 400 no bookmarks: {code:9004,message:\"No bookmarks found in file\"}. 500 {code:9003}.",
+          "file": "apps/web/app/api/ingest/bookmarks/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ingest/status/{jobId}",
+          "auth": "Required (session cookie or Bearer MCP key). 401 {code:1002}. Scoped by organizationId — a job from another org returns 404, not 403.",
+          "request": "Path param jobId (uuid). No body, no query params.",
+          "response": "200 application/json: { jobId: string, status: \"pending\"|\"processing\"|\"completed\"|\"failed\", progress: number (0-100), error?: string (present only on failed) }. Progress milestones observed: 10→15→(20 vision)→50(metadata)→70(entities)→90(categories)→95(related)→100(complete). 404 unknown/other-org job: {code:9003,message:\"Job not found\"}. 400 missing id: {code:9003}. 401 {code:1002}. 500 {code:9003}.",
+          "file": "apps/web/app/api/ingest/status/[jobId]/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/events/stream",
+          "auth": "Required (session cookie or Bearer MCP key via getUserIdFromRequest). 401 returns plain-text \"Unauthorized\" (NOT JSON). Server filters events to the caller's userId only.",
+          "request": "No params. Long-lived SSE connection (EventSource). dynamic=force-dynamic.",
+          "response": "Content-Type: text/event-stream; Cache-Control: no-cache, no-transform; X-Accel-Buffering: no. Wire protocol — on connect a comment line `: connected\\n\\n`; every 30s a keepalive comment `: keepalive\\n\\n`. Each real event is `event: <type>\\ndata: <json>\\n\\n` where <type> is one of document:created | document:updated | document:deleted | ingest:completed | ingest:failed, and <json> = { type, documentId, userId, title?, jobId?, error?, timestamp }. For capture flow: document:created fires immediately at POST (carries jobId), then ingest:completed (carries title) or ingest:failed (carries error) on job finish.",
+          "file": "apps/web/app/api/events/stream/route.ts"
+        }
+      ],
+      "notes": [
+        "Content-Type matters: url/text/extension = application/json; file/bookmarks = multipart/form-data with field name 'file'. Sending JSON to /file will fail formData parsing.",
+        "`force` is a BOOLEAN in JSON for /url, but a STRING \"true\" in the form for /file. /bookmarks uses skipDuplicates=\"false\" (string) to disable dedup. Mismatch = dedup silently stays on.",
+        "Duplicate detection is a HTTP 409 with a normal JSON body {duplicate:true, existingId, existingTitle, message} — it is NOT in the {code,message,timestamp} error envelope. Native client should treat 409 as 'already saved, here is the existing doc id' and offer a force-resave (which renames, e.g. 'Title (2)').",
+        "Two distinct response shapes: single-item endpoints (url/text/file/extension) return {documentId, jobId, title, status:\"pending\"} (url/extension also include `url`); /bookmarks returns {total, imported, skipped, folders, jobIds[]} — no documentId, array of jobIds.",
+        "Async processing is fire-and-forget in-process. POST returns instantly with status:\"pending\". The doc has NO summary/tags/entities/RAG-index yet at POST time; those land when the job reaches status:\"completed\".",
+        "Two ways to track a job: (a) poll GET /api/ingest/status/{jobId} (progress 0-100), or (b) subscribe once to SSE /api/events/stream and react to ingest:completed / ingest:failed events keyed by jobId/documentId. SSE avoids per-job polling for quick-capture UX.",
+        "SSE event format is `event: <name>\\ndata: <json>\\n\\n`; comment lines start with `:` (`: connected`, `: keepalive` every 30s). 401 on the stream is plain text, not JSON. Standard EventSource works.",
+        "Daily free-tier usage limit is enforced INSIDE the async job, not at POST. Over-limit captures still return 200 + jobId, then the job ends as status:\"failed\" with error like 'Daily free limit reached (N/limit). Add your own API key...'. Native client must surface failed-job errors, not just HTTP status.",
+        "A User-Agent header is MANDATORY on every ingest POST. Missing UA, or UA matching bot/crawl/spider/scrape/headless/phantom/selenium/puppeteer/playwright → 403 {code:9003}. Set a normal app UA, not a headless-client default.",
+        "Rate limits (in-memory, per-process): 100 req/min per client IP (Retry-After:60), 1000 req/hour per user (Retry-After:3600). Exceeding → 429 {code:9003}. Bulk capture should respect Retry-After.",
+        "Status route is org-scoped (uses organizationId); the underlying getJobStatus helper is user-scoped. The HTTP route is the source of truth: a job outside your active org returns 404 'Job not found'.",
+        "Error codes: 1002 AUTH_TOKEN_EXPIRED (401), 2001 INGEST_INVALID_URL, 2002 INGEST_FETCH_FAILED, 2003 INGEST_PARSE_FAILED, 2004 INGEST_UNSUPPORTED_FORMAT, 9003 SYSTEM_INTERNAL_ERROR / anti-bot, 9004 SYSTEM_VALIDATION_ERROR. Error envelope is {code:number, message:string, timestamp:ISO8601}.",
+        "File size caps: /file = 50MB; /bookmarks = 20MB. Images/videos <=10MB get base64 stored for async vision (Claude) analysis which can REPLACE the doc title+content after processing — so a quick-capture preview may change after ingest:completed.",
+        "locale only accepts ko|en|ja|zh; any other value is ignored and language is auto-detected from content. For mobile, pass the user's app locale to keep AI summaries in the right language."
+      ]
+    },
+    {
+      "area": "SEARCH + CATEGORIES/COLLECTIONS + TAGS (apps/web Next.js API routes)",
+      "summary": "All routes require auth via getOrgContext(), which resolves a userId + active organizationId + role. Auth is either a better-auth session cookie OR `Authorization: Bearer <mcp-api-key>` (hashed and looked up in user_mcp_keys; org then falls back to the user's first membership). No session => 401 {code:1002}. SEARCH is a single POST that calls EdgeQuake RAG and falls back to a PostgreSQL ILIKE search when EdgeQuake is unavailable OR returns 0 visible results; results are always org/visibility-scoped. CATEGORIES are a hierarchical tree (parent_id/path/depth) that doubles as COLLECTIONS — the `kind` field (\"collection\"|\"doc\"|\"mindmap\") namespaces them; there is no separate /api/collections route. Categories support per-team sharing via /[id]/teams. TAGS is read-only here: a single GET listing all tags in the active org (creation/assignment of tags happens through document routes / MCP, not under /api/tags). Note inconsistent response shapes: POST /api/categories returns a slim {categoryId,name,path[]} while GET/PUT/[id] return the full snake_case CategoryRow.",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/search",
+          "auth": "required; cookie session or Bearer MCP key. userId+organizationId+role from getOrgContext(). 401 {code:1002} if unauth. Rate-limited via checkAntiBot (may return 429).",
+          "request": "JSON body: { query: string (required, non-empty after trim), mode?: 'local'|'global'|'hybrid'|'drift'|'mix'|'naive' (default 'hybrid'; 'drift' maps to EdgeQuake 'hybrid'), limit?: number (default 10), offset?: number (default 0), filters?: { categoryIds?: string[], dateRange?: { start: string-ISO, end: string-ISO }, tags?: string[] } }. NOTE: filters are ONLY applied in the PostgreSQL fallback path; the EdgeQuake primary path ignores filters. `tags` filter is accepted in the type but never used in either path.",
+          "response": "200 SearchResponse: { results: SearchResult[], totalCount: number, took: number(ms) }. SearchResult = { documentId: string, title: string, snippet: string (summary or content[:200]), score: number, citations: Citation[], entities: Entity[] (always [] here) }. Citation = { documentId: string, title: string, url?: string, excerpt: string, relevanceScore: number }. Primary path groups EdgeQuake sources by document_id (score from source.score); fallback path gives every row score 1.0 with a single self-citation. Errors: 400 {code:3001,message:'Query is required'} for empty query; 500 {code:9003}. All error bodies: { code:number, message:string, timestamp:string-ISO }.",
+          "file": "apps/web/app/api/search/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/categories",
+          "auth": "required; getOrgContext(). 401 {code:1002} if unauth.",
+          "request": "No query params. No body.",
+          "response": "200 { categories: CategoryRow[], tree: CategoryNode|null, graph: { nodes: GraphNode[], edges: GraphEdge[] } }. CategoryRow (raw snake_case) = { id: string-uuid, user_id: string, organization_id: string, parent_id: string|null, name: string, description: string|null, color: string|null, depth: number, path: string ('/'-joined), privacy_level: string ('private'|'shared'), kind: string ('collection'|'doc'|'mindmap'), created_at: string-ISO, updated_at: string-ISO } — sorted by path,name; scoped by readableClause (own + org-shared). CategoryNode = { category: { id:string, name:string, depth:number, path:string, parentId:string|null }, children: CategoryNode[], documentCount: number } with a synthetic root {id:'root',name:'Categories',depth:-1,path:'',parentId:null}. GraphNode = { id:string, name:string, depth:number, documentCount:number }. GraphEdge = { source:string, target:string, type:'parent_child'|'related' }. documentCount reflects only readable docs. Errors: 500 {code:9003}.",
+          "file": "apps/web/app/api/categories/route.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/categories",
+          "auth": "required; getOrgContext(). 401 {code:1002}. Rate-limited (checkAntiBot).",
+          "request": "JSON body: { name: string (required, non-empty after trim), parentId?: string-uuid, description?: string, color?: string, kind?: 'collection'|'doc'|'mindmap' (anything else coerced to 'collection'; children inherit parent's kind) }. privacy_level is auto-resolved: 'private' in personal org, 'shared' in a team org; children inherit parent privacy.",
+          "response": "200 (NOTE: 200, not 201) SLIM shape: { categoryId: string-uuid, name: string, path: string[] (path split on '/') }. Creating a duplicate (same org+user+name+kind+parent) returns the EXISTING row silently (still 200). Errors: 400 {code:4001,message:'Category name is required'} for empty name; 409 {code:4002} on duplicate (only if store throws a 'duplicate' error — note normal dedupe path does NOT throw); 500 {code:9003}.",
+          "file": "apps/web/app/api/categories/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/categories/[id]",
+          "auth": "required; getOrgContext(). 401 {code:1002}.",
+          "request": "Path param id (uuid). No body.",
+          "response": "200 full CategoryRow (snake_case, same shape as in the list endpoint's `categories[]`). 404 {code:4001,message:'Category not found'} if not visible. 500 {code:9003}.",
+          "file": "apps/web/app/api/categories/[id]/route.ts"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/categories/[id]",
+          "auth": "required; getOrgContext(); writable (owner of category, or org admin, or editable-via-share). 401 {code:1002}. Rate-limited.",
+          "request": "Path param id. JSON body (all optional, partial update): { name?: string (trimmed), parentId?: string-uuid|null (pass null/omit to root), description?: string, color?: string }. Recomputes depth/path and cascades child paths. privacy not settable here.",
+          "response": "200 updated full CategoryRow (snake_case). 404 {code:4001} if not writable/found. 400 {code:4003,message:'Circular reference detected'} if parentId would create a cycle. 409 {code:4002} on unique-violation (pg 23505). 500 {code:9003}.",
+          "file": "apps/web/app/api/categories/[id]/route.ts"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/categories/[id]",
+          "auth": "required; getOrgContext(); writable. 401 {code:1002}.",
+          "request": "Path param id. No body.",
+          "response": "200 { success: true, movedDocuments: number } — removes doc assignments (docs become uncategorized) and reparents children to this node's parent. 404 {code:4001} if not writable/found. 500 {code:9003}.",
+          "file": "apps/web/app/api/categories/[id]/route.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/categories/merge",
+          "auth": "required; getOrgContext(); target+sources must be writable. 401 {code:1002}. Rate-limited.",
+          "request": "JSON body: { sourceIds: string[] (required, non-empty), targetId: string-uuid (required) }. Reassigns each source's documents (ON CONFLICT DO NOTHING) and children to target, then deletes the source categories. sourceId == targetId is skipped.",
+          "response": "200 { success: true, mergedCount: number } (count of sources actually merged). 400 {code:4001,message:'sourceIds and targetId are required'} if missing. 500 {code:9003} (e.g. target not writable throws -> 500).",
+          "file": "apps/web/app/api/categories/merge/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/categories/suggest/[documentId]",
+          "auth": "required; getOrgContext(); document must be readable. 401 {code:1002}.",
+          "request": "Path param documentId (uuid). No body. Reads documents.metadata.suggestedCategories.",
+          "response": "200 { documentId: string, suggestions: Array<{ categoryId: string, categoryName: string, ... }> } (suggestions come from doc metadata; [] if none). 404 {code:9003,message:'Document not found'} (NOTE: uses SYSTEM_INTERNAL_ERROR code 9003, not a 404-specific code). 500 {code:9003}.",
+          "file": "apps/web/app/api/categories/suggest/[documentId]/route.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/categories/suggest/[documentId]",
+          "auth": "required; getOrgContext(); document must be writable (writableClause, admin-aware). 401 {code:1002}.",
+          "request": "Path param documentId. JSON body: { action: 'approve'|'reject' (required), categoryId?: string-uuid | 'new', categoryName?: string }. action='approve' with categoryId='new' creates a category named categoryName then assigns it; otherwise assigns existing categoryId (must be readable). action='reject' records feedback into metadata.rejectedSuggestions. In both cases the matching entry is removed from metadata.suggestedCategories.",
+          "response": "approve -> 200 { success: true, action: 'approved', categoryId: string }. reject -> 200 { success: true, action: 'rejected' }. Errors: 400 {code:9003,message:\"Action must be 'approve' or 'reject'\"}; 400 {code:9003,message:'categoryId is required for approval'}; 404 {code:9003,message:'Document not found'}; 404 {code:4001} if target category not visible; 500 {code:9003}.",
+          "file": "apps/web/app/api/categories/suggest/[documentId]/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/categories/[id]/teams",
+          "auth": "required; getOrgContext(); caller must be able to manage the collection (its creator/user_id, or owner/admin of its home org). 401 {code:1002}.",
+          "request": "Path param id (category/collection uuid). No body.",
+          "response": "200 { teams: Array<{ id: string-orgId, name: string, isHome: boolean (== category.organization_id), shared: boolean }> } — lists the caller's team orgs (personal org excluded). For the home team `shared` = (privacy_level=='shared'); for others `shared` = a row exists in resource_team_shares(resource_type='category'). 404 {code:3003,message:'Resource not found'} (NOTE: uses SEARCH_NO_RESULTS code 3003) if not manageable.",
+          "file": "apps/web/app/api/categories/[id]/teams/route.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/categories/[id]/teams",
+          "auth": "required; getOrgContext(); caller must manage the collection AND be a member of the target team. 401 {code:1002}.",
+          "request": "Path param id. JSON body: { organizationId: string (required, target team org id), shared: boolean (required) }. If organizationId == home org: toggles categories.privacy_level between 'shared'/'private'. Else: shared=true inserts into resource_team_shares (ON CONFLICT DO NOTHING), shared=false deletes that share row.",
+          "response": "200 { ok: true, organizationId: string, shared: boolean }. Errors: 400 {code:9004,message:'Invalid JSON body'}; 400 {code:9004,message:'organizationId (string) and shared (boolean) are required'}; 403 {code:1004,message:'Not a member of that team'}; 404 {code:3003} if collection not manageable.",
+          "file": "apps/web/app/api/categories/[id]/teams/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/categories/[id]/documents",
+          "auth": "required; getOrgContext(); category must be readable. 401 {code:1002}.",
+          "request": "Path param id (category uuid). Query params: page? (number, default 1, min 1), limit? (number, default 20, clamped 1..100). offset computed as (page-1)*limit.",
+          "response": "200 { documents: Array<{ id: string, title: string, url: string|null, source_type: string, created_at: string-ISO }>, pagination: { page: number, limit: number, total: number, totalPages: number } }. Only readable docs counted/returned, ordered created_at DESC. 404 {code:4001,message:'Category not found'} if category not visible. 500 {code:9003}.",
+          "file": "apps/web/app/api/categories/[id]/documents/route.ts"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/categories/[id]/documents",
+          "auth": "required; getOrgContext(); both category AND document must be writable (writableClause OR editableViaShareClause). 401 {code:1002}.",
+          "request": "Path param id (category uuid). JSON body: { documentId: string (required) }. Removes the row from document_categories (un-assigns, does not delete the document).",
+          "response": "200 { success: true }. Errors: 400 {code:3001,message:'documentId is required'}; 404 {code:4001,message:'Category not found'} if category not writable; 404 {code:3003,message:'Document not found'} if document not writable; 500 {code:9003}.",
+          "file": "apps/web/app/api/categories/[id]/documents/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "auth": "required; getOrgContext(). 401 {code:1002}. Scoped strictly to the active organization (orgScopeClause: tags.organization_id = $orgId). force-dynamic.",
+          "request": "No query params. No body.",
+          "response": "200 { tags: Array<{ id: string-uuid, name: string, canonical_name: string, created_at: string-ISO }> } — every tag in the caller's active org, ordered by name. 500 {code:9003}. NOTE: read-only; there is no POST/PUT/DELETE under /api/tags. Tag creation/assignment happens via document ingest/update routes and MCP tools (sayknowmind_document_add_tags etc.), not here.",
+          "file": "apps/web/app/api/tags/route.ts"
+        }
+      ],
+      "notes": [
+        "Universal error body shape: { code: number, message: string, timestamp: string (ISO) }. Error codes are numeric (ErrorCode enum in apps/web/lib/types.ts): 1002 AUTH_TOKEN_EXPIRED (used for ALL 401s), 1004 AUTH_INSUFFICIENT_PERMISSIONS, 3001 SEARCH_INVALID_QUERY, 3003 SEARCH_NO_RESULTS, 4001 CATEGORY_NOT_FOUND, 4002 CATEGORY_DUPLICATE_NAME, 4003 CATEGORY_CIRCULAR_REFERENCE, 9003 SYSTEM_INTERNAL_ERROR, 9004 SYSTEM_VALIDATION_ERROR. Code is NOT the HTTP status — e.g. several 404/400 bodies carry code 9003.",
+        "Auth for a native client: send the better-auth session cookie, OR `Authorization: Bearer <mcp-api-key>`. With a Bearer key there is no session so the active org defaults to the user's first/oldest membership (can't pick a team). userId/org/role are always server-derived; never pass them in the body.",
+        "SEARCH gotcha: `filters` (categoryIds/dateRange/tags) are honored ONLY when the PostgreSQL fallback runs (EdgeQuake down or zero visible results). The normal EdgeQuake path ignores all filters. The `tags` filter is declared but never implemented in either path. `mode:'drift'` is silently downgraded to EdgeQuake 'hybrid'.",
+        "SEARCH pagination is post-hoc: results are fetched (max_results=limit) then sliced by offset in memory on the EdgeQuake path; totalCount = number of grouped docs, not a true corpus count. Fallback path does real SQL LIMIT/OFFSET and a COUNT(*).",
+        "CATEGORIES == COLLECTIONS: there is no /api/collections route. A 'collection' is a category whose `kind` is 'collection' (vs 'doc'/'mindmap'). Filter client-side on the `kind` field. The tree is materialized-path based (path string, depth int, parent_id).",
+        "Response-shape inconsistency to handle: POST /api/categories returns slim { categoryId, name, path:string[] } (200, not 201), while GET/PUT /api/categories/[id] return the full snake_case CategoryRow (id, user_id, organization_id, parent_id, name, description, color, depth, path:string, privacy_level, kind, created_at, updated_at). Don't assume a uniform Category type across create vs read.",
+        "Creating a category that already exists (same org+user+name+kind+parent) is idempotent: it returns the existing row with 200, no 409. The 409 {code:4002} path only fires if the store throws a 'duplicate' error (e.g. a DB unique violation on PUT, pg code 23505).",
+        "TAGS is the only mutation-free area here: GET /api/tags lists tags for the ACTIVE ORG only (org-scoped, not user-scoped). To create/attach/detach tags use the document routes or MCP tools (e.g. sayknowmind_document_add_tags / _remove_tags). Response includes both `name` (display) and `canonical_name` (normalized).",
+        "Per-team sharing (categories/[id]/teams) uses a single uniform toggle: home org uses categories.privacy_level ('shared'/'private'); other teams use rows in resource_team_shares (resource_type='category', resource_id, organization_id, granted_by). Manageability is creator-or-home-org-admin and independent of the caller's currently active org.",
+        "Content-Type application/json expected for all bodies; POST /api/categories/[id]/teams explicitly returns 400 {code:9004} on malformed JSON. Several routes are force-dynamic (no caching). All list/visibility is enforced in SQL via readableClause/writableClause/orgScopeClause (app-layer tenant isolation; per memory, Postgres RLS is inert here)."
+      ]
+    },
+    {
+      "area": "Chat / AI Conversations (streaming RAG pipeline + conversation CRUD)",
+      "summary": "Chat runs through a single endpoint, POST /api/chat, which ALWAYS streams a Server-Sent-Events response (Content-Type: text/event-stream). The request body is minimal: { message, conversationId? } — there is NO model, options, or messages array; the server loads the last 10 messages from the DB itself and picks the model/provider from the user's DB-stored (encrypted) provider config. The wire format is line-based SSE: each event is one `data: <json>\\n\\n` frame, with the event kind carried INSIDE the JSON as a `type` field (status | log | sources | answer | done | error) — there are NO SSE `event:` lines, NO `id:` lines, NO keepalive comments, and NO `[DONE]` sentinel (the `done` JSON frame plus stream close is the terminator). Auth is via better-auth session cookie OR `Authorization: Bearer sk-mcp-...` MCP key; the org is derived server-side (session activeOrganizationId, else the user's first membership). Conversation history/list/create/delete use plain JSON endpoints under /api/conversations and are ORG-scoped, not user-scoped.",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/chat",
+          "auth": "Required. better-auth session cookie OR Authorization: Bearer sk-mcp-<token> (MCP key, SHA-256 looked up). userId from getUserIdFromRequest(); organizationId from session.activeOrganizationId else first org membership. 401 JSON if neither resolves.",
+          "request": "application/json body: { \"message\": string (required, non-empty after trim), \"conversationId\"?: string (UUID; omit to auto-create a new conversation) }. Send header Accept: text/event-stream. NOTE: no \"model\", no \"options\", no \"messages\" array, no API keys — server loads last 10 DB messages as history and selects provider/model from the user's DB config.",
+          "response": "On success: HTTP 200, Content-Type: text/event-stream, Cache-Control: no-cache, Connection: keep-alive. Body = sequence of SSE frames, each exactly `data: ` + JSON.stringify(event) + `\\n\\n` (literal prefix 'data: ' with one space = 6 bytes; double-newline separates frames). Parse: UTF-8 stream-decode, split on '\\n', for each line if it startsWith('data: ') take line.substring(6) and JSON.parse; skip any line not starting with 'data: ' (the blank separator lines). Event JSON shapes (discriminated by .type): (1) {\"type\":\"status\",\"phase\":\"thinking\"|\"searching\"|\"answering\",\"message\":string}; (2) {\"type\":\"log\",\"message\":string} (agent reasoning/trace lines, optional UI); (3) {\"type\":\"sources\",\"sources\":[{\"id\":string,\"title\":string,\"url\"?:string,\"excerpt\":string,\"score\":number}]}; (4) {\"type\":\"answer\",\"token\":string} (INCREMENTAL — append token to build the answer; for general/RAG replies emitted many times token-by-token; for create/share intents emitted ONCE as the whole answer); (5) {\"type\":\"done\",\"conversationId\":string,\"messageId\":string} (terminator — capture conversationId to persist the newly-created conversation); (6) {\"type\":\"error\",\"message\":string} (non-fatal pipeline error, sent as a frame, then stream closes — HTTP is still 200). Typical order: status(thinking) -> log* -> [status(searching) -> log* -> sources] -> status(answering) -> log* -> answer* -> done. After done the server closes the stream (reader returns done=true). PRE-STREAM errors return JSON (not SSE) with status codes: 401 {code,message,timestamp}; 400 {code,message,timestamp} (empty message); 404 {code,message,timestamp} (conversationId not owned by user); 429 {code:\"DAILY_LIMIT_EXCEEDED\",message,used:number,limit:number,timestamp} (free tier 10/day with no own API key); 500 {code,message,timestamp}. Anti-bot middleware may also short-circuit with a block response.",
+          "file": "apps/web/app/api/chat/route.ts (SSE encoder: apps/web/lib/agents/stream-writer.ts; event producer: apps/web/lib/agents/pipeline.ts; client parser: apps/web/components/chat/chat-page.tsx handleSend)"
+        },
+        {
+          "method": "GET",
+          "path": "/api/conversations",
+          "auth": "Required via getOrgContext() (session cookie or Bearer MCP key). 401 JSON if unauthenticated. Results are ORGANIZATION-scoped (organization_id = caller's active org), not per-user.",
+          "request": "No body, no query params.",
+          "response": "200 { \"conversations\": [ { \"id\": string(uuid), \"title\": string, \"created_at\": string(ISO timestamp), \"updated_at\": string(ISO timestamp) } ] }. Ordered by updated_at DESC, LIMIT 50. 500 {code,message,timestamp} on error.",
+          "file": "apps/web/app/api/conversations/route.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/conversations",
+          "auth": "Required via getOrgContext(). Creates a row owned by ctx.userId in ctx.organizationId. Used by lite-desktop fast path that bypasses /api/chat.",
+          "request": "application/json (body optional): { \"title\"?: string } — trimmed, sliced to 500 chars; defaults to \"New Conversation\" if missing/blank. Invalid/empty JSON is tolerated.",
+          "response": "201 { \"id\": string, \"title\": string, \"created_at\": string, \"updated_at\": string }. 401/500 {code,message,timestamp}.",
+          "file": "apps/web/app/api/conversations/route.ts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/conversations/[id]/messages",
+          "auth": "Required via getOrgContext(). Verifies the conversation belongs to the caller's org before returning (404 otherwise).",
+          "request": "Path param id (conversation UUID). No body/query.",
+          "response": "200 { \"messages\": [ { \"id\": string, \"role\": \"user\"|\"assistant\"|\"system\", \"content\": string, \"citations\": (jsonb) Array<{ \"id\":string, \"title\":string, \"url\":string|null, \"excerpt\":string, \"score\":number }> | null, \"agent_steps\": jsonb|null, \"created_at\": string(ISO) } ] }. Ordered created_at ASC. NOTE: citations is the persisted form of the stream's sources (url is null, not omitted, when absent). 401 {code,message,timestamp}; 404 {code,message,timestamp} (not in caller's org); 500.",
+          "file": "apps/web/app/api/conversations/[id]/messages/route.ts"
+        },
+        {
+          "method": "POST",
+          "path": "/api/conversations/[id]/messages",
+          "auth": "Required via getOrgContext(). Verifies conversation is in caller's org (404 otherwise). Used by the lite-desktop OCP fast path to append turns manually when bypassing /api/chat.",
+          "request": "Path param id. application/json body: { \"role\": \"user\"|\"assistant\"|\"system\" (required, validated), \"content\": string (required, non-empty after trim) }.",
+          "response": "201 { \"id\": string, \"role\": string, \"content\": string, \"created_at\": string }. Errors: 400 {code,message,timestamp} (invalid JSON / bad role / empty content); 401; 404; 500.",
+          "file": "apps/web/app/api/conversations/[id]/messages/route.ts"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/conversations/[id]",
+          "auth": "Required via getOrgContext(). Uses writableClause: a member can delete their own conversation; org owners/admins can delete any in the org. Messages cascade-delete via FK.",
+          "request": "Path param id (conversation UUID). No body.",
+          "response": "200 { \"success\": true }. 401 {code,message,timestamp}; 404 {code,message,timestamp} (not found / not writable by caller); 500.",
+          "file": "apps/web/app/api/conversations/[id]/route.ts"
+        }
+      ],
+      "notes": [
+        "Byte-level SSE: frames are `data: ` + JSON + `\\n\\n`. The prefix has exactly one space (6 chars: d,a,t,a,:,space). The official client splits the buffered text on single '\\n', pops the trailing partial line back into the buffer, and processes only lines starting with 'data: ' (substring(6) -> JSON). It tolerates malformed JSON by skipping. There is NO 'event:' field, NO 'id:' field, NO ':'-comment heartbeats, and NO '[DONE]' marker — terminate on the {type:done} frame and/or stream EOF.",
+        "The event TYPE lives inside the JSON payload (.type), unlike standard SSE which would use the `event:` line. Dart clients using a generic SSE package that keys off `event:` will see every event as the default 'message' type — parse the JSON and switch on .type instead.",
+        "answer tokens are INCREMENTAL and must be concatenated. Exception: 'create' and 'share' intents (e.g. 'make a doc', 'share X') emit the full answer as a SINGLE answer frame, not token-by-token — your accumulator handles both since it just appends.",
+        "Request to /api/chat does NOT accept a model or provider — model selection is entirely server-side from the user's encrypted DB provider config (apps/web/lib/provider-db.ts). A native client cannot choose the model here. (Desktop has an unrelated local fallback: POST http://127.0.0.1:3458/ollama/chat with {model,messages,stream:false}, used only if /api/chat fails in the desktop env.)",
+        "Conversation creation is implicit: omit conversationId on /api/chat and the server INSERTs a new conversation (title = first 100 chars of message), then returns its id in the {type:done} frame. Capture it for subsequent turns. Passing a conversationId you don't own returns 404 (pre-stream JSON).",
+        "Conversations are ORG-scoped on GET (organization_id = active org), but ownership on /api/chat is checked per-user (user_id = caller). With personal orgs (slug personal-<userId>) these coincide; in a team org, GET /api/conversations may list teammates' conversations while /api/chat only lets you reuse ones you own.",
+        "Free-tier rate limit: 10 messages/day when the user has no own API key configured. Exceeding returns HTTP 429 with {code:'DAILY_LIMIT_EXCEEDED', used, limit, timestamp} BEFORE any stream starts. Handle this as a normal JSON error, not an SSE frame.",
+        "Two distinct error channels: (a) pre-stream failures = JSON body + non-200 status (401/400/404/429/500); (b) mid-stream failures = HTTP 200 + a `data: {type:error,message}` frame followed by stream close. A native client must check response status/Content-Type first, then parse SSE.",
+        "Persisted citations (GET messages -> citations) use url: string|null; the live stream `sources` event uses url?: string (key omitted when absent). Same fields otherwise (id,title,excerpt,score). The `agent_steps` column is selected on read but the pipeline never writes it — expect null.",
+        "Auth accepts an MCP bearer token (sk-mcp-...) on all these routes, so a native client can authenticate without cookies: send Authorization: Bearer sk-mcp-<token>. Org context then falls back to the user's first membership."
+      ]
+    }
+  ]
+}

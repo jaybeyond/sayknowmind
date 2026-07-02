@@ -323,8 +323,8 @@ export class SessionContextService {
       /(https?:\/\/[^\s]+)/,
       // 코드/명령어
       /`([^`]{3,50})`/,
-      // during요 keyword
-      /(?:during요|important|핵심|key|반드시|must)[:\s]*([^.!?\n]{5,100})/i,
+      // 중요 keyword
+      /(?:중요|important|핵심|key|반드시|must|重要|大事|要点|肝心)[:\s]*([^.!?\n]{5,100})/i,
     ];
     
     for (const pattern of keyPointPatterns) {

@@ -297,7 +297,8 @@ mod processing_stats_integration_tests {
                 embedding_tokens: 2500,
                 summarization_cost_usd: 0.00015,
             }),
-        };
+                    error_details: None,
+};
 
         // Verify all fields
         assert_eq!(stats.entity_count, 15);
@@ -343,7 +344,8 @@ mod processing_stats_integration_tests {
                 embedding_tokens: 1500,
                 summarization_cost_usd: 0.00006,
             }),
-        };
+                    error_details: None,
+};
 
         // Serialize
         let json = serde_json::to_string(&stats).expect("Failed to serialize");
@@ -756,7 +758,8 @@ mod cost_reporting_tests {
                 embedding_tokens: 2000,
                 summarization_cost_usd: 0.00020, // 10%
             }),
-        };
+                    error_details: None,
+};
 
         let breakdown = stats.cost_breakdown.unwrap();
         let total = breakdown.extraction_cost_usd

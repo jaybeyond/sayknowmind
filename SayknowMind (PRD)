@@ -2,7 +2,7 @@
 **버전**: v1.0 (2026년 3월 1일)  
 **프로젝트명**: SayknowMind — Open Personal Agentic Second Brain  
 **슬로건**: “Everything you say, we know, and mind forever.”  
-**오픈소스 여부**: 전체 공개 (MIT License)  
+**오픈소스 여부**: 전체 공개 (Apache 2.0 License)  
 **Sayknow 시리즈 연동**: SayknowAI · Sayknowwork와 하나의 에코시스템
 
 ---
@@ -150,7 +150,7 @@
 ---
 
 ### 9. 오픈소스 전략
-- License: MIT
+- License: Apache 2.0
 - 첫 릴리스: MVP 완성 즉시 공개
 - Roadmap 공개 + CONTRIBUTING.md
 - SayknowAI와 크로스 프로모션
@@ -247,7 +247,7 @@ PC 또는 Mini PC에 항상 Docker 띄워두고, Tailscale + Syncthing 병행.
 **버전**: v2.0 (2026년 3월 1일)  
 **프로젝트명**: SayknowMind — Open Personal Agentic Second Brain  
 **슬로건**: “Everything you say, we know, and mind forever.”  
-**오픈소스**: 전체 공개 (MIT License)  
+**오픈소스**: 전체 공개 (Apache 2.0 License)  
 **Sayknow 시리즈**: SayknowAI · Sayknowwork와 하나의 에코시스템
 
 ### 1. 프로젝트 비전 & 목적
@@ -363,7 +363,7 @@ PC 또는 Mini PC에 항상 Docker 띄워두고, Tailscale + Syncthing 병행.
 - **스케일**: 개인용 기준 10만 문서까지 문제없음
 
 ### 9. 오픈소스 전략
-- License: MIT
+- License: Apache 2.0
 - 첫 릴리스: MVP 완성 즉시 공개
 - 설치: `curl -fsSL https://sayknowmind.ai/install.sh | bash`
 - Roadmap 공개 + CONTRIBUTING.md
@@ -382,7 +382,7 @@ PC 또는 Mini PC에 항상 Docker 띄워두고, Tailscale + Syncthing 병행.
 **버전**: v1.0 (2026년 3월 1일)  
 **프로젝트명**: SayknowMind — Open Personal Agentic Second Brain  
 **슬로건**: “Everything you say, we know, and mind forever.”  
-**오픈소스 여부**: 전체 공개 (MIT License)  
+**오픈소스 여부**: 전체 공개 (Apache 2.0 License)  
 **Sayknow 시리즈 연동**: SayknowAI · Sayknowwork와 하나의 에코시스템
 
 ---
@@ -530,7 +530,7 @@ PC 또는 Mini PC에 항상 Docker 띄워두고, Tailscale + Syncthing 병행.
 ---
 
 ### 9. 오픈소스 전략
-- License: MIT
+- License: Apache 2.0
 - 첫 릴리스: MVP 완성 즉시 공개
 - Roadmap 공개 + CONTRIBUTING.md
 - SayknowAI와 크로스 프로모션
@@ -549,7 +549,7 @@ PC 또는 Mini PC에 항상 Docker 띄워두고, Tailscale + Syncthing 병행.
 **버전**: v2.2 (2026년 3월 1일 최신)  
 **프로젝트명**: SayknowMind — Open Personal Agentic Second Brain  
 **슬로건**: “Everything you say, we know, and mind forever.”  
-**오픈소스**: 전체 공개 (MIT License)  
+**오픈소스**: 전체 공개 (Apache 2.0 License)  
 **Sayknow 시리즈 연동**: SayknowAI · Sayknowwork와 하나의 에코시스템
 
 ### 1. 프로젝트 비전 & 목적

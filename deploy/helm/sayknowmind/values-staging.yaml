@@ -28,3 +28,7 @@ aiServer:
     limits:   { cpu: "2",  memory: 4Gi }
   modelCache:
     size: 5Gi
+
+# Login edition — Open (이메일 로그인, built-in better-auth)
+app:
+  authMode: local

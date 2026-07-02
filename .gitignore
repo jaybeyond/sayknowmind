@@ -74,6 +74,7 @@ venv/
 *.tgz
 *.tar.gz
 .claude/
+.skc/
 .omc/
 .superset/
 apps/desktop/web-standalone/
@@ -92,6 +93,7 @@ docs/*
 *.bak
 db/init/*.bak
 docker-compose.yml.bak
+docker-compose.local.yml
 
 # Local env backups
 .env.bak*

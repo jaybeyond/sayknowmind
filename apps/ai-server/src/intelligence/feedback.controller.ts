@@ -7,9 +7,11 @@ import {
   Query,
   Delete,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { FeedbackService } from './feedback.service';
 import { CreateFeedbackDto, FeedbackFilter } from './dto/feedback.dto';
+import { SignatureGuard } from '../auth/signature.guard';
 
 /**
  * Feedback Controller
@@ -19,6 +21,7 @@ import { CreateFeedbackDto, FeedbackFilter } from './dto/feedback.dto';
  * 
  * Requirements: 5.5
  */
+@UseGuards(SignatureGuard)
 @Controller('intelligence/feedback')
 export class FeedbackController {
   private readonly logger = new Logger(FeedbackController.name);

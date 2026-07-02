@@ -903,6 +903,7 @@
       "you": "（我）",
       "inviteHeading": "邀请队友",
       "invitePlaceholder": "colleague@example.com",
+      "invitePlaceholderSaas": "工号或邮箱",
       "inviteButton": "邀请",
       "pendingHeading": "待接受邀请",
       "invitedAs": "已邀请为{role} · 待确认",

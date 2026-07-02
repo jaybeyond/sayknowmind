@@ -209,8 +209,8 @@ mod workspace_crud_tests {
             embedding_provider: None,
             embedding_dimension: None,
 
-            vision_provider: None,
-            vision_model: None,
+            vision_llm_provider: None,
+            vision_llm_model: None,
         };
 
         let workspace = service
@@ -243,8 +243,8 @@ mod workspace_crud_tests {
             embedding_provider: None,
             embedding_dimension: None,
 
-            vision_provider: None,
-            vision_model: None,
+            vision_llm_provider: None,
+            vision_llm_model: None,
         };
 
         let workspace = service
@@ -274,8 +274,8 @@ mod workspace_crud_tests {
             embedding_provider: None,
             embedding_dimension: None,
 
-            vision_provider: None,
-            vision_model: None,
+            vision_llm_provider: None,
+            vision_llm_model: None,
         };
         service
             .create_workspace(tenant.tenant_id, request1)
@@ -293,8 +293,8 @@ mod workspace_crud_tests {
             embedding_provider: None,
             embedding_dimension: None,
 
-            vision_provider: None,
-            vision_model: None,
+            vision_llm_provider: None,
+            vision_llm_model: None,
         };
         let result = service.create_workspace(tenant.tenant_id, request2).await;
 
@@ -322,8 +322,8 @@ mod workspace_crud_tests {
             embedding_provider: None,
             embedding_dimension: None,
 
-            vision_provider: None,
-            vision_model: None,
+            vision_llm_provider: None,
+            vision_llm_model: None,
         };
 
         // Same slug in different tenants should work
@@ -375,8 +375,8 @@ mod workspace_crud_tests {
             embedding_provider: None,
             embedding_dimension: None,
 
-            vision_provider: None,
-            vision_model: None,
+            vision_llm_provider: None,
+            vision_llm_model: None,
         };
         let created = service
             .create_workspace(tenant.tenant_id, request)
@@ -404,8 +404,8 @@ mod workspace_crud_tests {
             embedding_provider: None,
             embedding_dimension: None,
 
-            vision_provider: None,
-            vision_model: None,
+            vision_llm_provider: None,
+            vision_llm_model: None,
         };
         service
             .create_workspace(tenant.tenant_id, request)
@@ -485,8 +485,8 @@ mod workspace_crud_tests {
                 embedding_provider: None,
                 embedding_dimension: None,
 
-                vision_provider: None,
-                vision_model: None,
+                vision_llm_provider: None,
+                vision_llm_model: None,
             };
             service
                 .create_workspace(tenant.tenant_id, request)
@@ -892,8 +892,8 @@ mod concurrent_tests {
                         embedding_provider: None,
                         embedding_dimension: None,
 
-                        vision_provider: None,
-                        vision_model: None,
+                        vision_llm_provider: None,
+                        vision_llm_model: None,
                     };
                     service.create_workspace(tenant_id, request).await
                 })

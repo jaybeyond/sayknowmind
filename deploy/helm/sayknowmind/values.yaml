@@ -42,6 +42,12 @@ ingress:
 app:
   nodeEnv: production
   deployMode: cloud            # cloud | desktop | auto — K8s install is "cloud"
+  # Login edition — see apps/web/lib/auth-mode.ts
+  #   saas  → Enterprise: 사원번호(loginId) login, delegated to SayKnowWork SaaS
+  #   local → Open: 이메일(email) login, built-in better-auth
+  authMode: saas
+  # SayKnowWork SaaS base URL (only used when authMode=saas)
+  saasAuthUrl: https://sayknowwork.ai-ops.click
   privateMode: "true"
   rustLog: info
   llm:

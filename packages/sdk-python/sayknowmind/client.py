@@ -1,17 +1,15 @@
 """SayknowMind Python SDK Client."""
 
 from __future__ import annotations
-from typing import Optional, AsyncIterator
+from typing import Optional
 import json
 
 import httpx
 
 from .types import (
-    SearchParams,
     SearchResult,
     SearchResponse,
     IngestResponse,
-    ChatParams,
     ChatResponse,
     Category,
     Citation,
@@ -72,14 +70,33 @@ class SayknowMindClient:
         query: str,
         mode: str = "hybrid",
         limit: int = 10,
-        **kwargs,
+        offset: int = 0,
+        category_ids: Optional[list[str]] = None,
+        date_range: Optional[dict[str, str]] = None,
+        tags: Optional[list[str]] = None,
     ) -> SearchResponse:
-        data = self._request("POST", "/api/search", json={
+        """Search the knowledge base.
+
+        Filter fields are sent nested under ``filters`` as the server expects:
+        ``{"query": ..., "filters": {"categoryIds": [...], ...}}``.
+        """
+        body: dict = {
             "query": query,
             "mode": mode,
             "limit": limit,
-            **kwargs,
-        })
+            "offset": offset,
+        }
+        filters: dict = {}
+        if category_ids:
+            filters["categoryIds"] = category_ids
+        if date_range:
+            filters["dateRange"] = date_range
+        if tags:
+            filters["tags"] = tags
+        if filters:
+            body["filters"] = filters
+
+        data = self._request("POST", "/api/search", json=body)
         results = [
             SearchResult(
                 document_id=r["documentId"],
@@ -148,27 +165,85 @@ class SayknowMindClient:
 
     # ---- Chat ----
 
-    def chat(self, message: str, **kwargs) -> ChatResponse:
-        data = self._request("POST", "/api/chat", json={
-            "message": message,
-            "mode": kwargs.get("mode", "simple"),
-            **kwargs,
-        })
+    def chat(
+        self,
+        message: str,
+        conversation_id: Optional[str] = None,
+        **kwargs,
+    ) -> ChatResponse:
+        """Send a chat message and aggregate the SSE stream into a ChatResponse.
+
+        The server always returns ``text/event-stream``.  This method reads all
+        ``answer`` token events and joins them, collects ``sources`` into
+        citations, and captures ``conversationId``/``messageId`` from the
+        ``done`` event.
+        """
+        payload: dict = {"message": message}
+        if conversation_id:
+            payload["conversationId"] = conversation_id
+        payload.update(kwargs)
+
+        url = f"{self.base_url}/api/chat"
+        headers = {**self._headers(), "Accept": "text/event-stream"}
+
+        answer_tokens: list[str] = []
+        citations: list[Citation] = []
+        conversation_id_resp = ""
+        message_id = ""
+
+        with self._client.stream(
+            "POST",
+            url,
+            headers=headers,
+            json=payload,
+            timeout=90.0,
+        ) as response:
+            if response.status_code >= 400:
+                body = response.read()
+                try:
+                    err = json.loads(body)
+                    raise SayknowMindError(
+                        err.get("code", response.status_code),
+                        err.get("message", ""),
+                    )
+                except (json.JSONDecodeError, KeyError):
+                    raise SayknowMindError(response.status_code, body.decode())
+
+            for line in response.iter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:].strip()
+                if data_str == "[DONE]":
+                    break
+                try:
+                    ev = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
+
+                ev_type = ev.get("type")
+                if ev_type == "answer":
+                    token = ev.get("token", "")
+                    if token:
+                        answer_tokens.append(token)
+                elif ev_type == "sources":
+                    for s in ev.get("sources", []):
+                        citations.append(Citation(
+                            document_id=s.get("id", ""),
+                            title=s.get("title", ""),
+                            excerpt=s.get("excerpt", ""),
+                            relevance_score=s.get("score", 0.0),
+                            url=s.get("url"),
+                        ))
+                elif ev_type == "done":
+                    conversation_id_resp = ev.get("conversationId", "")
+                    message_id = ev.get("messageId", "")
+
         return ChatResponse(
-            conversation_id=data["conversationId"],
-            message_id=data["messageId"],
-            answer=data["answer"],
-            citations=[
-                Citation(
-                    document_id=c["documentId"],
-                    title=c["title"],
-                    excerpt=c.get("excerpt", ""),
-                    relevance_score=c.get("relevanceScore", 0),
-                    url=c.get("url"),
-                )
-                for c in data.get("citations", [])
-            ],
-            related_documents=data.get("relatedDocuments", []),
+            conversation_id=conversation_id_resp,
+            message_id=message_id,
+            answer="".join(answer_tokens),
+            citations=citations,
+            related_documents=[],
         )
 
     # ---- Categories ----
@@ -189,12 +264,18 @@ class SayknowMindClient:
         ]
 
     def create_category(self, name: str, **kwargs) -> Category:
+        """Create a category.
+
+        The server returns ``{categoryId, name, path: list[str]}`` —
+        ``categoryId`` is mapped to ``id`` and ``path`` segments are joined.
+        """
         data = self._request("POST", "/api/categories", json={"name": name, **kwargs})
+        path_parts: list[str] = data.get("path", [name])
         return Category(
-            id=data["id"],
+            id=data["categoryId"],  # server uses "categoryId", not "id"
             name=data["name"],
-            depth=data.get("depth", 0),
-            path=data.get("path", name),
+            depth=len(path_parts) - 1 if path_parts else 0,
+            path="/".join(path_parts),
             parent_id=data.get("parentId"),
             description=data.get("description"),
             color=data.get("color"),

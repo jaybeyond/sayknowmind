@@ -25,6 +25,7 @@ const protectedPaths = [
   "/api/documents",
   "/api/sync",
   "/api/services",
+  "/api/models",
   "/api/integrations/telegram",
   "/api/admin",
   "/api/share",
@@ -54,24 +55,28 @@ function withCors(response: NextResponse, origin: string | null): NextResponse {
   return response;
 }
 
-// Per-user MCP API keys (`sk-mcp-...` rows in user_mcp_keys) authenticate
-// API requests instead of the session cookie. The middleware can't look
-// the key up in the DB cheaply on every request, so it just lets the
-// request fall through to the route handler — `getUserIdFromRequest()`
-// in session-helper.ts resolves the bearer to a user_id (or returns
-// null → 401) inside the handler.
-function hasMcpApiKey(request: NextRequest): boolean {
+// Both per-user MCP API keys (`sk-mcp-...` rows in user_mcp_keys) AND
+// better-auth bearer tokens (used by the native Flutter app, which is
+// cookieless) authenticate via the `Authorization: Bearer ...` header instead
+// of the session cookie. The middleware can't validate either cheaply on every
+// request (MCP keys need a DB lookup; better-auth tokens need the auth
+// pipeline), so the presence of a Bearer token defers auth to the route
+// handler. `getUserIdFromRequest()` / `getOrgContext()` resolve the token to a
+// user — `auth.api.getSession()` is bearer-aware via the bearer() plugin, with
+// an MCP-key fallback — or return null → 401. Without this, the Flutter app
+// (no cookie, non-`sk-mcp-` token) was 401'd at the edge before the handler
+// ever saw the valid bearer token.
+function hasBearerToken(request: NextRequest): boolean {
   const auth = request.headers.get("authorization");
   if (!auth) return false;
-  const match = auth.match(/^Bearer\s+(.+)$/i);
-  return !!match?.[1]?.trim().startsWith("sk-mcp-");
+  return /^Bearer\s+\S+/i.test(auth);
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const origin = request.headers.get("origin");
   const sessionCookie = getSessionCookie(request);
-  const mcpAuth = hasMcpApiKey(request);
+  const bearerAuth = hasBearerToken(request);
 
   // Handle CORS preflight from dashboard
   if (request.method === "OPTIONS" && origin === DASHBOARD_ORIGIN) {
@@ -83,7 +88,7 @@ export function middleware(request: NextRequest) {
   const isProtected =
     !isPublicApi &&
     protectedPaths.some((path) => pathname.startsWith(path));
-  if (isProtected && !sessionCookie && !mcpAuth) {
+  if (isProtected && !sessionCookie && !bearerAuth) {
     // API routes return 401, page routes redirect to login
     if (pathname.startsWith("/api/")) {
       return withCors(
@@ -144,6 +149,8 @@ export const config = {
     "/api/documents/:path*",
     "/api/sync/:path*",
     "/api/services/:path*",
+    "/api/models",
+    "/api/models/:path*",
     "/api/integrations/:path*",
     "/api/admin/:path*",
     "/api/share/:path*",

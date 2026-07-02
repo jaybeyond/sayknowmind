@@ -132,6 +132,13 @@ apply_sql() {
 
 apply_sql db/init/10-integration-tokens.sql           || exit 3
 apply_sql db/migrations/038_user_provider_configs.sql || exit 3
+# 039 tracks daily AI usage for free-tier rate limiting. Additive.
+apply_sql db/migrations/039_daily_usage_limits.sql    || exit 3
+# 040 adds the id column required by better-auth v1.5.6. Best-effort:
+# fails harmlessly on a fresh DB (rateLimit doesn't exist yet; the
+# inline CREATE below builds it with id already). Only needed to
+# upgrade existing DBs with the old key-only rateLimit schema.
+apply_sql db/migrations/040_fix_ratelimit_for_better_auth_156.sql || true
 # 031 replaces the legacy EdgeQuake multi-tenant conversations/messages
 # tables (conversation_id PK + tenant_id) with the simple better-auth
 # schema (id PK + user_id TEXT) the web app actually queries against.
@@ -140,6 +147,18 @@ apply_sql db/migrations/038_user_provider_configs.sql || exit 3
 # care about (currently always true: chat was broken before this).
 apply_sql db/migrations/031_conversations_simple.sql  || exit 3
 apply_sql db/migrations/032_document_relations.sql    || exit 3
+# 033 adds the unique index on categories needed for ON CONFLICT
+# auto-assignment (used by the AI categorisation pipeline).
+apply_sql db/migrations/033_categories_unique_index.sql   || exit 3
+# 034 creates the in-app notifications table. Missing → every call to
+# /api/notifications returns a 500 on a fresh DB.
+apply_sql db/migrations/034_notifications.sql             || exit 3
+# 035 adds the role column to "user" (admin gating). Additive.
+apply_sql db/migrations/035_admin_role.sql                || exit 3
+# 036 adds share_token to shared_content for URL-friendly share links.
+# Backfills existing rows; idempotent via ADD COLUMN IF NOT EXISTS +
+# UPDATE WHERE NULL.
+apply_sql db/migrations/036_shared_content_share_token.sql || exit 3
 # 028/029/030/037 build the channel_links table used by every
 # messaging integration (Telegram, Slack, Discord). Without these
 # verifyAndSave from the integrations tab dies with
@@ -162,6 +181,14 @@ apply_sql db/migrations/041_user_mcp_keys.sql         || exit 3
 # every job-queue summarization run dies with
 # `relation "tags" does not exist` the moment listTagNames() runs.
 apply_sql db/migrations/042_tags_table.sql            || exit 3
+# 043 adds user_id, summary, url, source_type, indexed_at to documents.
+# Critical for fresh DBs where EdgeQuake created the table first without
+# web-app columns — missing causes /api/user/me and every ingest route
+# to 500 with "column user_id does not exist".
+apply_sql db/migrations/043_documents_web_compat.sql      || exit 3
+# 044 adds the locale column to "user" read/written by /api/user/me.
+# Missing → every /api/user/me request on a fresh DB returns a 500.
+apply_sql db/migrations/044_user_locale.sql               || exit 3
 # 045 strips the bogus trailing /v1 from existing OCP rows so the
 # cloud-ai cascade composes /v1/chat/completions cleanly instead of
 # /v1/v1/chat/completions. Idempotent — UPDATE only matches rows
@@ -224,6 +251,12 @@ apply_sql db/migrations/062_hash_mcp_api_keys.sql || exit 3
 # (additive column + per-org partial unique index; drops the global constraint that
 # only the web app used).
 apply_sql db/migrations/063_entities_per_org_unique.sql || exit 3
+# 064: persist EdgeQuake document_id for dual-write delete/de-index (also self-healed in app code).
+apply_sql db/migrations/064_add_eq_document_id.sql || exit 3
+# 065: privacy-by-default 'private' + resource-share orphan-cleanup triggers.
+apply_sql db/migrations/065_privacy_default_and_share_cleanup.sql || exit 3
+# 066: RLS org-isolation backstop (role + policies, INERT under the superuser pool until cutover).
+apply_sql db/migrations/066_rls_org_backstop.sql || exit 3
 
 # better-auth rateLimit (no migration file ships this)
 echo "creating rateLimit table (if missing)"

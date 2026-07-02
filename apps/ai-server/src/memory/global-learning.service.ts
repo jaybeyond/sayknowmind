@@ -122,7 +122,7 @@ export class GlobalLearningService implements OnModuleInit {
     { pattern: '코드|함수|클래스|버그|에러|code|function|class|bug|error|debug', action: 'enableThinking', confidence: 0.85, occurrences: 0 },
     { pattern: '분석|analyze|analysis|설명해|explain|왜|why', action: 'enableThinking', confidence: 0.8, occurrences: 0 },
     { pattern: '비교|compare|차이|difference|장단점', action: 'enableThinking', confidence: 0.8, occurrences: 0 },
-    { pattern: '설계|design|아key텍처|architecture|structure', action: 'enableThinking', confidence: 0.85, occurrences: 0 },
+    { pattern: '설계|design|아키텍처|architecture|structure', action: 'enableThinking', confidence: 0.85, occurrences: 0 },
     { pattern: '최적화|optimize|성능|performance|개선', action: 'enableThinking', confidence: 0.8, occurrences: 0 },
     { pattern: '알고리즘|algorithm|로직|logic|구현', action: 'enableThinking', confidence: 0.85, occurrences: 0 },
     { pattern: '문제|problem|해결|solve|solution', action: 'enableThinking', confidence: 0.75, occurrences: 0 },
@@ -173,7 +173,7 @@ export class GlobalLearningService implements OnModuleInit {
 
     // 항상 latest branding rules으로 업데이트 (강력한 규칙 적용)
     await this.redis.setJson(this.BRANDING_KEY, DEFAULT_BRANDING_RULES);
-    this.logger.log('✅ Updated branding rules in Redis (강력한 버before)');
+    this.logger.log('✅ Updated branding rules in Redis (강력한 버전)');
   }
 
   /**

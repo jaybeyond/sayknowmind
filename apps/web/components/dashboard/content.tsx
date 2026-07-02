@@ -280,7 +280,9 @@ export function MemoryContent() {
 
   const filteredMemories = getFilteredMemories();
   const derivedTags = getDerivedTags();
-  const memoriesWithoutSummary = getFilteredMemories().filter(
+  // Reuse the single filtered list above instead of recomputing the O(n log n)
+  // filter a second time per render.
+  const memoriesWithoutSummary = filteredMemories.filter(
     (m) => !m.summary && m.jobStatus !== "processing" && m.jobStatus !== "pending"
   );
 

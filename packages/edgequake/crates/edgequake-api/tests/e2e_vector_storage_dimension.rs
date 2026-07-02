@@ -48,7 +48,9 @@ async fn create_workspace_with_providers(
         embedding_model: Some(embedding_model.to_string()),
         embedding_provider: Some(embedding_provider.to_string()),
         embedding_dimension: Some(embedding_dimension),
-    };
+            vision_llm_provider: None,
+        vision_llm_model: None,
+};
 
     state
         .workspace_service
@@ -216,7 +218,9 @@ async fn test_dimension_update_on_existing_workspace() {
         embedding_model: Some("text-embedding-3-small".to_string()),
         embedding_provider: Some("openai".to_string()),
         embedding_dimension: Some(1536),
-    };
+            vision_llm_provider: None,
+        vision_llm_model: None,
+};
 
     state
         .workspace_service
@@ -321,7 +325,9 @@ async fn test_workspace_creation_without_dimension() {
         embedding_model: Some("mock-embed".to_string()),
         embedding_provider: Some("mock".to_string()),
         embedding_dimension: None, // Not specified
-    };
+            vision_llm_provider: None,
+        vision_llm_model: None,
+};
 
     let workspace = state
         .workspace_service

@@ -40,13 +40,33 @@ export async function getFile(
 export async function downloadOgImage(
   documentId: string,
   imageUrl: string,
+  /** Source page URL — its origin is sent as Referer. Many CDNs (Instagram /
+   *  Facebook `scontent`, etc.) 403 a hotlinked image unless the Referer matches
+   *  the originating site, so pass the document URL here when available. */
+  sourceUrl?: string,
 ): Promise<{ relativePath: string; base64: string; contentType: string } | null> {
   try {
+    // CDNs like Instagram's `scontent` reject non-browser User-Agents (and a
+    // missing Referer) with a 403, even for otherwise-valid signed URLs. Send
+    // browser-like headers so the server-side fetch succeeds while the signed
+    // URL is still fresh (i.e. at ingest time).
+    const headers: Record<string, string> = {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    };
+    if (sourceUrl) {
+      try {
+        headers.Referer = `${new URL(sourceUrl).origin}/`;
+      } catch {
+        /* malformed source URL — fetch without Referer */
+      }
+    }
     // safeFetch re-validates every redirect hop (SSRF guard) — an allowed public
     // image URL that 302s to an internal address is rejected rather than fetched.
     const res = await safeFetch(imageUrl, {
       signal: AbortSignal.timeout(10_000),
-      headers: { "User-Agent": "SayKnowMind/0.1" },
+      headers,
     });
     if (!res.ok) return null;
 

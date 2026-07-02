@@ -1,0 +1,930 @@
+{
+  "maps": [
+    {
+      "area": "EdgeQuake Rust HTTP API — router construction + auth middleware wiring (packages/edgequake/crates/edgequake-api)",
+      "summary": "The HTTP API is an axum Router built in two steps: routes.rs::create_router() declares every route and binds AppState, then server.rs::build_router() wraps it in a fixed stack of tower/axum layers. The ONLY auth layer attached to the router is api_key_auth (wired in commit ff03128). It is always layered on, but it is a runtime no-op unless EDGEQUAKE_API_KEY is set in the environment — AuthConfig::default() has enabled=false, and the middleware returns next.run() immediately when disabled. So by default NO authentication runs on any route; the entire API is open. There is no JWT auth layer/middleware on the router at all: JWT is only verified inside one handler (/api/v1/auth/me) by manually parsing the Bearer header and calling jwt_service.verify_token; every other endpoint (documents, query, chat, graph, tenants, etc.) performs zero auth. A tenant_rate_limit middleware and TenantContext extractor exist but rate limiting is never wired into any router, and TenantContext is an Infallible header-reader (no rejection), used only as soft multi-tenant context.",
+      "files": [
+        {
+          "path": "packages/edgequake/crates/edgequake-api/src/server.rs",
+          "role": "Builds the axum app (build_router): constructs AuthConfig from EDGEQUAKE_API_KEY env, attaches the api_key_auth layer + logging/CORS/compression/Swagger, runs the server"
+        },
+        {
+          "path": "packages/edgequake/crates/edgequake-api/src/routes.rs",
+          "role": "create_router(): declares all routes (health, /api ollama, /api/v1/*) and binds AppState; no auth attached here"
+        },
+        {
+          "path": "packages/edgequake/crates/edgequake-api/src/middleware.rs",
+          "role": "Defines api_key_auth middleware + AuthConfig/AuthState, tenant_rate_limit (unwired), request_logging, request_id, and the TenantContext extractor"
+        },
+        {
+          "path": "packages/edgequake/crates/edgequake-api/src/handlers/auth/session.rs",
+          "role": "Issues JWTs (login/refresh) and is the ONLY place a JWT is verified — inside get_me handler, not a layer"
+        },
+        {
+          "path": "packages/edgequake/crates/edgequake-api/src/state/mod.rs",
+          "role": "AppState holds jwt_service (Arc<JwtService>) and auth_config; JWT service is available to handlers but not enforced by any middleware"
+        },
+        {
+          "path": "packages/edgequake/crates/edgequake-api/src/lib.rs",
+          "role": "Re-exports tenant_rate_limit/AuthState/RateLimitState (export only — tenant_rate_limit is never used)"
+        }
+      ],
+      "findings": [
+        {
+          "fact": "The router is created in routes.rs::create_router() which declares all routes (health/ready/live/metrics, /ws/*, nested /api ollama routes, nested /api/v1 routes) and binds state with .with_state(state). No auth/middleware is attached at this layer.",
+          "evidence": "routes.rs:93-113 `pub fn create_router(state: AppState) -> Router { Router::new().route(\"/health\"...).nest(\"/api\", ollama_api_routes()).nest(\"/api/v1\", api_v1_routes()).with_state(state) }`",
+          "severity": "context"
+        },
+        {
+          "fact": "server.rs::build_router() is where every middleware/layer is attached. The api_key_auth layer is the only auth layer; it is added directly onto create_router() via from_fn_with_state.",
+          "evidence": "server.rs:108-109 `let mut app = create_router(self.state.clone()).layer(middleware::from_fn_with_state(auth_state, api_key_auth));`",
+          "severity": "important"
+        },
+        {
+          "fact": "Default (always-on) layers, in addition to api_key_auth: DefaultBodyLimit(100MB), request_logging (from_fn), request_id (from_fn), TraceLayer. CORS, Compression, and Swagger UI are gated by ServerConfig flags which all default to true.",
+          "evidence": "server.rs:112-137 (.layer DefaultBodyLimit / request_logging / request_id / TraceLayer; if enable_cors -> CorsLayer Any/Any/Any; if enable_compression -> CompressionLayer; if enable_swagger -> .merge(SwaggerUi)). Defaults: server.rs:65-67 `enable_cors: true, enable_compression: true, enable_swagger: true`",
+          "severity": "context"
+        },
+        {
+          "fact": "api_key_auth is OPT-IN: AuthConfig is only enabled when EDGEQUAKE_API_KEY env var is set and non-empty; otherwise AuthConfig::default() is used with enabled=false. So the auth layer is present on every build but disabled by default.",
+          "evidence": "server.rs:96-106 `match std::env::var(\"EDGEQUAKE_API_KEY\") { Ok(key) if !key.trim().is_empty() => AuthConfig::with_api_keys(...), _ => AuthConfig::default() }`; middleware.rs:103-105 default `enabled: false`",
+          "severity": "blocker"
+        },
+        {
+          "fact": "When EDGEQUAKE_API_KEY is unset/empty (the default), api_key_auth short-circuits to next.run() for ALL requests — no key required, no rejection. The entire HTTP API is therefore unauthenticated by default.",
+          "evidence": "middleware.rs:173-176 `// Skip auth if disabled\\n if !config.enabled { return next.run(request).await; }`",
+          "severity": "blocker"
+        },
+        {
+          "fact": "There is NO JWT auth layer or JWT-validating middleware attached to the router. The only auth-related layer is api_key_auth. JWT verification happens solely inside the get_me handler, which manually parses the Authorization Bearer header and calls jwt_service.verify_token — not via a router layer or extractor.",
+          "evidence": "server.rs:36 imports only `api_key_auth, request_id, request_logging`; session.rs:257-267 (get_me) `let token = auth_header.strip_prefix(\"Bearer \")...; let claims = state.jwt_service.verify_token(token)...`",
+          "severity": "blocker"
+        },
+        {
+          "fact": "jwt_service exists in AppState and is wired into login/refresh (token issuance), but verify_token is called in only one place (the /auth/me handler). No other handler verifies a JWT, so all business endpoints (documents, query, chat, graph, tenants, costs, etc.) enforce no per-user/JWT auth.",
+          "evidence": "state/mod.rs:174-175 `pub jwt_service: Arc<edgequake_auth::JwtService>`; grep shows verify_token only at session.rs:266 across all of handlers/",
+          "severity": "blocker"
+        },
+        {
+          "fact": "When api_key_auth IS enabled, public (unauthenticated) paths are only /health, /ready, /live, /swagger-ui, /api-docs (matched by prefix via starts_with). Everything else requires the key — including /metrics, /ws/* websockets, the Ollama /api/* routes, and ALL /api/v1/* routes including /api/v1/auth/login.",
+          "evidence": "middleware.rs:107-113 public_paths list; middleware.rs:129-131 `is_public_path` uses `path.starts_with(p)`; routes.rs:99-102 (/metrics and /ws/* are NOT in public_paths); routes.rs:132 (/auth/login is under /api/v1 and not public)",
+          "severity": "important"
+        },
+        {
+          "fact": "api_key_auth accepts the key via `Authorization: Bearer <key>` OR `X-API-Key: <key>`, validated by plain string equality against the configured key list (no hashing/constant-time compare).",
+          "evidence": "middleware.rs:218-236 extract_api_key (Bearer then x-api-key); middleware.rs:134-136 `validate_api_key` uses `self.api_keys.iter().any(|k| k == key)`",
+          "severity": "context"
+        },
+        {
+          "fact": "Swagger UI is attached via .merge() AFTER all .layer() calls, so /swagger-ui and /api-docs routes sit outside the api_key_auth layer entirely (in addition to being whitelisted as public). They are always reachable when enable_swagger is true.",
+          "evidence": "server.rs:133-137 `app = app.merge(SwaggerUi::new(\"/swagger-ui\").url(\"/api-docs/openapi.json\", ApiDoc::openapi()))` placed after the .layer chain",
+          "severity": "context"
+        },
+        {
+          "fact": "A tenant_rate_limit middleware and RateLimitState exist and are publicly re-exported, but they are NEVER attached to any router and RateLimitState is never constructed in the server path. Rate limiting does not run.",
+          "evidence": "middleware.rs:287-355 tenant_rate_limit defined; lib.rs:119 re-exports it; grep for tenant_rate_limit/RateLimitState finds zero usages outside middleware.rs definition + lib.rs export (not in server.rs/routes.rs)",
+          "severity": "important"
+        },
+        {
+          "fact": "TenantContext is an axum FromRequestParts extractor with Rejection = Infallible — it never fails a request. It only reads X-Tenant-ID / X-Workspace-ID / X-User-ID headers and is used as soft multi-tenant context in ~43 handler files; it performs no authentication or authorization.",
+          "evidence": "middleware.rs:442 `type Rejection = std::convert::Infallible;` and middleware.rs:444-449 always `Ok(TenantContext::from_headers(...))`; used in 43 handler files (grep TenantContext under handlers/)",
+          "severity": "important"
+        },
+        {
+          "fact": "Layer execution order (inbound) is, from outermost to innermost: Compression -> CORS -> TraceLayer -> request_id -> request_logging -> DefaultBodyLimit -> api_key_auth -> route handler. api_key_auth was added first so it is innermost (runs just before the handler), but still covers every route in create_router().",
+          "evidence": "server.rs:108-129 layer add order (axum applies last-added layer as outermost); api_key_auth added at server.rs:109, compression last at server.rs:129",
+          "severity": "context"
+        },
+        {
+          "fact": "Commit ff03128 ('feat(security): wire opt-in API-key auth into the EdgeQuake router (P2)') is what attached api_key_auth; before it the middleware existed but was never wired, so the HTTP API enforced nothing. The commit touched only server.rs (+ a progress doc) and notes 'cargo check passes. Not runtime-tested.'",
+          "evidence": "`git show --stat ff03128`: message 'EdgeQuake ships a complete api_key_auth middleware that was never attached to the router...'; changed files server.rs (+27/-3) and Planning DEV/SECURITY-FIXES-PROGRESS.md",
+          "severity": "context"
+        }
+      ],
+      "open_questions": [
+        "The web app (apps/web lib/edgequake/client.ts) and MCP server reportedly forward EDGEQUAKE_API_KEY, but the dashboard sends a per-user JWT instead — if EDGEQUAKE_API_KEY is ever enabled, dashboard calls will 401 since there is no JWT auth path in the router. Is EDGEQUAKE_API_KEY actually set in any deployment env today? (Not verified here.)",
+        "The route doc comment in routes.rs:71-82 claims 'Most endpoints require authentication via Bearer JWT / X-API-Key' and that tenant context is extracted from JWT claims — this is aspirational/inaccurate vs the implemented router, which enforces neither by default. Worth confirming whether any reverse-proxy / network layer (Docker-internal-only port) is the real access control.",
+        "tenant_rate_limit is dead code in the HTTP server; confirm whether any other binary/crate mounts it or if it should be removed."
+      ]
+    },
+    {
+      "area": "EdgeQuake Rust auth primitives: JWT validation, API-key validation, and secret sourcing",
+      "summary": "EdgeQuake has a real JWT auth crate (edgequake-auth) with a JwtService (HS256), Argon2 password hashing, RBAC, and Axum extractors — but the secret it signs/verifies with is always the hardcoded default. AuthConfig::default() hardcodes jwt_secret = \"change-me-in-production-256-bit-secret-key\" (config.rs:51), and AuthConfig::from_env() (which reads JWT_SECRET) is never called in production — every AppState constructor builds JwtService from AuthConfig::default() (postgres.rs:293, memory.rs:46/182/272). The JWT Claims struct carries sub/role/iat/exp/nbf/jti plus optional iss/aud/tenant_id/workspace_id/metadata, but login only calls generate_token(), so tenant_id/workspace_id are never populated. JWTs are only used directly in the auth/session handlers (login/refresh/get_me); the real AuthUser/AuthState/RequireAdmin extractors are never wired into the router, so the validated identity is NOT propagated to data handlers. Downstream handlers instead read identity from unauthenticated, fully client-spoofable X-Tenant-ID/X-Workspace-ID/X-User-ID headers (TenantContext, used in 43 handler files). The only request-time API-key check is a non-constant-time String == comparison against an env-supplied key, disabled by default; DB-backed API keys are created/hashed but never validated on incoming requests.",
+      "files": [
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-auth/src/config.rs",
+          "role": "AuthConfig struct holding jwt_secret + Argon2/API-key params; Default hardcodes the secret; from_env() reads JWT_SECRET but is never called in prod"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-auth/src/jwt.rs",
+          "role": "Claims struct + JwtService: builds HS256 encoding/decoding keys from config.jwt_secret, generate_token / verify_token, decode_unverified"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-auth/src/extractors.rs",
+          "role": "Axum auth extractors: AuthState (jwt+rbac), AuthUser identity, OptionalAuth, ApiKeyAuth, CombinedAuth, RequireAdmin/RequireUser — defined but never wired into the API router"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-auth/src/password.rs",
+          "role": "PasswordService Argon2id hash/verify (verify uses Argon2 constant-time internally) used for login and API-key hashing"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-auth/src/types.rs",
+          "role": "Role enum (fail-open to User), User, ApiKey/ApiKeyAuth scope helpers, token request/response types"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/state/postgres.rs",
+          "role": "new_postgres() AppState factory; line 293 builds auth services from AuthConfig::default() (hardcoded secret), not from_env()"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/state/memory.rs",
+          "role": "In-memory AppState factories; lines 46/182/272 also use AuthConfig::default() for JwtService"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/middleware.rs",
+          "role": "Separate api_key_auth middleware with its own AuthConfig; validate_api_key uses non-constant-time String ==; TenantContext extractor reads unauthenticated X-Tenant/Workspace/User-ID headers"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/server.rs",
+          "role": "build_router(): only middleware wired is api_key_auth, gated on EDGEQUAKE_API_KEY env (disabled by default); real edgequake-auth extractors never added"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/handlers/auth/session.rs",
+          "role": "login/refresh/logout/get_me: only place JwtService is used at request time; login generates tokens without tenant/workspace claims"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/handlers/auth/api_keys.rs",
+          "role": "create/list/revoke API keys: hashes key with Argon2 to KV but hardcodes user_id='demo-user'; no incoming-request validation of stored keys exists"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-core/src/config.rs",
+          "role": "Core Config + from_env() (no JWT/auth fields at all; only DB/LLM/API host/port); ApiConfig.auth_enabled defaults false, api_keys empty"
+        }
+      ],
+      "findings": [
+        {
+          "fact": "The JWT secret default is a hardcoded, publicly-known string. AuthConfig::default() sets jwt_secret to 'change-me-in-production-256-bit-secret-key'.",
+          "evidence": "edgequake-auth/src/config.rs:51  jwt_secret: \"change-me-in-production-256-bit-secret-key\".to_string(),",
+          "severity": "blocker"
+        },
+        {
+          "fact": "AuthConfig::from_env() does read the JWT_SECRET env var, but falls back to the SAME hardcoded default when unset.",
+          "evidence": "edgequake-auth/src/config.rs:128-129  std::env::var(\"JWT_SECRET\").unwrap_or_else(|_| \"change-me-in-production-256-bit-secret-key\".to_string())",
+          "severity": "important"
+        },
+        {
+          "fact": "AuthConfig::from_env() is NEVER called anywhere in production code. The repo-wide search for from_env() callers returns only SafetyLimitsConfig::from_env() and ProviderFactory::from_env(); no AuthConfig::from_env() / Config::from_env() call sites exist outside the fn definitions.",
+          "evidence": "grep from_env() across crates/ (excluding fn defs): only crates/edgequake-api/src/safety_limits.rs:313,333 and state/{memory,postgres}.rs ProviderFactory::from_env(); zero AuthConfig::from_env() callers",
+          "severity": "blocker"
+        },
+        {
+          "fact": "Every AppState constructor wires the JWT service from AuthConfig::default(), so the hardcoded secret is always used regardless of JWT_SECRET in the environment.",
+          "evidence": "state/postgres.rs:293-294  let auth_config = AuthConfig::default(); let jwt_service = Arc::new(JwtService::new(auth_config.clone())); (same pattern at state/memory.rs:46-47, 182-183, 272-273)",
+          "severity": "blocker"
+        },
+        {
+          "fact": "JwtService signs and verifies with HS256 symmetric keys derived from config.jwt_secret; both encoding and decoding keys come from the same hardcoded secret. Validation enables exp and nbf checks with 30s leeway; algorithm is HS256 (Validation::default()), and aud/iss are NOT validated.",
+          "evidence": "edgequake-auth/src/jwt.rs:159-168  EncodingKey::from_secret(config.jwt_secret.as_bytes()); DecodingKey::from_secret(config.jwt_secret.as_bytes()); validation.validate_exp=true; validate_nbf=true; leeway=30",
+          "severity": "context"
+        },
+        {
+          "fact": "JWT Claims struct fields: sub (user id), role (string), iat, exp, nbf, jti, optional iss, optional aud (Vec<String>), optional tenant_id, optional workspace_id, optional metadata (JSON).",
+          "evidence": "edgequake-auth/src/jwt.rs:33-73 (sub:35, role:39, iat:43, exp:46, nbf:49, jti:52, iss:56, aud:60, tenant_id:64, workspace_id:68, metadata:72)",
+          "severity": "context"
+        },
+        {
+          "fact": "Login issues tokens via generate_token(user_uuid, role) which builds Claims::new() — tenant_id and workspace_id are left None. So multi-tenancy claims are never populated into real tokens despite existing in the struct.",
+          "evidence": "handlers/auth/session.rs:81-87 generate_token(user_uuid, user.role); jwt.rs:79-90 Claims::new sets tenant_id:None, workspace_id:None",
+          "severity": "important"
+        },
+        {
+          "fact": "A validated JWT produces AuthUser { user_id: Uuid, role: Role, claims } with tenant_id()/workspace_id() accessors — but this identity is only constructed by the AuthUser/AuthState extractors, which are NEVER wired into the API router. Grep for AuthUser/RequireAdmin/RequireUser/CombinedAuth/FromRef in handlers and router returns no matches; no edgequake_auth::AuthState is ever constructed in the api crate.",
+          "evidence": "extractors.rs:33-56 extract_user builds AuthUser; grep AuthUser|RequireAdmin|RequireUser|CombinedAuth in crates/edgequake-api/src/handlers → no matches; grep extractors::AuthState / AuthState::new(jwt...) in api → none",
+          "severity": "blocker"
+        },
+        {
+          "fact": "Downstream identity is taken from unauthenticated, client-supplied headers X-Tenant-ID / X-Workspace-ID / X-User-ID via TenantContext, with no signature/verification. TenantContext is consumed in 43 handler files (the de-facto identity path), making tenant/workspace/user fully spoofable by any caller.",
+          "evidence": "middleware.rs:361-435 TenantContext::from_headers reads x-tenant-id/x-workspace-id/x-user-id; FromRequestParts Rejection = Infallible (always succeeds, no auth); grep TenantContext in handlers → 43 files",
+          "severity": "blocker"
+        },
+        {
+          "fact": "The only request-time API-key check is a non-constant-time String equality comparison against env-provided keys; no subtle/ConstantTime/ct_eq is used anywhere in the repo. The check is disabled unless EDGEQUAKE_API_KEY is set.",
+          "evidence": "middleware.rs:134  self.api_keys.iter().any(|k| k == key); server.rs:96-105 enables it only when EDGEQUAKE_API_KEY env is set (else AuthConfig::default() with enabled:false); grep constant_time|subtle|ct_eq → no matches",
+          "severity": "important"
+        },
+        {
+          "fact": "DB-backed API keys are created and Argon2-hashed into KV storage but are never validated against incoming requests — there is no extractor or middleware that looks up stored key_hash. Created API keys are thus non-functional for authentication. The create handler also hardcodes the owner as user_id = 'demo-user' instead of the authenticated user.",
+          "evidence": "handlers/auth/api_keys.rs:47  let user_id = \"demo-user\".to_string(); lines 56-73 hash+store key_hash; no request-time verify_password against key_hash anywhere in api/src (grep key_hash only hits creation, not validation)",
+          "severity": "important"
+        },
+        {
+          "fact": "Role parsing fails open: an unrecognized role string in a token silently becomes Role::User rather than being rejected.",
+          "evidence": "types.rs:28-30 Role::parse → s.parse().unwrap_or_default(); Role default = User (types.rs:20-21); used by Claims::role() at jwt.rs:132-134",
+          "severity": "context"
+        },
+        {
+          "fact": "An insecure decode-without-verification path exists (dangerous::insecure_decode) but is only defined, never called outside its own module — low risk currently.",
+          "evidence": "edgequake-auth/src/jwt.rs:226-230 decode_unverified uses dangerous::insecure_decode; grep shows no external call sites",
+          "severity": "context"
+        },
+        {
+          "fact": "ApiConfig (core) also models auth as disabled-by-default with empty plaintext api_keys, reinforcing that EdgeQuake ships auth-off by default.",
+          "evidence": "edgequake-core/src/config.rs:235-236  auth_enabled: false, api_keys: Vec::new()",
+          "severity": "context"
+        }
+      ],
+      "open_questions": [
+        "Is EdgeQuake intended to be reachable only on an internal Docker network (server.rs comment at line 86-95 implies so), or is its port ever exposed such that the hardcoded JWT secret + spoofable TenantContext headers become directly exploitable?",
+        "What component is responsible for setting X-Tenant-ID/X-Workspace-ID/X-User-ID — is there an upstream proxy (e.g., apps/web) that authenticates and injects these, and does it strip client-supplied copies to prevent spoofing?",
+        "Are the edgequake-auth login/JWT endpoints actually used by any client, or is the real auth fully delegated to the web app's better-auth/SayKnowWork layer with EdgeQuake JWT being effectively dead code?",
+        "Is there any plan to call AuthConfig::from_env() (so JWT_SECRET takes effect) and to wire the AuthUser/RequireAdmin extractors into routes, or is the simple env-key middleware the intended sole gate?"
+      ]
+    },
+    {
+      "area": "EdgeQuake identity/tenant/workspace scope flow from inbound request to vector/query tenant filter (prompt.rs)",
+      "summary": "Tenant/workspace/user identity in EdgeQuake is carried entirely by three client-supplied HTTP headers: X-Tenant-ID, X-Workspace-ID, X-User-ID. TenantContext::from_headers reads them verbatim and its Axum extractor is infallible (never rejects). The only authentication layer is an optional shared static API key (api_key_auth), which is OFF unless EDGEQUAKE_API_KEY is set and, even when on, only gates access — it never binds the request to a tenant/workspace/user. A JwtService exists for /auth/login + /auth/me but the TenantContext extractor never consults it, so JWT claims do NOT drive scoping despite the routes.rs doc comment. Query handlers (execute_query, chat_completion, query_stream) take the header-derived workspace_id, look the workspace up in the DB, and use that workspace's tenant_id + the header workspace_id as the data scope passed into the engine; they verify the workspace exists but never verify the X-User-ID is a member of it. That scope flows via QueryRequest.params -> request.tenant_id()/workspace_id() -> matches_tenant_filter in prompt.rs, which (fail-closed) admits any record whose metadata.tenant_id and metadata.workspace_id string-equal the requested scope. Because the attacker supplies a matching scope, the fail-closed filter offers no protection against scope spoofing — it only stops leakage of untagged records.",
+      "files": [
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/middleware.rs",
+          "role": "TenantContext: extracts X-Tenant-ID/X-Workspace-ID/X-User-ID from headers (from_headers) and the infallible Axum extractor (FromRequestParts); also the only auth layer, api_key_auth (static shared key, off by default)"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/server.rs",
+          "role": "Auth wiring: api_key_auth enabled only if EDGEQUAKE_API_KEY env set; otherwise AuthConfig::default (disabled)"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/handlers/query/query_execute.rs",
+          "role": "POST /api/v1/query handler: builds engine request scope from header-derived TenantContext + workspace lookup; no membership check"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/handlers/chat/completion.rs",
+          "role": "Chat completion handler: same header-derived scope; validates workspace EXISTS but not user membership; uses workspace.tenant_id as data scope"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/handlers/query/query_stream.rs",
+          "role": "Streaming query handler: same header-derived scope pattern"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-query/src/engine.rs",
+          "role": "QueryRequest: with_tenant_id/with_workspace_id store scope into params; tenant_id()/workspace_id() read it back"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-query/src/sota_engine/query_entry/query_workspace.rs",
+          "role": "Engine entry: passes request.tenant_id()/workspace_id() into each mode-specific retrieval"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-query/src/sota_engine/query_modes.rs",
+          "role": "Calls matches_tenant_filter / matches_tenant_filter_props on each retrieved record/edge"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-query/src/sota_engine/vector_queries.rs",
+          "role": "Calls matches_tenant_filter on each vector result"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-query/src/sota_engine/prompt.rs",
+          "role": "The fail-closed tenant filter: record must carry metadata.tenant_id + metadata.workspace_id (or props) string-equal to requested scope"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/routes.rs",
+          "role": "Doc comment claims JWT-claims-first precedence for tenant context, which the code does not implement (misleading)"
+        }
+      ],
+      "findings": [
+        {
+          "fact": "Tenant/workspace/user identity is read verbatim from client-supplied headers X-Tenant-ID, X-Workspace-ID, X-User-ID with zero validation.",
+          "evidence": "middleware.rs:377-398 TenantContext::from_headers: `headers.get(\"x-tenant-id\")...`, `.get(\"x-workspace-id\")`, `.get(\"x-user-id\")` mapped straight to Option<String>",
+          "severity": "blocker"
+        },
+        {
+          "fact": "The TenantContext Axum extractor is infallible — it never rejects a request, so any/no header combination is accepted and flows downstream.",
+          "evidence": "middleware.rs:442-449 `type Rejection = std::convert::Infallible; ... Ok(TenantContext::from_headers(&parts.headers))`",
+          "severity": "blocker"
+        },
+        {
+          "fact": "There is no token that binds these headers to an authenticated identity. The only auth middleware is a single shared static API key check that does not derive or verify tenant/workspace/user.",
+          "evidence": "middleware.rs:166-215 api_key_auth only does `config.validate_api_key(&key)` against a static list; line 174 `if !config.enabled { return next.run(request).await }` skips entirely when disabled",
+          "severity": "blocker"
+        },
+        {
+          "fact": "API-key auth is OFF by default; it is enabled only if the EDGEQUAKE_API_KEY env var is set, and even then it is one shared key for all clients (not per-user).",
+          "evidence": "server.rs:96-105 `match std::env::var(\"EDGEQUAKE_API_KEY\") { Ok(key) if !key.trim().is_empty() => ... AuthConfig::with_api_keys(...), _ => AuthConfig::default() }`; middleware.rs:103-105 default `enabled: false`",
+          "severity": "blocker"
+        },
+        {
+          "fact": "A JwtService exists (login/get_me verify_token) but the TenantContext extractor never consults it, so JWT claims do NOT populate the query scope despite the routes.rs documentation claiming JWT-claims-first precedence.",
+          "evidence": "routes.rs:79-82 comment 'extracted from: 1. JWT claims (tenant_id, workspace_id) 2. Headers...'; but middleware.rs:377-398 only reads headers; verify_token appears only in handlers/auth/session.rs:264-266, unrelated to scoping",
+          "severity": "important"
+        },
+        {
+          "fact": "In POST /api/v1/query the header-supplied workspace_id is used directly as the workspace scope, and the data tenant_id is resolved from that workspace's DB row — so supplying only a victim's X-Workspace-ID is enough; the attacker need not know the tenant_id. No check confirms the caller (X-User-ID) belongs to the workspace.",
+          "evidence": "query_execute.rs:87-104: `let workspace = ... get_workspace(&state, workspace_id)...; let data_tenant_id = workspace.map(|ws| ws.tenant_id.to_string()).or_else(|| tenant_ctx.tenant_id...); engine_request.with_tenant_id(data_tenant_id); ... engine_request.with_workspace_id(workspace_id.clone())`",
+          "severity": "blocker"
+        },
+        {
+          "fact": "chat_completion validates only that the workspace EXISTS (get_workspace), never that the user is a member; it then uses workspace.tenant_id as the data scope. Anonymous users with random UUIDs are auto-created, so X-User-ID is meaningless as identity.",
+          "evidence": "chat/completion.rs:99-113 workspace-exists validation; :181-188 `data_tenant_id = workspace.map(|ws| ws.tenant_id...).unwrap_or...; with_tenant_id(...); with_workspace_id(ws_id)`; :78 comment 'frontend generates random UUIDs for anonymous users' + INSERT ... ON CONFLICT DO NOTHING at :81-94",
+          "severity": "blocker"
+        },
+        {
+          "fact": "query_stream uses the identical header-derived scope pattern with no membership check.",
+          "evidence": "query_stream.rs:36 `tenant_ctx: TenantContext`; :61-77 `let workspace = ... get_workspace(... workspace_id)...; engine_request.with_workspace_id(workspace_id.clone())`",
+          "severity": "blocker"
+        },
+        {
+          "fact": "No authorization/membership primitives exist anywhere in edgequake-api (no is_member/authorize/can_access). 'Unauthorized' is returned only when tenant/user headers are absent, never validated.",
+          "evidence": "grep across crates/edgequake-api/src found no is_member/membership/authorize/can_access; chat/completion.rs:54-63 returns ApiError::Unauthorized only via .ok_or(...) on missing headers",
+          "severity": "blocker"
+        },
+        {
+          "fact": "The scope reaches prompt.rs unchanged via QueryRequest.params: with_tenant_id/with_workspace_id store into params, tenant_id()/workspace_id() read them, and query_workspace passes them into every retrieval mode.",
+          "evidence": "engine.rs:215-244 params insert/read; query_workspace.rs:100-104 `request.tenant_id(), request.workspace_id()` passed to query_local_with_vector_storage etc.; query_modes.rs:54/70/132/181/240/367/415/549/582 and vector_queries.rs:37/69/85/226/265/432 call matches_tenant_filter[_props]",
+          "severity": "context"
+        },
+        {
+          "fact": "To pass the filter a record must carry, in its vector metadata JSON (or graph edge properties map), a `tenant_id` string field AND a `workspace_id` string field that string-equal the requested scope. The filter is fail-CLOSED (untagged records rejected), but the attacker simply supplies a matching scope so fail-closed gives no protection against spoofing.",
+          "evidence": "prompt.rs:24-36 `metadata.get(\"tenant_id\").and_then(as_str) ... == tid else return false`, same for workspace_id; prompt.rs:54-65 props variant; prompt.rs:20-22 returns true when both scopes are None (unscoped queries see everything)",
+          "severity": "important"
+        },
+        {
+          "fact": "If a query is issued with no scope (no X-Tenant-ID/X-Workspace-ID headers), the filter short-circuits to allow ALL records regardless of tag — a global read of every tenant's data.",
+          "evidence": "prompt.rs:20-22 `if tenant_id.is_none() && workspace_id.is_none() { return true; }`",
+          "severity": "important"
+        }
+      ],
+      "open_questions": [
+        "Is the EdgeQuake API port actually network-isolated (Docker-internal only) in production, or reachable from the web tier / internet? The server.rs comment claims it is 'normally internal-only' — the severity of header spoofing depends on this. If the web app proxies user requests and forwards X-Workspace-ID from client-controlled state (localStorage), the spoof is reachable by end users.",
+        "Does the web app / MCP client set X-User-ID, X-Workspace-ID from a server-validated session, or from client-side localStorage (the chat handler comment about 'stale workspace_id from localStorage' suggests the latter)? Confirm in apps/web/lib/edgequake/client.ts.",
+        "Should the fix bind tenant/workspace scope to verified JWT claims (JwtService) and add a workspace-membership authorization check before trusting X-Workspace-ID, rather than relying on the prompt.rs fail-closed filter which cannot defend against a matching spoofed scope?"
+      ]
+    },
+    {
+      "area": "apps/web → EdgeQuake integration: base URL, auth headers, per-user identity, and PG re-filtering",
+      "summary": "The web app talks to the EdgeQuake Rust service through one thin client at apps/web/lib/edgequake/client.ts via raw fetch. Base URL comes from EDGEQUAKE_URL (default http://localhost:5403). On every request it sets Content-Type plus X-Workspace-ID and X-Tenant-ID (hard-coded default UUIDs from EDGEQUAKE_WORKSPACE_ID / EDGEQUAKE_TENANT_ID), adds X-User-ID only when a caller passes userId, and adds an Authorization: Bearer header only if EDGEQUAKE_API_KEY is non-empty (default empty, so by default NO auth header is sent). Identity (userId/tenantId/workspaceId) is stripped out of the JSON body and sent purely as headers; for indexing it is also duplicated into document metadata. Crucially, no caller ever passes tenantId or workspaceId, so every web user shares the SAME single EdgeQuake workspace/tenant — only X-User-ID varies, and EdgeQuake is documented to ignore X-User-ID for scoping (it is a single shared index). Real per-user/per-org isolation therefore happens entirely AFTER results return, by re-filtering EdgeQuake's document ids through PostgreSQL readableClause (directly, or via the filterVisibleSources/filterVisibleDocIds helpers in lib/edgequake/visibility.ts).",
+      "files": [
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/lib/edgequake/client.ts",
+          "role": "The only EdgeQuake HTTP client. Defines env vars, builds headers (api key / workspace / tenant / user), strips identity from body into headers, embeds identity in index metadata, and exposes query/stream/graph/index/sync/embedding-provider calls."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/lib/edgequake/visibility.ts",
+          "role": "Shared PG re-filter gate. Explicitly documents that EdgeQuake is a single shared index that ignores X-User-ID, so results MUST be re-filtered through Postgres readableClause via filterVisibleDocIds / filterVisibleSources."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/lib/visibility.ts",
+          "role": "Defines readableClause(), the SQL visibility predicate used to re-scope EdgeQuake-returned document ids to the authenticated user/org."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/app/api/search/route.ts",
+          "role": "Main search endpoint. Auths via getOrgContext, calls queryEdgeQuake with only userId, then re-filters returned document_ids through readableClause; returns scoped PG fallback when nothing is visible."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/lib/ultrarag/executor.ts",
+          "role": "UltraRAG pipeline executor. search step calls queryEdgeQuake with userId, then filterVisibleSources(userId, orgId) and blanks out eq.answer before returning. embed step calls indexDocument with userId."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/app/api/pipeline/route.ts",
+          "role": "POST /api/pipeline. Auths via getOrgContext and threads {userId, organizationId} into executePipeline so the executor can re-scope EdgeQuake results."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/lib/ingest/job-queue.ts",
+          "role": "Ingest worker. Step 4 indexes docs via indexDocument(userId, metadata.user_id). Related-docs step calls queryEdgeQuake then filterVisibleDocIds(userId, orgId) before notifying."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/lib/agents/pipeline.ts",
+          "role": "Conversational RAG pipeline (searchKnowledge). Queries EdgeQuake naive mode with userId, then enriches/re-filters candidate ids via readableClause; has a PG fallback path."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/lib/agents/orchestrator.ts",
+          "role": "LangGraph-style agent orchestrator. search case calls queryEdgeQuake with userId but returns eqResult.answer WITHOUT re-filtering; inline comment marks this as a currently-unreachable latent isolation risk (orgId not threaded in)."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/lib/ingest/reprocessor.ts",
+          "role": "Self-heal job. Calls syncUnindexedToEdgeQuake(userId, orgId) for docs with indexed_at IS NULL."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/app/api/documents/sync-edgequake/route.ts",
+          "role": "POST /api/documents/sync-edgequake. healthChecks EdgeQuake, then pushes un-indexed docs via syncUnindexedToEdgeQuake(ctx.userId, ctx.organizationId)."
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/app/api/services/status/route.ts",
+          "role": "Status check; pings EDGEQUAKE_URL + /health (second place EDGEQUAKE_URL is read)."
+        }
+      ],
+      "findings": [
+        {
+          "fact": "Base URL is the EDGEQUAKE_URL env var, defaulting to http://localhost:5403 (EdgeQuake Rust service, port 5403).",
+          "evidence": "apps/web/lib/edgequake/client.ts:6 `const EDGEQUAKE_URL = process.env.EDGEQUAKE_URL ?? \"http://localhost:5403\";`",
+          "severity": "context"
+        },
+        {
+          "fact": "The API key is EDGEQUAKE_API_KEY and defaults to an EMPTY string. It is forwarded as an Authorization: Bearer header ONLY when non-empty, so by default the web app sends NO auth header to EdgeQuake.",
+          "evidence": "client.ts:7 `const EDGEQUAKE_API_KEY = process.env.EDGEQUAKE_API_KEY ?? \"\";` and client.ts:27 `if (EDGEQUAKE_API_KEY) h[\"Authorization\"] = \\`Bearer ${EDGEQUAKE_API_KEY}\\`;`",
+          "severity": "important"
+        },
+        {
+          "fact": "Every request always sends X-Workspace-ID and X-Tenant-ID; X-User-ID is sent only if the caller passes scope.userId. These are the only identity headers.",
+          "evidence": "client.ts:20-29 headers(): sets `X-Workspace-ID`, `X-Tenant-ID` unconditionally and `if (scope?.userId) h[\"X-User-ID\"] = scope.userId;`",
+          "severity": "important"
+        },
+        {
+          "fact": "Workspace and tenant default to HARD-CODED UUIDs (EDGEQUAKE_WORKSPACE_ID=...0003, EDGEQUAKE_TENANT_ID=...0002). No caller in lib/ or app/ ever passes tenantId or workspaceId, so all web traffic lands in ONE shared EdgeQuake workspace/tenant; only X-User-ID differs per user.",
+          "evidence": "client.ts:11-12 default UUIDs; grep for `tenantId:`/`workspaceId:` across lib+app returns only client.ts definitions (no callers set them)",
+          "severity": "blocker"
+        },
+        {
+          "fact": "Per-user identity is sent OUT-OF-BAND as headers only — userId/tenantId/workspaceId are destructured OUT of the JSON body before POSTing to /api/v1/query and /api/v1/query/stream.",
+          "evidence": "client.ts:101-106 (queryEdgeQuake) and 153-158 (streamQuery) destructure `userId: _userId, tenantId: _tenantId, workspaceId: _workspaceId, ...payload` and only send `payload`",
+          "severity": "context"
+        },
+        {
+          "fact": "EdgeQuake does NOT enforce per-user/org isolation and ignores X-User-ID for scoping (single shared index). The codebase documents this explicitly and treats PG re-filtering as the mandatory isolation gate.",
+          "evidence": "lib/edgequake/visibility.ts:4-11 `EdgeQuake is a SINGLE SHARED index ... it ignores X-User-ID for scoping; everything lives in one shared workspace ... EVERY consumer ... MUST re-filter them through PostgreSQL visibility first.`",
+          "severity": "blocker"
+        },
+        {
+          "fact": "The search endpoint relies entirely on PG re-filtering after EdgeQuake returns: it collects source document_ids and intersects with readableClause; if nothing is visible it returns a scoped PG fallback rather than EdgeQuake's synthesized answer.",
+          "evidence": "app/api/search/route.ts:68 passes only `userId`; 87-92 `WHERE d.id = ANY($1) AND ${readableClause(\"d\", 3, 2, \"document\")}` with `[ids, userId, organizationId]`; 130-135 returns fallbackSearch when results.length===0",
+          "severity": "important"
+        },
+        {
+          "fact": "indexDocument embeds identity into EdgeQuake document metadata (user_id/tenant_id/workspace_id + sayknowmind_document_id) in addition to headers — intended for future workspace re-scoping/migration.",
+          "evidence": "client.ts:203-209 builds metadata with `user_id`, `tenant_id`, `workspace_id`, `sayknowmind_document_id`",
+          "severity": "context"
+        },
+        {
+          "fact": "UltraRAG search step re-filters EdgeQuake sources via filterVisibleSources(userId, organizationId) AND blanks the LLM answer before returning to /api/pipeline.",
+          "evidence": "lib/ultrarag/executor.ts:149-150 `const sources = await filterVisibleSources(eq.sources, userId, organizationId); return { ...eq, sources, answer: \"\" };`",
+          "severity": "context"
+        },
+        {
+          "fact": "Ingest related-docs step re-filters EdgeQuake similarity results through filterVisibleDocIds(userId) before surfacing/notifying.",
+          "evidence": "lib/ingest/job-queue.ts:468-483 queryEdgeQuake({...userId}) then `const visibleIds = await filterVisibleDocIds(... , userId, ...)`",
+          "severity": "context"
+        },
+        {
+          "fact": "The agent orchestrator's search branch is the one EdgeQuake consumer that does NOT re-filter — it returns eqResult.answer/snippets directly. A code comment flags this as a latent cross-user data-leak risk that is currently unreachable (no route wires it; orgId is not threaded into runAgent/executeStep).",
+          "evidence": "lib/agents/orchestrator.ts:111-128 — comment `SECURITY: EdgeQuake is a shared index that ignores per-user scope ... currently unreachable ... Until then, this is a no-op risk.` then `result = eqResult.answer || eqResult.sources.map(...)`",
+          "severity": "important"
+        },
+        {
+          "fact": "EdgeQuake endpoints invoked by the web app: POST /api/v1/query, POST /api/v1/query/stream, GET /api/v1/graph, POST /api/v1/documents, PUT /api/v1/workspaces/{EDGEQUAKE_WORKSPACE_ID}, POST /api/v1/embeddings/test, GET /health. getGraph(), updateEmbeddingProvider(), and testEmbeddingProvider() send NO per-user identity (call headers() with no scope), so they only carry the shared workspace/tenant headers.",
+          "evidence": "client.ts:108,137-139,160,211,232,256-257,343 (paths) and 139/256/342 call `headers()` with no scope arg",
+          "severity": "context"
+        },
+        {
+          "fact": "Env var inventory for EdgeQuake (web app): EDGEQUAKE_URL, EDGEQUAKE_API_KEY, EDGEQUAKE_WORKSPACE_ID, EDGEQUAKE_TENANT_ID. EDGEQUAKE_URL is also read independently in the service status route.",
+          "evidence": "grep `EDGEQUAKE_.*process.env`: client.ts:6,7,11,12 and app/api/services/status/route.ts:60",
+          "severity": "context"
+        }
+      ],
+      "open_questions": [
+        "Does the EdgeQuake Rust service actually validate the Authorization: Bearer EDGEQUAKE_API_KEY header, or does it accept unauthenticated requests in the default (empty-key) configuration? The web client sends no auth header by default.",
+        "Does EdgeQuake do anything at all with X-Workspace-ID / X-Tenant-ID / X-User-ID server-side (e.g. partition vectors), or are they purely informational? The web-side comment asserts X-User-ID is ignored, but server behavior was not verified in this slice.",
+        "Is the agent orchestrator search branch (lib/agents/orchestrator.ts) truly unreachable in all current builds, or could a future LangGraph route expose the un-refiltered eqResult.answer and leak other users' content?",
+        "Should tenantId/workspaceId ever be threaded per-user/per-org, or is the single-shared-workspace + PG-refilter model the intended permanent design (relevant to the 'don't revive EdgeQuake tenancy' memory)?"
+      ]
+    },
+    {
+      "area": "EdgeQuake auth: how packages/mcp-server and apps/dashboard call EdgeQuake (vs the web app), and the per-user-JWT vs shared-key conflict",
+      "summary": "There are two distinct EdgeQuake callers besides the web app, with opposite auth models. (1) The MCP server has TWO outbound paths: its \"direct EdgeQuake\" tools (query, graph_*, workspace_*, document_*, health) talk to EdgeQuake via the edgequake-sdk client, forwarding the shared EDGEQUAKE_API_KEY plus a global tenant/workspace; its sayknowmind_* tools do NOT hit EdgeQuake at all — they proxy the SayKnowMind web app, forwarding the caller's per-user Bearer token. The direct tools are gated by rejectUserScopedEdgeQuakeTool(), which 403-blocks any request carrying per-user context (a user_mcp_keys key), so only the admin/shared key or stdio/anonymous callers reach EdgeQuake directly. (2) The dashboard talks to EdgeQuake directly and authenticates with a per-USER JWT (issued by EdgeQuake's own /api/v1/auth/login), sent as Authorization: Bearer <jwt> on every /api/v1/* call — it never sends a shared key. The conflict: EdgeQuake's optional api_key_auth middleware (enabled by setting EDGEQUAKE_API_KEY) validates the Bearer value by exact-string match against a static shared-key allowlist; a per-user JWT will never equal that key, so turning on shared-key enforcement would 401 the dashboard — both its login (login is not a public path) and all subsequent JWT-bearing data calls. This conflict is explicitly documented in a code comment in EdgeQuake's server.rs.",
+      "files": [
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/mcp-server/src/config.ts",
+          "role": "MCP resolves the EdgeQuake shared key from EDGEQUAKE_API_KEY (and base URL from EDGEQUAKE_URL/EDGEQUAKE_BASE_URL) for its direct-EdgeQuake SDK client"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/mcp-server/src/client.ts",
+          "role": "MCP EdgeQuake SDK singleton: constructs EdgeQuake({ apiKey: EDGEQUAKE_API_KEY, tenantId, workspaceId }) — shared-key, single global tenant/workspace; auto-discovers tenant/workspace on first use"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/mcp-server/src/auth-context.ts",
+          "role": "Defines RequestContext (userId/rawToken/isAdmin) via AsyncLocalStorage and the rejectUserScopedEdgeQuakeTool()/rejectUserScopedEdgeQuakeResource() guards that block direct EdgeQuake access for per-user MCP keys"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/mcp-server/src/index.ts",
+          "role": "MCP HTTP entrypoint + authMiddleware: accepts admin shared key (MCP_API_KEY) or per-user key (sk-mcp-*, SHA-256-hashed in user_mcp_keys via DATABASE_URL); sets requestContext.userId/rawToken/isAdmin accordingly"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/mcp-server/src/tools/sayknowmind.ts",
+          "role": "sayknowmind_* proxy tools: fetch the web app (SAYKNOWMIND_URL, default :5400), NOT EdgeQuake; forward caller's per-user Bearer (context.rawToken) or fall back to AUTH_SECRET"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/mcp-server/src/tools/health.ts",
+          "role": "Direct EdgeQuake health tool that calls getClient() (shared key) but is NOT wrapped by the rejectUserScopedEdgeQuakeTool() guard"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/dashboard/src/lib/api/client.ts",
+          "role": "Dashboard base HTTP client: buildHeaders() attaches Authorization: Bearer <accessToken> (per-user JWT from localStorage) plus X-Tenant-ID/X-Workspace-ID/X-User-ID; auto-refreshes via /auth/refresh"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/dashboard/src/lib/api/edgequake.ts",
+          "role": "Dashboard typed EdgeQuake REST client; every function routes through api.* (Bearer JWT) against /api/v1/* — auth, tenants/workspaces, documents, query, graph, tasks, pipeline, lineage, costs"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/dashboard/src/stores/use-auth-store.ts",
+          "role": "Dashboard auth store: login() stores the EdgeQuake-issued access_token/refresh_token JWTs (no shared key anywhere)"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/server.rs",
+          "role": "EdgeQuake router build: api_key_auth layer is OFF unless EDGEQUAKE_API_KEY set; the in-code comment (lines 92-95) names the dashboard-JWT vs shared-key conflict"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/middleware.rs",
+          "role": "EdgeQuake api_key_auth middleware: validate_api_key() is an exact-string allowlist match on the Bearer value; public_paths = health/ready/live/swagger-ui/api-docs only (login NOT public)"
+        }
+      ],
+      "findings": [
+        {
+          "fact": "MCP direct-EdgeQuake tools authenticate with the SHARED key: the SDK client is built with apiKey = process.env.EDGEQUAKE_API_KEY and a single global tenant/workspace, not per-user.",
+          "evidence": "packages/mcp-server/src/config.ts:21 \"apiKey: process.env.EDGEQUAKE_API_KEY\"; packages/mcp-server/src/client.ts:91-96 \"new EdgeQuake({ baseUrl, apiKey: _config.apiKey, tenantId: _config.defaultTenant, workspaceId: _config.defaultWorkspace })\"",
+          "severity": "important"
+        },
+        {
+          "fact": "The rejectUserScopedEdgeQuakeTool() guard blocks direct EdgeQuake tools whenever the request carries per-user context (a user_mcp_keys key): if context.userId is set it returns a 403 user_isolation_unimplemented error; admin/shared-key, stdio, and anonymous callers (userId null) pass through.",
+          "evidence": "packages/mcp-server/src/auth-context.ts:35-65 \"if (!context?.userId) return null;\" then returns \"{ error: 'user_isolation_unimplemented', status: 403, ... }\"",
+          "severity": "important"
+        },
+        {
+          "fact": "The guard is wired into every direct EdgeQuake tool (query, all graph_*, all workspace_*, all document_*) and into workspace resources via rejectUserScopedEdgeQuakeResource(), each called immediately before getClient().",
+          "evidence": "packages/mcp-server/src/tools/query.ts:44-47; tools/graph.ts:32,79,112,167; tools/workspace.ts:18,107,171,199,230; tools/document.ts:36,101,260,317,367,403; resources/workspace.ts:14,68",
+          "severity": "context"
+        },
+        {
+          "fact": "The EdgeQuake health tool is the one direct-EdgeQuake tool NOT protected by the guard — it calls getClient() (shared key) with no rejectUserScopedEdgeQuakeTool() call, so a per-user MCP key can invoke EdgeQuake's health endpoint via the shared key.",
+          "evidence": "packages/mcp-server/src/tools/health.ts:18 \"const client = await getClient();\" with no guard import/call in the file (contrast query.ts:44)",
+          "severity": "context"
+        },
+        {
+          "fact": "MCP sayknowmind_* tools do NOT call EdgeQuake at all — they fetch the SayKnowMind web app (SAYKNOWMIND_URL, default http://localhost:5400) and forward the caller's per-user Bearer token (context.rawToken), falling back to AUTH_SECRET; the web app enforces org-scoped visibility. This is how per-user isolation is delivered while direct EdgeQuake stays shared-key.",
+          "evidence": "packages/mcp-server/src/tools/sayknowmind.ts:17 \"WEB_APP_URL = process.env.SAYKNOWMIND_URL ?? 'http://localhost:5400'\"; :20-29 apiHeaders() sets \"Authorization: Bearer ${context.rawToken}\" else \"Bearer ${AUTH_SECRET}\"",
+          "severity": "context"
+        },
+        {
+          "fact": "MCP-edge auth (client-to-MCP) uses a DIFFERENT key namespace than EdgeQuake: clients present MCP_API_KEY (admin/shared, userId=null/isAdmin=true) or a per-user sk-mcp-* key looked up by SHA-256 hash in user_mcp_keys (requires DATABASE_URL). EDGEQUAKE_API_KEY is only used MCP-to-EdgeQuake. These must not be conflated.",
+          "evidence": "packages/mcp-server/src/index.ts:20 \"ADMIN_API_KEY = process.env.MCP_API_KEY\"; :46-56 findUserByApiKey hashes token -> user_mcp_keys; :106-121 admin vs per-user requestContext.run(...)",
+          "severity": "context"
+        },
+        {
+          "fact": "The dashboard authenticates to EdgeQuake with a per-USER JWT, never a shared key: buildHeaders() reads the stored accessToken and sets Authorization: Bearer <token>; it also adds X-Tenant-ID / X-Workspace-ID / X-User-ID. The JWT is obtained from EdgeQuake's own /auth/login and persisted in localStorage. No EDGEQUAKE_API_KEY/X-API-Key is ever sent by the dashboard.",
+          "evidence": "apps/dashboard/src/lib/api/client.ts:172-175 \"const { accessToken: token } = getTokens(); if (token) headers.set('Authorization', `Bearer ${token}`);\"; :177-186 X-Tenant-ID/X-Workspace-ID/X-User-ID; edgequake.ts:76 login -> api.post('/auth/login'); use-auth-store.ts:59 setTokens(response.access_token, response.refresh_token)",
+          "severity": "blocker"
+        },
+        {
+          "fact": "JWT-vs-shared-key conflict confirmed in EdgeQuake: api_key_auth validates the Bearer value by exact-string allowlist match (validate_api_key: api_keys.iter().any(|k| k == key)). A per-user JWT never equals the single configured EDGEQUAKE_API_KEY, so enabling enforcement returns 401 for the dashboard. EdgeQuake does issue JWTs (JwtService, /auth/login) but the api_key_auth layer does NOT validate JWTs — it only matches the static key.",
+          "evidence": "packages/edgequake/crates/edgequake-api/src/middleware.rs:134-135 \"validate_api_key: self.api_keys.iter().any(|k| k == key)\"; :187-210 match: matching key -> allow, else 401 unauthorized; :218-231 extract_api_key from Authorization Bearer / X-API-Key",
+          "severity": "blocker"
+        },
+        {
+          "fact": "The conflict is already documented in code: server.rs warns that enabling EDGEQUAKE_API_KEY requires every client to send the SAME key, that the web app and MCP server already forward it, but the dashboard currently sends a per-user JWT instead and must be updated first, or it will get 401s.",
+          "evidence": "packages/edgequake/crates/edgequake-api/src/server.rs:92-95 comment; :96-105 auth_config = with_api_keys(...) only when EDGEQUAKE_API_KEY set, else AuthConfig::default() (disabled); :108-109 api_key_auth layer applied to all routes",
+          "severity": "blocker"
+        },
+        {
+          "fact": "Enabling the shared key would break the dashboard's login itself, not just data calls: public_paths is only /health, /ready, /live, /swagger-ui, /api-docs. /api/v1/auth/login is NOT public, and a login request carries no token, so api_key_auth would 401 it with 'Missing API key' before any JWT could be issued.",
+          "evidence": "packages/edgequake/crates/edgequake-api/src/middleware.rs:107-113 default public_paths list; :128-131 is_public_path startsWith match; :201-210 missing key -> 401. Dashboard login is the only path to a JWT (edgequake.ts:75-77, use-auth-store.ts:55-68)",
+          "severity": "important"
+        },
+        {
+          "fact": "Routes the dashboard hits with the JWT (all under /api/v1, all via api.* -> buildHeaders Bearer JWT): auth (/auth/login,/auth/logout,/auth/refresh,/auth/me); tenants & workspaces (/tenants,/tenants/{id},/tenants/{id}/workspaces,/workspaces/{id},/workspaces/{id}/stats,rebuild-embeddings,rebuild-knowledge-graph,reprocess-documents); documents (/documents,/documents/{id},/documents/upload,/documents/pdf*,/documents/reprocess,/documents/scan,/documents/{id}/retry-chunks,/failed-chunks,/documents/track/{id}); query (/query,/query/stream); graph (/graph,/graph/labels*,/graph/stats,/graph/nodes/search,/graph/entities*,/graph/relationships*,/graph/stream); tasks (/tasks,/tasks/{id},/tasks/{id}/cancel,/tasks/{id}/retry); pipeline (/pipeline/status,/pipeline/cancel,/pipeline/queue-metrics); ingestion/lineage/costs (/ingestion/{id}/progress,/lineage/documents/{id},/documents/{id}/lineage,/costs/*). Only /health and /ready are fetched without the JWT (raw fetch, and they're public anyway).",
+          "evidence": "apps/dashboard/src/lib/api/edgequake.ts: login :76, getDocuments :504, query :935, queryStream :941, getGraph :988, getTasksList :1316, getEnhancedPipelineStatus :1632, getQueueMetrics :1712; raw health/ready :53-69 use plain fetch (not api.*)",
+          "severity": "context"
+        },
+        {
+          "fact": "For anonymous/un-logged-in dashboard sessions, buildHeaders sends NO Authorization header but always sends an X-User-ID generated as a client-side UUID v4 stored in localStorage — identity for conversation APIs is asserted by an unverified header, independent of any JWT.",
+          "evidence": "apps/dashboard/src/lib/api/client.ts:111-132 generateUUID/getOrCreateUserId; :184-186 \"headers.set('X-User-ID', effectiveUserId)\"",
+          "severity": "context"
+        }
+      ],
+      "open_questions": [
+        "Does EdgeQuake validate the per-user JWT anywhere in the request path today (e.g., a separate JWT-extraction layer feeding tenant_id/workspace_id from claims, per routes.rs:80), or is the Bearer JWT currently accepted only because api_key_auth is disabled by default and nothing else verifies it? This determines whether the dashboard's JWT is actually enforced or effectively ignored at the EdgeQuake edge.",
+        "Is the dashboard (apps/dashboard) actually deployed/wired into either edition (mind.sayknow.ai Railway or ypai.click EC2), or is it a standalone/legacy EdgeQuake admin UI? That affects how load-bearing this conflict is in production.",
+        "The health tool bypassing rejectUserScopedEdgeQuakeTool() lets a per-user MCP key reach EdgeQuake via the shared key — intended (low-sensitivity) or an oversight to close for consistency?"
+      ]
+    },
+    {
+      "area": "EdgeQuake deployment topology & auth env-var plumbing (exposure + what \"wiring auth\" must not break)",
+      "summary": "EdgeQuake's RAG/graph HTTP API (port 8080, mapped to 5403 in native dev) is internal-only in every tracked deploy target: docker-compose declares no `ports:` for it (only web/dashboard/ai-server/mcp/relay are published), and the Helm chart gives it a ClusterIP Service with NO Ingress rule. The only auth EdgeQuake actually enforces is an optional shared-key check (`api_key_auth` middleware) that is OFF unless `EDGEQUAKE_API_KEY` is set in the EdgeQuake process env; the JWT/login/api-keys/tenant machinery referenced in routes/docs is unwired — no middleware verifies JWTs. In prod the real `.env` leaves `EDGEQUAKE_API_KEY` empty, so auth is disabled. Crucially, the EdgeQuake container itself is never handed `EDGEQUAKE_API_KEY` in either docker-compose or Helm, so the toggle is currently inert even if you set the secret. If shared-key auth were turned on, the web app would keep working (it forwards the key as `Authorization: Bearer`), but the MCP server (no key in compose or Helm) and the dashboard (sends a per-user JWT, not the shared key) would get 401s on every non-public route. JWT auth \"by default\" isn't a real option today — it would have to be built and wired first.",
+      "files": [
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/docker-compose.yml",
+          "role": "Compose topology: edgequake has no published ports (internal-only); defines which services get EDGEQUAKE_URL/EDGEQUAKE_API_KEY"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/.env",
+          "role": "Real prod/dev env: EDGEQUAKE_API_KEY empty (auth off), EDGEQUAKE_URL=localhost:5403, EDGEQUAKE_PORT=5403"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/.env.example",
+          "role": "Documents EDGEQUAKE_URL/EDGEQUAKE_API_KEY/EDGEQUAKE_PORT defaults"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/scripts/production-deploy.sh",
+          "role": "Canonical EC2 deploy: uses main docker-compose.yml + host .env; never sets/touches EDGEQUAKE_API_KEY"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/.github/workflows/deploy.yml",
+          "role": "CI deploy (marked non-canonical/unsafe): generates docker-compose.prod.yml with only web/ai-server/dashboard/mcp-server — no edgequake service"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/deploy/helm/sayknowmind/templates/edgequake.yaml",
+          "role": "K8s EdgeQuake: ClusterIP Service (internal), Deployment env does NOT inject EDGEQUAKE_API_KEY → auth can't turn on"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/deploy/helm/sayknowmind/templates/ingress.yaml",
+          "role": "Ingress: routes web/dashboard/ai/mcp/relay only — NO edgequake host (confirms no external route)"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/deploy/helm/sayknowmind/templates/secret.yaml",
+          "role": "Defines EDGEQUAKE_API_KEY secret key (line 14) — but only web.yaml consumes it"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/deploy/helm/sayknowmind/templates/web.yaml",
+          "role": "K8s web: injects EDGEQUAKE_API_KEY from secret (lines 77-81) — the only consumer"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/deploy/helm/sayknowmind/templates/mcp-server.yaml",
+          "role": "K8s mcp: gets EDGEQUAKE_URL via configmap but NO EDGEQUAKE_API_KEY (only AUTH_SECRET) → would 401 if auth on"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/deploy/helm/sayknowmind/templates/configmap-app.yaml",
+          "role": "Sets internal EDGEQUAKE_URL/EDGEQUAKE_BASE_URL to cluster Service DNS (lines 20-21)"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/deploy/helm/sayknowmind/templates/_helpers.tpl",
+          "role": "dashboardPublicApiUrl points browser at ingress.hosts.ai (AI host), not an edgequake host that doesn't exist in ingress"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/server.rs",
+          "role": "Auth toggle: api_key_auth enabled only if EDGEQUAKE_API_KEY set; comment warns dashboard sends JWT not key (lines 86-109)"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/middleware.rs",
+          "role": "api_key_auth: simple string-equality shared-key check; public_paths = /health /ready /live /swagger-ui /api-docs"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/routes.rs",
+          "role": "Documents JWT+X-API-Key auth & login/api-keys/tenant routes — handlers exist but no JWT-verifying middleware is wired"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/web/lib/edgequake/client.ts",
+          "role": "Web→EdgeQuake client: forwards EDGEQUAKE_API_KEY as Authorization: Bearer (line 27) + X-Tenant/Workspace/User headers"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/mcp-server/src/config.ts",
+          "role": "MCP resolves EDGEQUAKE_URL/EDGEQUAKE_API_KEY; warns if no key on https URL"
+        },
+        {
+          "path": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/apps/dashboard/src/lib/api/client.ts",
+          "role": "Dashboard→EdgeQuake: sends per-user JWT from localStorage as Bearer (lines 172-174) — incompatible with shared-key auth"
+        }
+      ],
+      "findings": [
+        {
+          "fact": "EdgeQuake is internal-only in docker-compose: the edgequake service declares no published ports, with an explicit comment that access is via the Docker network. Externally published services are only web (WEB_PORT), dashboard (3001), ai-server (4000), mcp (8082), relay (3200).",
+          "evidence": "docker-compose.yml:58-59 \"# ports: — internal only, access via Docker network\"; published ports at :96,:137,:189,:234,:269",
+          "severity": "context"
+        },
+        {
+          "fact": "EdgeQuake is internal-only in Kubernetes: its Service is type ClusterIP and the Ingress has NO edgequake host rule (only web/dashboard/ai/mcp/relay). There is no external route to EdgeQuake in the chart.",
+          "evidence": "deploy/helm/sayknowmind/templates/edgequake.yaml:9 \"type: ClusterIP\"; ingress.yaml:35-93 rules list web/dashboard/ai/mcp/relay only",
+          "severity": "context"
+        },
+        {
+          "fact": "The only auth EdgeQuake actually enforces is a shared-key check, OFF by default. api_key_auth is enabled only when EDGEQUAKE_API_KEY is a non-empty env var on the EdgeQuake process; otherwise AuthConfig::default() (enabled=false) lets all requests through.",
+          "evidence": "server.rs:96-105 match on EDGEQUAKE_API_KEY → with_api_keys vs default; middleware.rs:173-176 \"if !config.enabled { return next.run(...)\"",
+          "severity": "important"
+        },
+        {
+          "fact": "In production the shared key is empty, so EdgeQuake auth is disabled. The real .env sets EDGEQUAKE_API_KEY= (blank). Any pod/process on the Docker bridge network or cluster can call EdgeQuake's /api/v1/* with no credentials.",
+          "evidence": ".env:28 \"EDGEQUAKE_API_KEY=\"; middleware.rs:174 enabled=false path",
+          "severity": "important"
+        },
+        {
+          "fact": "The auth toggle is currently inert in docker-compose: the edgequake container's environment block never references EDGEQUAKE_API_KEY (only DATABASE_URL, RUST_LOG, EDGEQUAKE_DEFAULT_* , OLLAMA_HOST, OPENAI_API_KEY). Setting EDGEQUAKE_API_KEY in .env does NOT reach the EdgeQuake server, so auth stays off even if an operator thinks they enabled it.",
+          "evidence": "docker-compose.yml:60-68 (edgequake environment has no EDGEQUAKE_API_KEY); contrast web env at :152 EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}",
+          "severity": "blocker"
+        },
+        {
+          "fact": "Same inert toggle in Helm: secret.yaml defines EDGEQUAKE_API_KEY, but the edgequake Deployment does not inject it (only POSTGRES_PASSWORD, DATABASE_URL, OPENAI_API_KEY, OPENROUTER_API_KEY). secrets.edgequakeApiKey is dead config for the server; only web.yaml consumes the key.",
+          "evidence": "secret.yaml:14 defines EDGEQUAKE_API_KEY; edgequake.yaml:46-63 env has no EDGEQUAKE_API_KEY; web.yaml:77-81 is the sole injector",
+          "severity": "blocker"
+        },
+        {
+          "fact": "If shared-key auth were turned on, the MCP server would break: it talks to EdgeQuake directly (health/graph/query via the EdgeQuake SDK) but is never given EDGEQUAKE_API_KEY — neither in docker-compose (mcp-server env lacks it) nor in Helm (mcp-server.yaml only injects AUTH_SECRET). Its requests would 401.",
+          "evidence": "docker-compose.yml:235-252 (mcp-server env: EDGEQUAKE_URL, AUTH_SECRET, DATABASE_URL, SAYKNOWMIND_URL, MCP_API_KEY — no EDGEQUAKE_API_KEY); mcp-server.yaml:45-50 only AUTH_SECRET; config.ts:21 apiKey: process.env.EDGEQUAKE_API_KEY (undefined)",
+          "severity": "blocker"
+        },
+        {
+          "fact": "If shared-key auth were turned on, the dashboard would break: it authenticates to EdgeQuake with a per-user JWT (from /api/v1/auth/login, stored in localStorage) sent as Authorization: Bearer. EdgeQuake's api_key_auth does plain string-equality against the shared key, so a JWT != key yields 401 on every non-public route. The server source explicitly warns about this.",
+          "evidence": "apps/dashboard/src/lib/api/client.ts:172-174 headers.set(\"Authorization\", `Bearer ${token}`); server.rs:92-95 \"the dashboard currently sends a per-user JWT instead and must be updated first, or it will get 401s\"; middleware.rs:134-136 validate_api_key is equality",
+          "severity": "blocker"
+        },
+        {
+          "fact": "JWT auth is unwired — \"turning JWT auth on by default\" is not a real option today. The login/refresh/api-keys/tenant route handlers exist and the OpenAPI advertises bearer_auth, but build_router wires ONLY api_key_auth; no middleware decodes or verifies JWT claims (tenant_id/workspace_id). EdgeQuake never validates the tokens the dashboard issues.",
+          "evidence": "server.rs:108-109 only layer is api_key_auth; routes.rs:71-82 documents JWT/tenant extraction; no jsonwebtoken/Claims verification in handlers/ or services/ (grep found none)",
+          "severity": "important"
+        },
+        {
+          "fact": "Tenant/workspace/user scoping is header-trust only, not derived from any verified token. The web client sets X-Workspace-ID/X-Tenant-ID/X-User-ID from app-side values; EdgeQuake's TenantContext just reads those headers. With auth off this means full app-layer trust and no isolation enforced by EdgeQuake itself.",
+          "evidence": "apps/web/lib/edgequake/client.ts:20-28 sets X-Workspace-ID/X-Tenant-ID/X-User-ID; middleware.rs:377-398 TenantContext::from_headers reads them verbatim",
+          "severity": "context"
+        },
+        {
+          "fact": "Even with shared-key auth on, health/readiness probes survive but metrics and WS do not. public_paths covers /health,/ready,/live,/swagger-ui,/api-docs (prefix match), but /metrics and the WebSocket routes (/ws/pipeline/progress, /ws/progress/{id}) are NOT public — the dashboard's live WS would 401.",
+          "evidence": "middleware.rs:107-113 public_paths list; routes.rs:99-107 /metrics and /ws/* routes not in that list; dashboard websocket-manager.ts is an EdgeQuake consumer",
+          "severity": "important"
+        },
+        {
+          "fact": "EdgeQuake CORS is wide open (allow_origin Any / methods Any / headers Any). Harmless while internal-only, but would be a problem if EdgeQuake were ever exposed via Ingress/proxy.",
+          "evidence": "server.rs:119-124 CorsLayer allow_origin(Any).allow_methods(Any).allow_headers(Any)",
+          "severity": "context"
+        },
+        {
+          "fact": "The CI deploy path (deploy.yml) does not even run EdgeQuake — its generated docker-compose.prod.yml defines only web/ai-server/dashboard/mcp-server. It is explicitly flagged as non-canonical/unsafe; the canonical path is production-deploy.sh which uses the main docker-compose.yml + host .env.",
+          "evidence": ".github/workflows/deploy.yml:43-66 (services: web, ai-server, dashboard, mcp-server only); :68-77 warning block; production-deploy.sh:14-21 canonical flow",
+          "severity": "context"
+        }
+      ],
+      "open_questions": [
+        "On the production EC2 host, is nginx (or another reverse proxy outside this repo) proxying any public hostname to the EdgeQuake container:8080? The repo configs never publish or ingress EdgeQuake, but a host-level nginx conf not in the repo could change the real external exposure.",
+        "The dashboard is built to log into EdgeQuake (/api/v1/auth/login → JWT), yet EdgeQuake enforces no JWT verification. Is the dashboard actually deployed/used in prod, and if so does its EdgeQuake login currently 'work' only because auth is disabled (tokens accepted by absence of enforcement)?",
+        "Plan for wiring auth: should EDGEQUAKE_API_KEY be threaded into the edgequake container env (compose + edgequake.yaml) AND into mcp-server, plus the dashboard switched from per-user JWT to the shared key (or a real JWT-verifying middleware added)? All four must change together or one of web/mcp/dashboard breaks.",
+        "values.yaml has aiServer.skipAuth:false (line 161) — is there a separate AI-server auth path, and is it related to EdgeQuake at all, or fully independent?"
+      ]
+    }
+  ],
+  "designs": [
+    {
+      "canonical_identity": "EdgeQuake has two legitimate, opposite trust models and the design must keep both. The canonical identity is therefore PRINCIPAL-TYPED, resolved by a single combined auth layer:\n\n(A) Trusted-service principal (web app, MCP server). Authenticates with the shared EDGEQUAKE_API_KEY. It has ALREADY authenticated the end user via better-auth and does the real isolation in Postgres readableClause (lib/visibility.ts, lib/edgequake/visibility.ts). For this principal EdgeQuake stays a single shared index and TRUSTS the X-Tenant-ID/X-Workspace-ID/X-User-ID headers verbatim — exactly today's behavior. This honors the memory directives 'don't revive EdgeQuake tenancy' and 'isolation is app-layer only'. EdgeQuake is NOT the isolation authority for the Open/web edition.\n\n(B) End-user principal (dashboard). Authenticates with a per-user JWT issued by EdgeQuake /api/v1/auth/login. Here the canonical identity IS the JWT: subject claim `sub` = EdgeQuake user UUID (the principal), `role` = RBAC role, and `tenant_id`+`workspace_id` claims = the authorization scope. For this principal, identity is derived FROM verified claims, not trusted from spoofable headers.\n\nMapping to the existing prompt.rs filter: prompt.rs (matches_tenant_filter / matches_tenant_filter_props) does string equality on metadata.tenant_id and metadata.workspace_id. Those strings are what the JWT's tenant_id/workspace_id claims must equal. Today login() calls generate_token() which leaves both claims None (jwt.rs:88-89), so the JWT carries no scope and the dashboard is effectively unscoped. The canonical-identity fix is: at login, populate tenant_id (= the user's tenant UUID, the same value query_execute.rs already derives from workspace.tenant_id at line 94-97) and workspace_id (= the user's default/selected workspace) into the Claims, then have the combined auth layer STAMP the verified sub into X-User-ID (and, gated, tenant/workspace) before the request reaches the 43 TenantContext-based handlers. That way the existing TenantContext extractor and prompt.rs filter keep working unchanged, but for JWT callers their inputs are now verified rather than client-asserted. The single source of truth for both signing and verifying is AppState.jwt_service, which must be built from JWT_SECRET (see wiring).",
+      "rationale": "Three independent defects compound today: (1) the JWT secret is the hardcoded 'change-me-in-production-256-bit-secret-key' because every AppState factory uses AuthConfig::default() and AuthConfig::from_env() is never called (config.rs:51, postgres.rs:293, memory.rs:46/182/272); (2) the only enforced layer is api_key_auth, which is a no-op unless EDGEQUAKE_API_KEY is set and only does a non-constant-time string == (middleware.rs:134, 173-176); (3) the dashboard sends a per-user JWT that api_key_auth can never match, so turning the shared key on 401s the dashboard's login, data calls, and WS — the conflict server.rs:92-95 already documents.\n\nThe security-first + zero-regression resolution is a single combined auth middleware that accepts EITHER the shared key (-> trusted-service principal, headers trusted as-is = current behavior) OR a valid JWT (-> end-user principal, identity from claims). This dissolves the shared-key-vs-JWT mismatch without forcing the dashboard onto the shared key (the option the existing comment proposes, which would break workspace switching and WS). It keeps the layer OPT-IN (only enforced when EDGEQUAKE_API_KEY or a new EDGEQUAKE_REQUIRE_AUTH is set), so the current Docker deploy — which ships EDGEQUAKE_API_KEY empty and the EdgeQuake port internal-only — is byte-for-byte unaffected until an operator opts in. The secret fix (route from_env into the factories + thread JWT_SECRET into the container) is independent of enforcement and safe to ship first, because from_env() still falls back to the dev default when JWT_SECRET is unset (no behavior change), but now a set JWT_SECRET actually takes effect.",
+      "wiring_steps": [
+        {
+          "step": "Make JWT secret env-sourced and validated (mandatory-when-set)",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-auth/src/config.rs",
+          "detail": "Keep from_env() reading JWT_SECRET (line 128) but: (a) when JWT_SECRET is SET, use it verbatim and validate len>=32 bytes (BR0851), returning/panicking on too-short; (b) when UNSET, keep the dev default BUT emit a loud tracing::warn once ('JWT_SECRET not set, using insecure default'); (c) add a helper like is_default_secret()/jwt_secret_is_default to let the server refuse the known placeholder when enforcement is on. Do NOT change Default::default() so unit tests stay deterministic."
+        },
+        {
+          "step": "Route production AppState to from_env() so JWT_SECRET takes effect",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/state/postgres.rs",
+          "detail": "Line 293: replace `let auth_config = AuthConfig::default();` with `let auth_config = AuthConfig::from_env();`. This is the core secret fix for the real deploy path (PostgreSQL mode). password_service/rbac unaffected; jwt_service now derives from JWT_SECRET."
+        },
+        {
+          "step": "Route in-memory production factories to from_env(); leave test_state on default",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/state/memory.rs",
+          "detail": "Lines 46/182/273: switch the non-test in-memory server factories to AuthConfig::from_env() (falls back to default when unset, so harmless). Keep AppState::test_state on AuthConfig::default() for deterministic tests. Verify which of the three is test_state before editing."
+        },
+        {
+          "step": "Add a constant-time API-key compare",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/Cargo.toml",
+          "detail": "Add `subtle = \"2\"` (no crypto dep exposes a public ct-compare here; jsonwebtoken pulls aws_lc_rs but not a usable API). sha2 0.10 is already present (line 58) if you prefer hashing both sides first; subtle is cleaner."
+        },
+        {
+          "step": "Build the combined auth layer (shared key OR JWT) with constant-time key check and identity stamping",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/middleware.rs",
+          "detail": "Replace validate_api_key's `==` (line 134) with subtle::ConstantTimeEq. Add a new middleware `auth` plus a state struct `EdgeAuthState { api: Arc<AuthConfig>, jwt: Arc<edgequake_auth::JwtService>, enforce: bool }`. Logic: if !enforce -> pass; if is_public_path -> pass; extract bearer/x-api-key (reuse extract_api_key); if ct-equals a shared key -> insert request extension AuthPrincipal::Service and pass (TRUST X-* headers, current behavior); else verify as JWT via jwt.verify_token -> on success derive claims, OVERWRITE x-user-id header with claims.sub and (gated) x-tenant-id/x-workspace-id from claims when present, insert AuthPrincipal::User(claims), pass; else 401. Keep TenantContext/from_headers untouched so all 43 handlers keep working but now read verified values for JWT callers."
+        },
+        {
+          "step": "Wire the combined layer into the router and gate enforcement",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/server.rs",
+          "detail": "Replace the api_key_auth wiring (lines 96-109) with the combined `auth` layer. Build EdgeAuthState from self.state.jwt_service.clone() + AuthConfig parsed from EDGEQUAKE_API_KEY (lines 96-105). Set enforce = (EDGEQUAKE_API_KEY set) OR a new EDGEQUAKE_REQUIRE_AUTH=true (lets the dashboard/Enterprise edition enforce JWT-only without a shared key). When enforce && jwt_secret_is_default -> log a hard error or refuse to start. Keep default (no key, no flag) -> enforce=false, identical to today. Update the comment at lines 86-95 to reflect that JWT is now accepted."
+        },
+        {
+          "step": "Populate canonical scope claims at login",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/handlers/auth/session.rs",
+          "detail": "Lines 81-87: replace generate_token(user_uuid, role) with generate_token_with_claims(Claims::new(user_uuid, role, expiry).with_tenant_id(<user's tenant uuid>).with_workspace_id(<user's default/selected workspace>)). Look up the user's tenant (UserRecord already carries identity; reuse the same tenant the workspace lookup uses in query_execute.rs:94). Mirror the claim copy already done in jwt.rs refresh_token (lines 242-243) so refresh preserves scope. This makes the JWT actually carry the scope prompt.rs filters on."
+        },
+        {
+          "step": "Fix the api-key owner and stop hardcoding demo-user",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/handlers/auth/api_keys.rs",
+          "detail": "Line 47: replace user_id = \"demo-user\" with the authenticated principal from the new AuthPrincipal request extension (or the stamped X-User-ID). Request-time validation of the Argon2-hashed DB keys (so created keys actually authenticate) is a larger follow-up — flag as a decision, not required for this pass."
+        },
+        {
+          "step": "Correct the misleading router doc + decide public paths for /metrics and /ws/*",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/packages/edgequake/crates/edgequake-api/src/routes.rs",
+          "detail": "Update the lines 71-82 'Authentication'/'Multi-Tenancy' doc block to describe the implemented dual model (it currently claims JWT-claims-first precedence that did not exist). Decide whether /metrics and /ws/pipeline/progress, /ws/progress/{track_id} (lines 99-107) join public_paths; browser WebSockets cannot send Authorization headers, so /ws/* must be whitelisted OR accept a token query-param when enforcement is on, or the dashboard's live updates 401."
+        },
+        {
+          "step": "Thread JWT_SECRET and EDGEQUAKE_API_KEY into the EdgeQuake container (compose)",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/docker-compose.yml",
+          "detail": "The edgequake service block (starts line 54, env lines ~60-68) never receives these vars, so the toggle is inert. Add `JWT_SECRET: ${JWT_SECRET:-}` and `EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}` to the edgequake environment. Also add `EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}` to the mcp-server environment block (~lines 235-252) so MCP's direct-EdgeQuake SDK client keeps working when the key is enabled."
+        },
+        {
+          "step": "Thread the secrets into Helm EdgeQuake + MCP deployments",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/deploy/helm/sayknowmind/templates/edgequake.yaml",
+          "detail": "Inject JWT_SECRET and EDGEQUAKE_API_KEY from secret.yaml into the edgequake Deployment env (currently only POSTGRES/DATABASE/OPENAI/OPENROUTER). Add a JWT_SECRET key to deploy/helm/sayknowmind/templates/secret.yaml (EDGEQUAKE_API_KEY key already exists at line 14). Add EDGEQUAKE_API_KEY injection to deploy/helm/sayknowmind/templates/mcp-server.yaml (currently only AUTH_SECRET). All consumers must get the same key in one change or one of web/mcp/dashboard breaks."
+        },
+        {
+          "step": "Document the new env vars",
+          "file": "/Volumes/jmin-G/Dev/SayKnowMind(Agentic Second Brain )/.env.example",
+          "detail": "Document JWT_SECRET (>=32 bytes, generate with openssl rand -hex 32) and clarify EDGEQUAKE_API_KEY enables shared-key enforcement and EDGEQUAKE_REQUIRE_AUTH enables JWT-only enforcement. Mirror into the real .env (currently EDGEQUAKE_API_KEY= empty) only when the operator opts in."
+        }
+      ],
+      "compat_risks": [
+        "Dashboard JWT vs shared key: the documented breakage (server.rs:92-95) is eliminated by the combined layer accepting JWTs, so the dashboard's /auth/login (not a public path) and all Bearer-JWT /api/v1/* calls keep working when EDGEQUAKE_API_KEY is enabled. Without this layer, enabling the key 401s the dashboard entirely.",
+        "Browser WebSocket auth: /ws/pipeline/progress and /ws/progress/{track_id} cannot carry an Authorization header from the browser. If enforcement is on and they are not whitelisted (or token-via-query-param), dashboard live updates 401. Mitigation: whitelist /ws/* or add query-param token validation before flipping enforcement on.",
+        "Existing clients on shared-key path stay green: web app (client.ts:27 forwards Bearer EDGEQUAKE_API_KEY) and MCP (config.ts:21 apiKey) are unaffected as trusted-service principals — provided the compose/Helm plumbing actually delivers the key to the EdgeQuake AND mcp-server containers (today it reaches neither EdgeQuake nor MCP).",
+        "Secret rotation: switching JWT_SECRET off the hardcoded default invalidates any currently-issued dashboard JWTs; users must re-login once. Low impact, expected.",
+        "from_env() strictness: if you hard-fail on the known-default secret, an operator who enables auth without setting JWT_SECRET will fail to start. Mitigation: only refuse when enforcement is ON; when enforcement is OFF keep the warn-and-fallback so non-auth deploys are untouched.",
+        "Stamping tenant/workspace from JWT claims could pin a dashboard user to their login-time workspace and break in-session workspace switching. Mitigation: always stamp X-User-ID from sub (anti-spoof, safe) but stamp tenant/workspace only when the header is absent, OR re-issue the JWT on workspace switch — a UX decision.",
+        "Constant-time compare swap is behavior-identical (same accept/reject), only removes the timing side-channel; no functional regression.",
+        "Default-on risk: keeping enforcement opt-in means a fresh deploy is still unauthenticated by default (same as today). The mitigation is the internal-only network posture (no published port in compose, ClusterIP + no Ingress in Helm); flag the move to default-on as a separate, later step once MCP/compose plumbing is verified."
+      ],
+      "rollout": "\"Phased, opt-in first, to keep the current Docker deploy working untouched. Phase 0 (safe, ship immediately, no behavior change): fix the secret sourcing — config.rs from_env hardening + postgres.rs/memory.rs switch to from_env() + thread JWT_SECRET into the edgequake container (compose + Helm). With JWT_SECRET unset this is a no-op (falls back to dev default); with it set the real secret finally takes effect. Phase 1 (build, still inert by default): land the combined auth layer + constant-time compare + login claim population + api-keys owner fix. enforce stays false unless EDGEQUAKE_API_KEY or EDGEQUAKE_REQUIRE_AUTH is set, so default deploys are unchanged. Phase 2 (reconcile clients): ensure EDGEQUAKE_API_KEY reaches web, mcp-server (compose + Helm) and decide the /ws/* + /metrics whitelist; confirm dashboard JWT path end-to-end in a staging env. Phase 3 (opt-in enable): set JWT_SECRET (>=32 bytes) and EDGEQUAKE_API_KEY in one env change across all consumers; turn enforcement on in staging, validate web search, MCP tools, dashboard login/data/WS, then promote. Phase 4 (optional, later): flip to default-on (enforce unless explicitly disabled) once the plumbing is proven and DB-backed per-user API keys are wired. The canonical EC2 path (production-deploy.sh + host .env + main docker-compose.yml) is the deploy to validate; the CI deploy.yml path does not run EdgeQuake at all.\"",
+      "open_decisions": [
+        "Is the dashboard (apps/dashboard) actually deployed in either edition (mind.sayknow.ai Railway / ypai.click EC2), or legacy? If legacy/unused, the JWT path is lower priority and a pure shared-key + trusted-service model is enough — but building the JWT branch now future-proofs the Enterprise edition.",
+        "Should X-Tenant-ID/X-Workspace-ID from a JWT caller be allowed to override the JWT claims (enables in-session workspace switching) or be clamped to claims (stronger anti-spoof)? This is a dashboard UX vs security tradeoff.",
+        "Enforcement default: keep opt-in indefinitely (rely on internal-only network) or commit to default-on after plumbing lands? Security-first argues default-on eventually; zero-regression argues opt-in until clients are proven.",
+        "WebSocket auth strategy for /ws/* under enforcement: whitelist as public, accept a token query-param, or use a subprotocol header? Needed before enforcement can be turned on without breaking dashboard live updates.",
+        "Confirm the permanent design per memory: EdgeQuake remains a single shared index and is NOT the isolation authority for the web edition (PG readableClause stays the gate); 'don't revive EdgeQuake tenancy' — so we deliberately do NOT add per-user vector partitioning, only verified-identity stamping.",
+        "JWT_SECRET strictness: hard-fail startup on the known placeholder when enforcement is on (recommended) vs warn-only?",
+        "Scope of DB-backed API keys: wire request-time validation of the Argon2-hashed keys in api_keys.rs (so created keys actually authenticate, and fix demo-user ownership properly) now, or defer? This is the only piece that needs a real per-key lookup path and is larger than the shared-key fix.",
+        "The MCP health tool (tools/health.ts) bypasses rejectUserScopedEdgeQuakeTool and reaches EdgeQuake via the shared key for any per-user MCP key — close for consistency or accept as low-sensitivity?"
+      ]
+    },
+    {
+      "canonical_identity": "Canonical identity at the EdgeQuake edge = the authenticated CALLER, proven by ONE of two credentials, not a re-derivation of per-user data scope:\n\n1. Shared service key (EDGEQUAKE_API_KEY) — represents the trusted app tier (apps/web, packages/mcp-server). These clients already do per-user/per-org isolation downstream via Postgres readableClause re-filter (apps/web/lib/edgequake/visibility.ts), so EdgeQuake must NOT try to re-enforce that. Per the 'don't revive EdgeQuake tenancy' memory, the shared-key path stays trusted to assert X-Tenant-ID/X-Workspace-ID/X-User-ID and keeps the single-shared-workspace model.\n\n2. Per-user JWT — for apps/dashboard, which treats EdgeQuake as genuinely multi-tenant. The JWT subject (`sub`) is the user UUID, plus `role`. Optional `tenant_id`/`workspace_id` claims (Claims already supports them at jwt.rs) carry scope. EdgeQuake issues this token at /api/v1/auth/login and can verify it because it holds the (now env-sourced) JWT_SECRET.\n\nHow it maps to prompt.rs filtering: today scope reaches prompt.rs::matches_tenant_filter via request.tenant_id()/workspace_id(), which come from the X-* headers (TenantContext). The fix makes the auth layer the AUTHORITY for those headers on the JWT path: when a JWT verifies, the middleware overwrites x-user-id (always, from `sub`) and, once login populates them, x-tenant-id/x-workspace-id (from claims) BEFORE handlers run. Because all 43 handlers read TenantContext from headers, this binds identity to the verified token with zero handler edits. On the shared-key path, headers pass through unchanged (web/mcp keep asserting scope; PG re-filter remains the isolation gate). This means the dashboard's existing JWT becomes a first-class credential and does NOT need to be rewritten to send the shared key.",
+      "rationale": "Defect #2 is three coupled problems with very different blast radii, so I split them and only ship the low-risk parts default-on:\n\n(1) Hardcoded JWT secret — cheapest, highest value. AuthConfig::from_env() exists but is never called; every AppState builds JwtService from AuthConfig::default() (postgres.rs:293, memory.rs:46/182/272), so JWT_SECRET is ignored. Switching those four call sites to from_env() makes the env var real. To honor 'fail-closed-when-configured', harden from_env() so that the known sentinel secret triggers a loud warning by default and a hard refusal-to-boot only when EDGEQUAKE_AUTH_STRICT=true. If JWT_SECRET is unset, behavior is byte-identical to today (same default secret) — zero blast radius.\n\n(2) No auth attached — the api_key_auth layer is already on the router (commit ff03128) but inert because EDGEQUAKE_API_KEY is empty AND the edgequake container is never even handed the var (docker-compose.yml:60-68, helm edgequake.yaml). I keep it OPT-IN, but (a) make the toggle actually reachable by threading the var into the edgequake + mcp containers, and (b) teach the gate to accept a verified JWT in addition to the shared key, so flipping it on does not 401 the dashboard. Default OFF = zero blast radius; this is the migration path, not default-on enforcement.\n\n(3) Spoofable identity headers — biggest blast radius (43 handlers + the web app's deliberate header-trust model). I do the one safe sub-step now: when a JWT verifies, overwrite x-user-id from `sub` so identity is bound to the token without touching handlers. Full scope-binding (populate tenant/workspace claims at login + membership authorization + strip client headers) is staged as phase 2, because EdgeQuake is internal-only (no published ports; ClusterIP, no Ingress) and the web path's real isolation is the PG re-filter — so the live exploitability is gated by the network today.\n\nThis sequence closes the secret defect immediately and default-on, makes enforcement a one-flag operation that won't break any of the four clients, and leaves a clear path to header-binding — all without a big-bang.",
+      "wiring_steps": [
+        {
+          "step": "Make JWT_SECRET take effect and add fail-closed-when-configured behavior",
+          "file": "packages/edgequake/crates/edgequake-auth/src/config.rs",
+          "detail": "Extract the default secret into a const SENTINEL (currently duplicated at lines 51 and 129). In from_env() (line 127): after reading JWT_SECRET, if it is unset/empty/equal to SENTINEL, log a loud tracing::warn! ('insecure default JWT secret in use'); if std::env::var('EDGEQUAKE_AUTH_STRICT') parses to true, panic/return an error instead so the process refuses to boot. Keep the lenient default so dev and unset-JWT_SECRET deploys are unchanged. This is purely additive."
+        },
+        {
+          "step": "Source the JWT/auth config from the environment in every AppState factory",
+          "file": "packages/edgequake/crates/edgequake-api/src/state/postgres.rs",
+          "detail": "Line 293: replace `let auth_config = AuthConfig::default();` with `let auth_config = AuthConfig::from_env();`. jwt_service/password_service and AppState.auth_config now use the real JWT_SECRET. No other change; both downstream builders already consume auth_config."
+        },
+        {
+          "step": "Same env-sourcing fix for the in-memory factories (consistency + tests)",
+          "file": "packages/edgequake/crates/edgequake-api/src/state/memory.rs",
+          "detail": "Lines 46, 182, 272: replace `AuthConfig::default()` with `AuthConfig::from_env()` so memory-mode and test states sign/verify with the same secret as postgres mode."
+        },
+        {
+          "step": "Let the existing api-key gate also accept a verified JWT, and give it the JWT service",
+          "file": "packages/edgequake/crates/edgequake-api/src/middleware.rs",
+          "detail": "Extend AuthState (line 147) to carry `jwt: Option<Arc<edgequake_auth::JwtService>>`. In api_key_auth (line 166): keep the `if !config.enabled { next.run }` short-circuit (line 174) and public-path skip UNCHANGED. In the credential branch, after extract_api_key: if key equals a configured shared key -> allow (use a constant-time compare instead of `k == key` at line 135); else if jwt is Some and jwt.verify_token(token).is_ok() -> on success overwrite the request's x-user-id header from claims.sub (and x-tenant-id/x-workspace-id if those claims are present) BEFORE next.run, so TenantContext reflects verified identity; else 401. Also add '/api/v1/auth/login' and '/api/v1/auth/refresh' to public_paths (line 107) so the dashboard can still obtain/refresh a token when the gate is on."
+        },
+        {
+          "step": "Pass jwt_service into the auth layer at router build time; keep the toggle opt-in",
+          "file": "packages/edgequake/crates/edgequake-api/src/server.rs",
+          "detail": "Leave the EDGEQUAKE_API_KEY gating (lines 96-105) exactly as-is (still OFF by default). Change AuthState construction (line 106) to also pass `Some(self.state.jwt_service.clone())` so the middleware can verify dashboard JWTs. No change to layer order."
+        },
+        {
+          "step": "Make the auth toggle actually reachable by the EdgeQuake container",
+          "file": "docker-compose.yml",
+          "detail": "In the edgequake service environment block (lines 60-68) add `EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}`, `JWT_SECRET: ${JWT_SECRET:-}`, and `EDGEQUAKE_AUTH_STRICT: ${EDGEQUAKE_AUTH_STRICT:-false}`. All default empty/false, so current deploys are unchanged — but operators can now enable auth without it being silently inert."
+        },
+        {
+          "step": "Give the MCP server the shared key so enabling auth doesn't break it",
+          "file": "docker-compose.yml",
+          "detail": "In the mcp-server environment block (~line 236) add `EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}`. The web service already forwards it (line 152); MCP's SDK client reads process.env.EDGEQUAKE_API_KEY (packages/mcp-server/src/config.ts:21) but never receives it today."
+        },
+        {
+          "step": "Inject EDGEQUAKE_API_KEY + JWT_SECRET into the EdgeQuake pod (K8s parity)",
+          "file": "deploy/helm/sayknowmind/templates/edgequake.yaml",
+          "detail": "Under the Deployment env: block (line 46) add EDGEQUAKE_API_KEY and JWT_SECRET from the app secret (valueFrom secretKeyRef). Today secret.yaml defines EDGEQUAKE_API_KEY but only web.yaml consumes it, so the toggle is inert in Helm too."
+        },
+        {
+          "step": "Inject EDGEQUAKE_API_KEY into the MCP pod",
+          "file": "deploy/helm/sayknowmind/templates/mcp-server.yaml",
+          "detail": "Under env: (line 45, alongside the existing AUTH_SECRET at lines 46-50) add EDGEQUAKE_API_KEY from the secret so the MCP direct-EdgeQuake tools authenticate when the gate is enabled."
+        },
+        {
+          "step": "Add the JWT_SECRET key to the Helm secret template",
+          "file": "deploy/helm/sayknowmind/templates/secret.yaml",
+          "detail": "EDGEQUAKE_API_KEY exists (line 14); add a JWT_SECRET entry (optional/defaulted) so edgequake.yaml can reference it. Keep it optional to avoid forcing a value on existing installs."
+        },
+        {
+          "step": "Document the new/changed env vars and the enablement order",
+          "file": ".env.example",
+          "detail": "Document JWT_SECRET (must be a strong 256-bit value in prod), EDGEQUAKE_AUTH_STRICT (opt-in fail-closed), and update the EDGEQUAKE_API_KEY note (line 42) to state the enablement order: set the key + JWT_SECRET, redeploy web/mcp/edgequake together, verify dashboard login, THEN flip enforcement."
+        },
+        {
+          "step": "PHASE 2 (not required to close #2, sequenced next): populate scope claims at login",
+          "file": "packages/edgequake/crates/edgequake-api/src/handlers/auth/session.rs",
+          "detail": "At login (lines 81-87) switch generate_token -> generate_token_with_claims to include tenant_id/workspace_id from the user's membership. This lets the Step-4 middleware override x-tenant-id/x-workspace-id from verified claims and enables a real membership/authorization check in query_execute.rs/completion.rs/query_stream.rs, finishing the spoofable-header fix. Also revisit prompt.rs:20-22 (None scope => allow all) as a separate hardening."
+        }
+      ],
+      "compat_risks": [
+        "Changing the JWT secret invalidates already-issued dashboard tokens — only happens when JWT_SECRET is actually set (different from the current sentinel); mitigation: it forces one re-login, tokens are short-lived (24h), and if JWT_SECRET stays unset behavior is identical to today. Communicate the re-login on the deploy that first sets it.",
+        "Dashboard JWT vs shared key: if an operator enables EDGEQUAKE_API_KEY WITHOUT the Step-4 JWT-accept change, the dashboard 401s on every /api/v1/* call and even on login (login is not public today). Mitigation: ship the JWT-accept-or-shared-key gate + add /auth/login,/auth/refresh to public_paths in the SAME change, so both credential types pass.",
+        "MCP server breakage on enable: MCP talks to EdgeQuake directly with the shared key but is never given EDGEQUAKE_API_KEY in compose/helm. Mitigation: Steps 7 and 9 thread it in before anyone flips the toggle.",
+        "Existing open-edition deploy (Railway/mind.sayknow.ai) and EC2 (ypai.click) must keep working: all new vars default to empty/false and enforcement stays OPT-IN, so default-on behavior is unchanged. EdgeQuake is internal-only (no published ports, ClusterIP, no Ingress), so leaving auth off is not a new regression.",
+        "Overwriting x-user-id/x-tenant-id/x-workspace-id from JWT claims could blank scope for the dashboard IF claims are empty (login doesn't populate tenant/workspace yet). Mitigation: in phase 1 only overwrite x-user-id (sub is always present) and overwrite tenant/workspace ONLY when the claim is Some; defer full claim-based scope to phase 2 after login populates claims.",
+        "WebSocket and /metrics routes are NOT in public_paths — if auth is enabled, the dashboard's live WS (/ws/*) and metrics scraping 401. Mitigation: decide per-route (metrics likely behind network policy; WS clients must send the JWT/key) before default-on; out of scope for opt-in phase 1.",
+        "Non-constant-time shared-key compare (== at middleware.rs:135) is a minor timing-oracle; mitigation: swap to a constant-time comparison while editing the file — cheap, no behavior change."
+      ],
+      "rollout": "\"Opt-in, phased; current Docker/Railway/EC2 deploys keep working untouched because every new var defaults to empty/false and enforcement stays disabled.\n\nPhase 0 (default-on, zero blast radius): Steps 1-3 (from_env for JWT_SECRET + fail-closed-when-strict). With JWT_SECRET unset, identical to today; operators who set it get a real secret. Land Step 4-5 (JWT-accept gate wiring) but with the gate still gated on EDGEQUAKE_API_KEY (off), so no runtime change yet.\n\nPhase 1 (plumbing, still off): Steps 6-10 thread EDGEQUAKE_API_KEY/JWT_SECRET into edgequake + mcp containers (compose + Helm) and document. Nothing enforces yet; this just makes the toggle real and pre-positions web/mcp.\n\nPhase 2 (opt-in enable per environment): set JWT_SECRET (strong) + EDGEQUAKE_API_KEY, redeploy web+mcp+edgequake together, verify dashboard login + a JWT data call + a shared-key call all return 200, then set EDGEQUAKE_AUTH_STRICT=true. Roll one environment at a time (start with the one where the dashboard is confirmed deployed).\n\nPhase 3 (header-binding hardening): populate tenant/workspace JWT claims at login, switch middleware to override scope headers from claims, add membership authorization in the query/chat handlers, and revisit prompt.rs None-scope global-read. Only after Phase 2 is stable.\n\nDefault-on enforcement everywhere is deferred until the dashboard's deployment status is confirmed and WS/metrics route handling is decided.\"",
+      "open_decisions": [
+        "Is apps/dashboard actually deployed in either edition (Railway open / EC2 enterprise), or is it a standalone/legacy EdgeQuake admin UI? If NOT deployed, the JWT-accept path (Step 4) is optional and shared-key-only is even simpler; if deployed, it is mandatory before any enable.",
+        "Default-on vs permanent opt-in: do we ever want EDGEQUAKE_API_KEY/strict enforcement on by default, or is network isolation (internal-only port) the intended primary control with auth as defense-in-depth? This sets whether Phase 3 is required.",
+        "How to treat /metrics and /ws/* when auth is enabled — add to public_paths, require a credential, or restrict via network policy? The dashboard's live WebSocket will 401 otherwise.",
+        "Should we revive any scope-binding in EdgeQuake for the web path, or keep the 'don't revive EdgeQuake tenancy' stance where EdgeQuake only authenticates the caller and the web app's Postgres re-filter remains the per-user isolation gate? This decides whether Phase 3 touches the web path at all or only the dashboard path.",
+        "Should prompt.rs:20-22 (None tenant+workspace => allow ALL records) be changed to fail-closed (deny when unscoped), given some admin/dashboard queries may intentionally run unscoped? Behavior change, needs a product call.",
+        "Constant-time shared-key comparison and hashing of the shared key — include the cheap constant-time swap now, or leave as-is given internal-only exposure?",
+        "JWT_SECRET rotation policy and who owns the prod secret value (it must be set in the EC2 host .env and the Helm secret) — coordinate so the first enable doesn't surprise live dashboard sessions with a forced re-login."
+      ]
+    }
+  ],
+  "critic": "Verified enough. Both designs' API assumptions (Claims builders, `generate_token_with_claims`, sha2 present) hold; but the login-time tenant/workspace source does NOT exist, which is the crux. Here is the critique.\n\n---\n\n# Adversarial Critique: EdgeQuake Auth Wiring (Design A vs B)\n\n## 1. Verdict per design\n\n### Design A (security-first) — strong, but over-reaches and has one hard correctness gap\n**Correct against MAP:** dual-principal model; combined layer accepting shared-key OR JWT; routing `postgres.rs:293` + `memory.rs` factories to `from_env()`; threading `JWT_SECRET`/`EDGEQUAKE_API_KEY` into the edgequake + mcp containers (compose + Helm); constant-time compare; the observation that the documented `server.rs:92-95` breakage is dissolved by accepting JWTs rather than forcing the dashboard onto the shared key. All verified consistent with MAP.\n\n**Gaps / defects:**\n- **HARD GAP — public_paths for `/auth/login` never added.** A's combined-layer step relies on `is_public_path` but never updates the list. MAP is explicit: `/api/v1/auth/login` is NOT public (`middleware.rs:107-113`), carries no token, so under `enforce=true` A's layer 401s login itself — the exact failure MAP calls out. A's only public-paths edit (routes.rs step) discusses `/metrics` and `/ws/*`, not login/refresh. This must be fixed or enforcement is unusable. **Design B catches this** (its Step 4 adds `/auth/login`,`/auth/refresh`).\n- **Over-reach: claim-based tenant/workspace stamping in the same pass.** A's login step says \"look up the user's tenant … reuse the same tenant `query_execute.rs:94` derives.\" That's incorrect: `query_execute` derives `tenant_id` from a **workspace row that came from a header**, not from the user. I verified `session.rs` login only does `generate_token(user_uuid, user.role)` — there is **no user→workspace/tenant membership source in the login path at all.** So \"populate tenant_id/workspace_id at login\" is not a safe autonomous edit; it depends on a membership/default-workspace lookup that does not exist yet. A treats this as in-scope phase-1 work; it is actually a blocked design decision.\n- **`EDGEQUAKE_REQUIRE_AUTH` (JWT-only enforcement) is net-new surface** with no consumer that needs it confirmed (dashboard deployment status is an open question). Adds a second toggle and a \"refuse-to-boot on default secret\" hard-fail path. Reasonable but speculative; defer.\n\n### Design B (minimal) — better sequencing and blast-radius discipline, slightly under-specified on hardening\n**Correct against MAP:** identical dual-principal conclusion; same `from_env()` routing; **explicitly adds `/auth/login`+`/auth/refresh` to public_paths** (the thing A misses); extends existing `AuthState` with `Option<Arc<JwtService>>` rather than inventing a parallel state struct (smaller diff, lower regression risk); correctly sequences scope-claim population + membership authorization into an explicit Phase 2/3 *after* confirming exploitability is network-gated. B's framing (\"split #2 into three problems with different blast radii\") is the more honest read of the MAP.\n\n**Gaps / defects:**\n- B switches **all** `memory.rs` factories (46/182/272) to `from_env()` including what is likely `test_state`. MAP doesn't label which is the test factory. **A's caution is correct here** — keep the test factory on `AuthConfig::default()` for deterministic tests, or you risk env-dependent test flakiness.\n- B leaves `EDGEQUAKE_AUTH_STRICT` semantics loose (warn-vs-panic) and doesn't address `/ws/*` + `/metrics` until \"before default-on\" — acceptable for opt-in but should be named as a blocker before any enable.\n- B's Phase-2 note also assumes login can populate tenant/workspace claims without confronting the missing membership source (same flaw as A, but B at least quarantines it to a later phase).\n\n**Bottom line:** B's *phasing and minimalism* are superior and lower-risk; A's *combined-layer construction detail* (principal extension, identity stamping, constant-time) is more complete. The synthesized plan takes B's spine and A's flesh.\n\n## 2. Claims NOT supported by (or contradicted by) the MAP\n\n- **A & B — login can source the user's tenant/workspace.** Unsupported and effectively contradicted. Verified: `session.rs` login uses only `user.role`; no user→workspace/tenant mapping exists. The tenant in the query path comes from a header-supplied workspace, not the user. **This is the single biggest hand-wave in both designs.**\n- **A — \"mirror the claim copy already done in jwt.rs refresh_token (lines 242-243).\"** Misstated but harmless: `refresh_token(&self, claims: &Claims)` (jwt.rs:236) re-signs the *passed* claims, so scope is preserved automatically if the original token carried it — there is nothing to \"mirror.\" No code change needed there.\n- **A — data-scope alignment is silently assumed.** Neither design notes that web-app-indexed vectors are tagged with the web app's **hardcoded** `EDGEQUAKE_TENANT_ID(...0002)/WORKSPACE_ID(...0003)` (client.ts), while a dashboard JWT would carry *different* tenant/workspace UUIDs. `prompt.rs` does string-equality on those tags. So stamping dashboard claims as scope could match **zero** documents. Unsupported assumption that JWT-claim scope and indexed metadata share a namespace. Real efficacy risk.\n- **Confirmed-true claims I checked (not defects):** `with_tenant_id`/`with_workspace_id` Claims builders exist (jwt.rs:107/113); `generate_token_with_claims` exists (jwt.rs:186); `sha2 = \"0.10\"` is present in edgequake-api Cargo.toml (line 58). `subtle` is NOT currently a dep — adding it (A) is fine, or reuse sha2 to hash-then-compare.\n- **B — \"tokens are short-lived (24h).\"** Not in MAP; token expiry duration is unverified. Don't rely on it in deploy comms.\n\n## 3. Canonical identity — recommendation\n\n**Adopt the principal-typed dual model both designs converge on.** It is correct and honors the memory directives (\"don't revive EdgeQuake tenancy\", \"isolation is app-layer only\"):\n\n- **Trusted-service principal** (web, mcp): shared `EDGEQUAKE_API_KEY`. Headers `X-Tenant/Workspace/User-ID` pass through **verbatim, unchanged**. Postgres `readableClause` remains the *sole* isolation authority for the Open/web edition. EdgeQuake stays a single shared index.\n- **End-user principal** (dashboard): per-user JWT; `sub` is canonical caller identity.\n\n**But split the identity decision in two, against both designs' instinct to do it all at once:**\n\n1. **Safe now (autonomous):** on a verified JWT, **overwrite `X-User-ID` from `sub` only.** `sub` is always present, this is pure anti-spoof, and it touches zero handlers (the 43 `TenantContext` readers keep working).\n2. **Blocked / human-decision (do NOT do in the first pass):** stamping `X-Tenant-ID`/`X-Workspace-ID` from JWT claims. This requires (a) a user→default-workspace/tenant membership source that **does not exist** in the login path today, and (b) confirmation that dashboard tenant/workspace UUIDs actually align with how vectors are tagged at index time (they currently do not — web indexes under hardcoded UUIDs). Until both are resolved, claim-based scope stamping would either match nothing or silently broaden scope.\n\nSo: **caller-authentication first; scope-binding is a separate, later, design-gated phase.** EdgeQuake authenticates *who is calling*; it does not become the per-user data-isolation authority for the web path.\n\n## 4. Synthesized recommended plan (ordered, file-by-file)\n\nPrinciple: **opt-in, phased, cannot 401 the live dashboard.** Every new var defaults empty/false; default deploys are byte-identical to today (EdgeQuake is internal-only — no published compose port, ClusterIP + no Ingress — so leaving auth off is not a new regression).\n\n### Phase 0 — Secret fix (default-on, zero blast radius)\n1. `packages/edgequake/crates/edgequake-auth/src/config.rs` — hoist the duplicated default secret (lines 51 & ~129) into a `const SENTINEL`. In `from_env()`: read `JWT_SECRET`; if set, validate `len >= 32` bytes; if unset/empty/== SENTINEL, `tracing::warn!` once; if `EDGEQUAKE_AUTH_STRICT` is truthy, return Err/panic instead. **Do not touch `Default::default()`** (keeps unit tests deterministic). *(autonomous)*\n2. `packages/edgequake/crates/edgequake-api/src/state/postgres.rs:293` — `AuthConfig::default()` → `AuthConfig::from_env()`. *(autonomous)*\n3. `packages/edgequake/crates/edgequake-api/src/state/memory.rs:46/182/272` — switch the **non-test** factories to `from_env()`; **leave the test factory on `AuthConfig::default()`** (confirm which of the three is `test_state` before editing — adopt A's caution, not B's blanket change). *(autonomous, with one verification step)*\n\nWith `JWT_SECRET` unset this is a no-op; with it set the real secret finally takes effect. Ship independently of all enforcement work.\n\n### Phase 1 — Combined gate, built but inert (still default-off)\n4. `packages/edgequake/crates/edgequake-api/src/middleware.rs`:\n   - Replace `validate_api_key`'s `k == key` (line ~134) with a constant-time compare (`subtle::ConstantTimeEq`, or hash-both-sides with the already-present `sha2`). *(autonomous)*\n   - Extend the existing `AuthState` (line ~147) with `jwt: Option<Arc<edgequake_auth::JwtService>>` — **B's minimal extension, not A's parallel struct.** *(autonomous)*\n   - Keep `if !config.enabled { next.run }` and public-path skip unchanged. In the credential branch: ct-match shared key → allow, headers pass through (`AuthPrincipal::Service`); else if `jwt` is `Some` and `verify_token` succeeds → **overwrite `x-user-id` from `sub` only**, pass (`AuthPrincipal::User`); else 401. *(autonomous)*\n   - **Add `/api/v1/auth/login` and `/api/v1/auth/refresh` to `public_paths` (line ~107).** This is mandatory and is the gap in Design A. *(autonomous)*\n5. `packages/edgequake/crates/edgequake-api/src/server.rs` — leave `EDGEQUAKE_API_KEY` gating (96-105) as-is; pass `Some(self.state.jwt_service.clone())` into `AuthState`. Update the 86-95 comment to state JWTs are now accepted. **Do not add `EDGEQUAKE_REQUIRE_AUTH` yet** (defer A's JWT-only toggle until dashboard deployment is confirmed). *(autonomous)*\n\nDefault (no key) → `enforce=false` → identical to today.\n\n### Phase 2 — Make the toggle reachable + reconcile clients (plumbing, still off)\n6. `docker-compose.yml` — add `EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}`, `JWT_SECRET: ${JWT_SECRET:-}`, `EDGEQUAKE_AUTH_STRICT: ${EDGEQUAKE_AUTH_STRICT:-false}` to the **edgequake** env (60-68, currently inert) AND `EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}` to the **mcp-server** env (~236). *(autonomous)*\n7. `deploy/helm/.../templates/edgequake.yaml` — inject `EDGEQUAKE_API_KEY` + `JWT_SECRET` from secret (Deployment env currently omits both). *(autonomous)*\n8. `deploy/helm/.../templates/mcp-server.yaml` — add `EDGEQUAKE_API_KEY` from secret (currently only `AUTH_SECRET`). *(autonomous)*\n9. `deploy/helm/.../templates/secret.yaml` — add an optional `JWT_SECRET` key (`EDGEQUAKE_API_KEY` already at line 14). *(autonomous)*\n10. `.env.example` — document `JWT_SECRET` (>=32 bytes, `openssl rand -hex 32`), `EDGEQUAKE_AUTH_STRICT`, and the enablement order: set key+secret → redeploy web+mcp+edgequake **together** → verify dashboard login + one JWT data call + one shared-key call → only then flip enforcement. *(autonomous)*\n11. `packages/edgequake/crates/edgequake-api/src/routes.rs` — fix the misleading 71-82 \"JWT-claims-first\" doc block to describe the implemented model; decide `/metrics` + `/ws/*` handling (see below). *(doc edit autonomous; route policy = decision)*\n\n### Phase 3 — Scope-binding + authorization (DESIGN-GATED, not autonomous)\n12. `handlers/auth/session.rs` — populate `tenant_id`/`workspace_id` claims via `generate_token_with_claims`. **BLOCKED on a human decision:** there is no user→default-workspace/tenant source in the login path today, and indexed-vector tags use the web app's hardcoded UUID namespace, not dashboard tenant UUIDs. Resolve the membership source + namespace alignment first.\n13. Membership authorization in `query_execute.rs`/`completion.rs`/`query_stream.rs`; reconsider `prompt.rs:20-22` (None-scope → allow-all global read). **Decisions, not autonomous.**\n14. `handlers/auth/api_keys.rs:47` — replace `user_id = \"demo-user\"` with the authenticated principal; request-time validation of Argon2-hashed DB keys is a separate larger task.\n\n## 5. Autonomous vs human-decision summary\n\n**Safe to do autonomously:** Phase 0 entirely (1-3); Phase 1 (4-5) including the login/refresh public-path fix and ct-compare; Phase 2 plumbing (6-11 code/config, default off). These cannot 401 the dashboard because enforcement stays disabled and login is whitelisted.\n\n**Must be a human decision (do NOT ship blind):**\n- Whether `apps/dashboard` is actually deployed in either edition — gates whether the JWT branch and Phase 3 are needed at all.\n- Phase 3 scope-claim population — blocked on the **missing user→workspace membership source** and the **dashboard-vs-indexed-metadata namespace mismatch** (neither design acknowledges the latter; it can silently make dashboard queries return zero results).\n- `/ws/*` (browser cannot send Authorization header) and `/metrics` policy before any enable: whitelist, token-via-query-param, or network policy.\n- Whether to ever go default-on, or keep internal-network isolation as the primary control with auth as defense-in-depth.\n- `EDGEQUAKE_AUTH_STRICT` panic-vs-warn on the sentinel secret.\n- Actual flip of `EDGEQUAKE_API_KEY`/`JWT_SECRET` in prod (forces one dashboard re-login; coordinate the value across EC2 `.env` + Helm secret in one change).\n\n**Net recommendation:** ship Design **B's phasing** with Design **A's combined-layer internals**, fix A's missing login whitelist, keep A's test-factory caution, and explicitly quarantine scope-claim binding behind the unresolved membership + metadata-namespace decisions."
+}

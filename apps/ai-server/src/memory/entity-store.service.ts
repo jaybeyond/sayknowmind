@@ -67,18 +67,30 @@ const TECH_KEYWORDS_KO = [
 
 // 장소 keyword
 const PLACE_KEYWORDS = [
-  '서울', '부산', '인천', '대구', '대before', '광주', '울산', '세종', '제주',
-  '경기', '강원', '충북', '충남', 'before북', 'before남', '경북', '경남',
+  // Korean
+  '서울', '부산', '인천', '대구', '대전', '광주', '울산', '세종', '제주',
+  '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남',
+  // English
   'Seoul', 'Busan', 'Tokyo', 'New York', 'San Francisco', 'London', 'Paris',
   'Singapore', 'Hong Kong', 'Shanghai', 'Beijing', 'Sydney', 'Berlin',
+  // Japanese
+  '東京', '大阪', '京都', '横浜', '名古屋', '札幌', '福岡', '神戸', '日本',
+  // Chinese
+  '北京', '上海', '广州', '深圳', '杭州', '成都', '重庆', '南京', '香港', '台北', '台湾', '中国',
 ];
 
 // occupation keyword
 const OCCUPATION_KEYWORDS = [
+  // Korean
   '개발자', '디자이너', '기획자', '마케터', '엔지니어', '학생', '교사', '교수',
   '의사', '변호사', '회계사', '컨설턴트', '매니저', '대표', 'CEO', 'CTO',
+  // English
   'developer', 'designer', 'engineer', 'student', 'teacher', 'manager',
   'analyst', 'consultant', 'architect', 'scientist', 'researcher',
+  // Japanese
+  'エンジニア', 'デザイナー', '開発者', 'プログラマー', '医者', '教師', '学生', '弁護士', '研究者', 'マネージャー',
+  // Chinese
+  '开发者', '设计师', '工程师', '程序员', '学生', '老师', '医生', '律师', '研究员', '经理', '会计师',
 ];
 
 @Injectable()
@@ -254,15 +266,15 @@ export class EntityStoreService {
   ): Promise<ExtractedEntity[]> {
     if (!aiRouter) return [];
 
-    const extractionPrompt = `next 텍스트에서 during요한 Entity(개체)를 추출please do.
-추출할 Entity type: PERSON(사람), TECH(기술), PLACE(장소), ORG(조직), CONCEPT(개념), PRODUCT(제품), EVENT(event)
+    const extractionPrompt = `다음 텍스트에서 중요한 엔티티(개체)를 추출하세요.
+추출할 엔티티 유형: PERSON(사람), TECH(기술), PLACE(장소), ORG(조직), CONCEPT(개념), PRODUCT(제품), EVENT(이벤트)
 
 텍스트: "${text.substring(0, 500)}"
 
-JSON array로만 응답please do. 예시:
+JSON 배열로만 응답하세요. 예시:
 [{"name": "React", "type": "TECH"}, {"name": "서울", "type": "PLACE"}]
 
-during요하지 않은 일반 단어는 제외please do. max 5개만 추출please do.`;
+중요하지 않은 일반 단어는 제외하세요. 최대 5개만 추출하세요.`;
 
     try {
       // local model 우선 사용 (Ollama)

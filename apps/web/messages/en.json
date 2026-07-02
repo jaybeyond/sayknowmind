@@ -903,6 +903,7 @@
       "you": "(you)",
       "inviteHeading": "Invite a teammate",
       "invitePlaceholder": "colleague@example.com",
+      "invitePlaceholderSaas": "Employee number or email",
       "inviteButton": "Invite",
       "pendingHeading": "Pending invitations",
       "invitedAs": "Invited as {role} · Pending",

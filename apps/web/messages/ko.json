@@ -903,6 +903,7 @@
       "you": "(나)",
       "inviteHeading": "팀원 초대",
       "invitePlaceholder": "colleague@example.com",
+      "invitePlaceholderSaas": "사원번호 또는 이메일",
       "inviteButton": "초대",
       "pendingHeading": "초대 대기 중",
       "invitedAs": "{role}(으)로 초대됨 · 대기 중",

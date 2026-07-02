@@ -4,11 +4,13 @@ import {
   Param,
   Get,
   Logger,
+  UseGuards,
   HttpCode,
   HttpStatus,
   BadRequestException,
 } from '@nestjs/common';
 import { GdprService, GdprDeletionResult } from './gdpr.service';
+import { SignatureGuard } from '../auth/signature.guard';
 
 /**
  * GDPR Controller
@@ -19,6 +21,9 @@ import { GdprService, GdprDeletionResult } from './gdpr.service';
  * 
  * Requirements: 8.4
  */
+// Destructive GDPR deletion + data-existence probe by arbitrary userId — must
+// require AI-server authentication (API key / signed request).
+@UseGuards(SignatureGuard)
 @Controller('intelligence/user')
 export class GdprController {
   private readonly logger = new Logger(GdprController.name);

@@ -9,6 +9,8 @@ import { RelayClient } from "./client";
 import { detectConflict, resolveConflict } from "./conflict-resolver";
 import { isRelayConfigured, getRelayUrl, issueRelayToken, getDeviceId } from "./token";
 import type { SyncPayload } from "./types";
+import { deleteDocument as deleteEdgeQuakeDocument } from "@/lib/edgequake/client";
+import { ensureEqDocumentIdColumn } from "@/lib/ingest/document-store";
 
 /** Raw row shape from sync_ledger SQL query (snake_case). */
 interface SyncLedgerRow {
@@ -336,10 +338,18 @@ async function applyDelete(pool: Pool, userId: string, payload: SyncPayload): Pr
   const data = payload.data as { id?: string };
   if (!data.id) return;
 
-  await pool.query(
-    `DELETE FROM documents WHERE id = $1 AND user_id = $2`,
+  await ensureEqDocumentIdColumn();
+  const del = await pool.query(
+    `DELETE FROM documents WHERE id = $1 AND user_id = $2 RETURNING eq_document_id`,
     [data.id, userId],
   );
+  // Best-effort de-index from the shared EdgeQuake corpus.
+  const eqDocId = del.rows[0]?.eq_document_id as string | null;
+  if (eqDocId) {
+    deleteEdgeQuakeDocument(eqDocId).catch((eqErr) =>
+      console.warn("[relay] EdgeQuake de-index failed:", eqErr),
+    );
+  }
 }
 
 /**

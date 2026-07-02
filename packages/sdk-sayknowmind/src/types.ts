@@ -9,6 +9,7 @@ export interface SearchParams {
   mode?: "naive" | "local" | "global" | "hybrid" | "mix";
   limit?: number;
   offset?: number;
+  /** Nested under `filters` when sent to the server. */
   categoryIds?: string[];
   dateRange?: { start: string; end: string };
   tags?: string[];
@@ -71,10 +72,23 @@ export interface ChatResponse {
   relatedDocuments: string[];
 }
 
-export interface ChatStreamEvent {
-  type: "text" | "citation" | "step" | "done" | "error";
-  data: string;
+/** Source entry emitted in the SSE `sources` event. */
+export interface StreamSource {
+  id: string;
+  title: string;
+  url?: string;
+  excerpt: string;
+  score: number;
 }
+
+// Discriminated union matching the server SSE event schema (stream-writer.ts).
+export type ChatStreamEvent =
+  | { type: "status"; phase: string; message: string }
+  | { type: "log"; message: string }
+  | { type: "sources"; sources: StreamSource[] }
+  | { type: "answer"; token: string }
+  | { type: "done"; conversationId: string; messageId: string }
+  | { type: "error"; message: string };
 
 export interface Category {
   id: string;

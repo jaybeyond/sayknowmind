@@ -110,7 +110,7 @@ SayKnowMind is a full-stack, cross-platform knowledge management system built on
 | **Frontend** | Next.js 16, React 19, Tailwind CSS, shadcn/ui |
 | **Search Engine** | EdgeQuake (Rust), Apache AGE, pgvector |
 | **AI Server** | sayknow-ai-server (OpenRouter, Ollama, WebLLM cascade) |
-| **Agent Runtime** | ZeroClaw (Rust), LangGraph Orchestrator |
+| **Agent Runtime** | TypeScript orchestrator (`lib/agents/`); ZeroClaw (external binary, not in-repo); LangGraph module is present but unused in active routes |
 | **Database** | PostgreSQL 16 + pgvector + Apache AGE |
 | **Authentication** | better-auth (email/password, JWT, session management) |
 | **Desktop** | Tauri (Windows/macOS/Linux) |
@@ -118,7 +118,7 @@ SayKnowMind is a full-stack, cross-platform knowledge management system built on
 | **MCP** | @modelcontextprotocol/sdk (JSON-RPC 2.0) |
 | **SDKs** | TypeScript, Python (httpx), Go |
 | **Encryption** | AES-256-GCM (per-user key derivation) |
-| **i18n** | Korean, English (next-intl) |
+| **i18n** | Korean, English, Chinese, Japanese (custom i18n setup — `lib/i18n.ts`) |
 | **Graph Viz** | Sigma.js (knowledge graph), React Flow (category graph) |
 | **Deployment** | Docker Compose (9 services) |
 | **License** | Apache 2.0 |
@@ -165,7 +165,7 @@ sayknowmind/
 │   │   │   ├── shared-mode.ts  # IPFS/Arweave/Ceramic sharing
 │   │   │   ├── sync.ts         # Tailscale + Syncthing sync
 │   │   │   └── types.ts        # Domain type definitions
-│   │   ├── messages/           # i18n (en.json, ko.json)
+│   │   ├── messages/           # i18n (en.json, ko.json, zh.json, ja.json)
 │   │   ├── __tests__/          # 20 property-based test files (Vitest + fast-check)
 │   │   └── middleware.ts       # Auth guard for all API routes
 │   ├── ai-server/              # sayknow-ai-server (LLM routing engine)
@@ -180,7 +180,7 @@ sayknowmind/
 │   ├── sdk-sayknowmind/        # SayKnowMind TypeScript SDK
 │   ├── sdk-python/             # SayKnowMind Python SDK (httpx)
 │   ├── sdk-go/                 # SayKnowMind Go SDK
-│   └── zeroclaw/               # Rust agent runtime
+│   └── zeroclaw/               # ⚠️ NOT in this repo — ZeroClaw is an external binary (see AGENTS.md)
 ├── db/
 │   ├── init/
 │   │   ├── 01-edgequake-init.sql   # EdgeQuake schema
@@ -483,12 +483,15 @@ SayKnowMind exposes a [Model Context Protocol](https://modelcontextprotocol.io/)
 
 | Tool | Description |
 |------|-------------|
-| `sayknowmind.search` | Search the knowledge base |
-| `sayknowmind.ingest` | Ingest new content |
-| `sayknowmind.document.get` | Retrieve a document |
-| `sayknowmind.document.list` | List documents |
-| `sayknowmind.graph.query` | Query the knowledge graph |
-| `sayknowmind.health` | Check system health |
+| `query` | Execute RAG queries against the knowledge graph |
+| `document_upload` | Upload text content for knowledge extraction |
+| `document_list` | List documents with pagination/filtering |
+| `document_get` | Get document details |
+| `document_delete` | Delete a document |
+| `workspace_create` | Create a new workspace |
+| `workspace_list` | List all workspaces |
+| `graph_entity_neighborhood` | Explore entity relationships |
+| `health_check` | Check backend connectivity |
 
 ### Claude Desktop Configuration
 
@@ -497,7 +500,7 @@ SayKnowMind exposes a [Model Context Protocol](https://modelcontextprotocol.io/)
   "mcpServers": {
     "sayknowmind": {
       "command": "npx",
-      "args": ["-y", "@sayknowmind/mcp-server"],
+      "args": ["-y", "@edgequake/mcp-server"],
       "env": {
         "EDGEQUAKE_URL": "http://localhost:8080",
         "AUTH_SECRET": "your-auth-secret"

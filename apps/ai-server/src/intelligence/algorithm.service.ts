@@ -54,43 +54,43 @@ export class AlgorithmService {
   // search needed keyword pattern
   private readonly SEARCH_PATTERNS = [
     // time 관련
-    /오늘|내일|어제|current|지금|최근|요즘|today|tomorrow|yesterday|current|now|recent|lately/i,
+    /오늘|내일|어제|지금|최근|요즘|today|tomorrow|yesterday|current|now|recent|lately|今日|明日|昨日|今|最近|今天|明天|昨天|现在/i,
     // 날씨
-    /날씨|기온|비|눈|맑|흐림|weather|forecast|temperature/i,
+    /날씨|기온|비|눈|맑|흐림|weather|forecast|temperature|天気|気温|天气|气温|下雨/i,
     // 뉴스/info
-    /뉴스|소식|news|latest|속보|breaking/i,
+    /뉴스|소식|news|latest|속보|breaking|ニュース|最新|新闻|消息/i,
     // 가격/시세
-    /주가|주식|stock|price|시세|환율|가격|얼마/i,
+    /주가|주식|stock|price|시세|환율|가격|얼마|株価|株|価格|為替|いくら|股价|股票|价格|汇率|多少钱/i,
     // 검색 요청
-    /검색해|찾아봐|search|look up|알아봐|찾아줘/i,
+    /검색해|찾아봐|search|look up|알아봐|찾아줘|検索|調べて|探して|搜索|查一下|找一下/i,
     // location/장소
-    /어디서|어디에|where|location|장소|맛집|추천/i,
+    /어디서|어디에|where|location|장소|맛집|추천|どこ|場所|おすすめ|哪里|在哪|地点|推荐/i,
     // 사실 확인
-    /사실인가|진짜|정말|is it true|really|actually/i,
+    /사실인가|진짜|정말|is it true|really|actually|本当|まじで|真的吗|是真的/i,
     // event/일정
-    /언제|when|일정|schedule|event|행사/i,
+    /언제|when|일정|schedule|event|행사|いつ|予定|スケジュール|什么时候|日程|活动/i,
   ];
 
   // 사고 모드 필요 keyword pattern
   private readonly THINKING_PATTERNS = [
     // 코드 관련
-    /코드|함수|클래스|버그|에러|code|function|class|bug|error|debug|```/i,
+    /코드|함수|클래스|버그|에러|code|function|class|bug|error|debug|```|コード|関数|クラス|バグ|エラー|代码|函数|类|错误|调试/i,
     // 분석/설명
-    /분석|analyze|analysis|설명해|explain|왜|why|이유/i,
+    /분석|analyze|analysis|설명해|explain|왜|why|이유|分析|説明|なぜ|理由|说明|解释|为什么|原因/i,
     // 비교
-    /비교|compare|차이|difference|장단점|pros|cons|vs/i,
-    // 설계/아key텍처
-    /설계|design|아key텍처|architecture|structure|structure/i,
+    /비교|compare|차이|difference|장단점|pros|cons|vs|比較|違い|メリット|比较|区别|优缺点/i,
+    // 설계/아키텍처
+    /설계|design|아키텍처|architecture|structure|設計|アーキテクチャ|構造|设计|架构|结构/i,
     // 최적화
-    /최적화|optimize|성능|performance|개선|improve/i,
+    /최적화|optimize|성능|performance|개선|improve|最適化|性能|改善|优化|改进/i,
     // 알고리즘/로직
-    /알고리즘|algorithm|로직|logic|구현|implement/i,
+    /알고리즘|algorithm|로직|logic|구현|implement|アルゴリズム|ロジック|実装|算法|逻辑|实现/i,
     // 문제 해결
-    /문제|problem|해결|solve|solution|풀어/i,
+    /문제|problem|해결|solve|solution|풀어|問題|解決|问题|解决/i,
     // 수학/계산
-    /계산|calculate|수학|math|공식|formula/i,
+    /계산|calculate|수학|math|공식|formula|計算|数学|公式|计算/i,
     // complex 추론
-    /단계별|step by step|차근차근|하나씩/i,
+    /단계별|step by step|차근차근|하나씩|段階的|一つずつ|一步步|逐步/i,
   ];
 
   // Language detection pattern
@@ -391,23 +391,16 @@ export class AlgorithmService {
    * 학습을 above한 최근 Get Span
    */
   private async getRecentSpansForLearning(): Promise<any[]> {
-    // AdapterService를 통해 최근 완료된 Get Span
-    // 실제 구현에서는 SpanService를 직접 사용하거나 AdapterService에 메서드 추가 필요
-    try {
-      // cache된 글로벌 메트릭에서 모델 분포 확인
-      const globalMetrics = await this.adapterService.getGlobalMetrics('24h');
-      if (globalMetrics && globalMetrics.modelDistribution) {
-        // 모델 분포 data를 기반으로 가상의 Span data 생성
-        // 실제 구현에서는 SpanService.findMany를 사용
-        return globalMetrics.modelDistribution.map(dist => ({
-          modelUsed: dist.model,
-          count: dist.count,
-          success: true,
-        }));
-      }
-    } catch (error) {
-      this.logger.warn('Failed to get recent spans for learning:', error);
-    }
+    // Real span data requires SpanService access, which AlgorithmService does not
+    // hold directly (only AdapterService is injected). The previous implementation
+    // fabricated spans from globalMetrics.modelDistribution — synthetic, always-
+    // success records that caused the learning pipeline to reinforce patterns from
+    // non-existent data and report fabricated cost/token analytics.
+    //
+    // Until SpanService is injected here (or AdapterService exposes a raw-span
+    // method for the global window), return empty so learnPatterns() exits early
+    // with patternsLearned=0 rather than learning from fabricated inputs.
+    // See: DEEP-ANALYSIS-2026-06-22 AISRV-10 / audit item DB-10.
     return [];
   }
 
@@ -673,28 +666,28 @@ export class AlgorithmService {
     // 코드 관련
     if (
       query.includes('```') ||
-      /코드|함수|클래스|code|function|class|debug|error|bug/i.test(lowerQuery)
+      /코드|함수|클래스|code|function|class|debug|error|bug|コード|関数|クラス|代码|函数|类/i.test(lowerQuery)
     ) {
       return 'code';
     }
 
     // 검색 관련
     if (
-      /검색|찾아|search|find|look up/i.test(lowerQuery)
+      /검색|찾아|search|find|look up|検索|探して|調べて|搜索|查找/i.test(lowerQuery)
     ) {
       return 'search';
     }
 
     // 번역 관련
     if (
-      /번역|translate|English로|Korean로|Japanese로/i.test(lowerQuery)
+      /번역|translate|English로|Korean로|Japanese로|翻訳|翻译/i.test(lowerQuery)
     ) {
       return 'translation';
     }
 
     // 분석 관련
     if (
-      /분석|analyze|설명|explain/i.test(lowerQuery)
+      /분석|analyze|설명|explain|分析|説明|说明|解释/i.test(lowerQuery)
     ) {
       return 'analysis';
     }
@@ -712,7 +705,7 @@ export class AlgorithmService {
     }
 
     // 단순 인사/감사
-    if (/^(inside녕|hi|hello|thanks|감사|고마워)/i.test(query)) {
+    if (/^(안녕|hi|hello|thanks|감사|고마워|こんにちは|ありがとう|どうも|你好|您好|谢谢|謝謝)/i.test(query)) {
       return true;
     }
 

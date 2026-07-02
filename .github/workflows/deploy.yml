@@ -38,51 +38,82 @@ jobs:
             echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Generate docker-compose.prod.yml
-        run: |
-          cat > docker-compose.prod.yml << 'COMPOSE'
-          version: "3.8"
-          services:
-            web:
-              image: ${REGISTRY}/${IMAGE_PREFIX}-web:${TAG}
-              restart: always
-              ports: ["3000:3000"]
-              env_file: .env
-              depends_on:
-                postgres: { condition: service_healthy }
-            ai-server:
-              image: ${REGISTRY}/${IMAGE_PREFIX}-ai-server:${TAG}
-              restart: always
-              ports: ["4000:4000"]
-              env_file: .env
-            dashboard:
-              image: ${REGISTRY}/${IMAGE_PREFIX}-dashboard:${TAG}
-              restart: always
-              ports: ["3001:3000"]
-            mcp-server:
-              image: ${REGISTRY}/${IMAGE_PREFIX}-mcp-server:${TAG}
-              restart: always
-              ports: ["8082:8082"]
-          COMPOSE
-
-      # WARNING: this is NOT the canonical deploy path — scripts/production-deploy.sh is.
-      # This step is UNSAFE as written and must not be enabled against the production DB
-      # until it is unified with the tracked runner:
-      #   1. It applies db/migrations/*.sql blindly with `|| true`, masking failures AND
-      #      RE-RUNNING destructive migrations every release. 031_conversations_simple
-      #      DROPs the conversations/messages tables — re-running it wipes live chat data.
-      #   2. There is no schema_migrations tracking here, so db/migrations/scripts/migrate.sh
-      #      cannot be dropped in directly until production's schema_migrations table is
-      #      backfilled with the already-applied filenames (otherwise migrate.sh also
-      #      re-runs 031). See production-deploy.sh for the curated, idempotent list.
       - name: Run DB migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          for f in db/migrations/*.sql; do
-            echo "Applying: $f"
-            psql "$DATABASE_URL" -f "$f" 2>&1 || true
-          done
+          set -euo pipefail
+          # Canonical, ordered, idempotent migration list — mirrors scripts/production-deploy.sh.
+          # Failures propagate immediately (no || true except where explicitly noted).
+          apply() {
+            local f="$1"
+            if [ ! -f "$f" ]; then echo "skip (missing): $f"; return 0; fi
+            echo "==> $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          }
+
+          apply db/init/10-integration-tokens.sql
+
+          # 028 has a data-migration step from a legacy table that may not exist
+          # on a fresh DB — the CREATE TABLE still runs, so || true is safe here.
+          apply db/migrations/028_channel_links.sql || true
+          apply db/migrations/029_add_bot_token_to_channel_links.sql
+          apply db/migrations/030_add_lang_to_channel_links.sql
+
+          # 031 GUARD: this migration contains DROP TABLE IF EXISTS — re-running it
+          # wipes live chat data. Skip when the simple (id PK, user_id TEXT) schema
+          # is already in place.
+          CONV_SHAPE=$(psql "$DATABASE_URL" -tAc \
+            "SELECT data_type FROM information_schema.columns
+             WHERE table_name='conversations' AND column_name='user_id'" 2>/dev/null || true)
+          if [ "$CONV_SHAPE" = "text" ]; then
+            echo "skip (guard): 031_conversations_simple.sql — simple schema already applied"
+          else
+            apply db/migrations/031_conversations_simple.sql
+          fi
+
+          apply db/migrations/032_document_relations.sql
+          apply db/migrations/033_categories_unique_index.sql
+          apply db/migrations/034_notifications.sql
+          apply db/migrations/035_admin_role.sql
+          apply db/migrations/036_shared_content_share_token.sql
+          apply db/migrations/037_channel_links_unique_channel_user.sql
+          apply db/migrations/038_user_provider_configs.sql
+          apply db/migrations/039_daily_usage_limits.sql
+          # 040 only relevant for existing DBs with old rateLimit schema; best-effort.
+          apply db/migrations/040_fix_ratelimit_for_better_auth_156.sql || true
+          apply db/migrations/041_user_mcp_keys.sql
+          apply db/migrations/042_tags_table.sql
+          apply db/migrations/043_documents_web_compat.sql
+          apply db/migrations/044_user_locale.sql
+          apply db/migrations/045_fix_ocp_base_url.sql
+          apply db/migrations/046_fix_provider_models.sql
+          apply db/migrations/047_telegram_processed_updates.sql
+          apply db/migrations/048_fix_codex_chatgpt_models.sql
+          apply db/migrations/049_web_graph_schema_compat.sql
+          apply db/migrations/050_telegram_per_bot_link_scope.sql
+          apply db/migrations/051_mcp_audit_log.sql
+          apply db/migrations/052_categories_unique_per_user_parent.sql
+          apply db/migrations/053_add_organization_tables.sql
+          apply db/migrations/054_add_organization_id_to_resources.sql
+          apply db/migrations/055_team_visibility_defaults.sql
+          apply db/migrations/056_add_resource_shares.sql
+          apply db/migrations/057_backfill_orphan_organization_id.sql
+          apply db/migrations/058_add_resource_team_shares.sql
+          apply db/migrations/059_add_doc_collab.sql
+          apply db/migrations/060_add_category_kind.sql
+          apply db/migrations/061_add_document_versions.sql
+          apply db/migrations/062_hash_mcp_api_keys.sql
+          apply db/migrations/063_entities_per_org_unique.sql
+          apply db/migrations/064_add_eq_document_id.sql
+          apply db/migrations/065_privacy_default_and_share_cleanup.sql
+          apply db/migrations/066_rls_org_backstop.sql
+
+          # better-auth rateLimit (no migration file ships this)
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c '
+            CREATE TABLE IF NOT EXISTS "rateLimit" (
+              id text PRIMARY KEY, key text, count integer DEFAULT 0, "lastRequest" bigint
+            );'
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
@@ -95,6 +126,9 @@ jobs:
             export TAG=${{ steps.tag.outputs.tag }}
             export REGISTRY=${{ env.REGISTRY }}
             export IMAGE_PREFIX=${{ env.IMAGE_PREFIX }}
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            # Use the repo's docker-compose.yml (all services: postgres, edgequake,
+            # relay-server, web, etc.). Pull image: services first, then up with
+            # --build so services using build: directives pick up the new commit.
+            docker compose pull 2>/dev/null || true
+            docker compose up -d --build --remove-orphans
             echo "Deployed $TAG"

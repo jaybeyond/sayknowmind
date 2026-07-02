@@ -237,15 +237,15 @@ export class UserMemoryService {
     if (!aiRouter) return null;
     
     try {
-      const extractionPrompt = `next from conversation user info를 JSON으로 추출please do.
-추출할 info: name(name), occupation(occupation), location(거주지), interests(interests array), facts(during요한 사실 array)
-infoif not present null로 설정. 추측do not. 명확히 언급된 것만 추출please do.
+      const extractionPrompt = `다음 대화에서 사용자 정보를 JSON으로 추출하세요.
+추출할 정보: name(이름), occupation(직업), location(거주지), interests(관심사 배열), facts(중요한 사실 배열)
+정보가 없으면 null로 설정하세요. 추측하지 마세요. 명확히 언급된 것만 추출하세요.
 
 대화:
 User: ${userMessage.substring(0, 500)}
 Assistant: ${assistantResponse.substring(0, 500)}
 
-JSON format으로만 응답please do:`;
+JSON 형식으로만 응답하세요:`;
 
       const result = await aiRouter.chatWithCascade(
         [{ role: 'user', content: extractionPrompt }],
@@ -470,13 +470,22 @@ JSON format으로만 응답please do:`;
       'data분석', 'data사이언스', 'Data Science', 'Big Data',
       // 도구
       'Docker', 'Kubernetes', 'Git', 'Linux', 'Figma', 'Photoshop',
+      // Japanese / Chinese native tech terms
+      '機械学習', 'ディープラーニング', '人工知能', 'バックエンド', 'フロントエンド', 'プログラミング',
+      '机器学习', '深度学习', '人工智能', '后端', '前端', '编程', '云计算',
     ];
     
     // 취미/interests keyword
     const hobbyKeywords = [
+      // Korean
       '게임', '영화', '음악', '독서', '여행', '운동', '요리', '사진', '그림', '글쓰기',
-      '등산', '수영', '자before거', '러닝', '요가', '헬스',
+      '등산', '수영', '자전거', '러닝', '요가', '헬스',
+      // English
       'gaming', 'movies', 'music', 'reading', 'travel', 'cooking', 'photography',
+      // Japanese
+      'ゲーム', '映画', '音楽', '読書', '旅行', '運動', '料理', '写真', '登山', '水泳', 'ランニング', 'ヨガ',
+      // Chinese
+      '游戏', '电影', '音乐', '阅读', '旅行', '运动', '烹饪', '摄影', '登山', '游泳', '跑步', '瑜伽',
     ];
     
     const allKeywords = [...techKeywords, ...hobbyKeywords];
@@ -490,9 +499,17 @@ JSON format으로만 응답please do:`;
     
     // during요한 사실 추출 (문장 pattern)
     const factPatterns = [
-      /(?:저는|나는|제가) (.{5,50})(?:해요|does|예요|야)/g,
-      /(?:요즘|최근에) (.{5,40})(?:하고 있어|during이에요)/g,
+      // Korean
+      /(?:저는|나는|제가) (.{5,50})(?:해요|합니다|예요|야)/g,
+      /(?:요즘|최근에) (.{5,40})(?:하고 있어|중이에요)/g,
       /(.{5,40})(?:에 관심이 있어|을 배우고 있어)/g,
+      // Japanese
+      /(?:私は|僕は|俺は|わたしは)(.{3,40})(?:です|ます|だ|である)/g,
+      /(?:最近|今)(.{3,40})(?:しています|してる|中です)/g,
+      // Chinese
+      /(?:我是|我在|我喜欢|我正在|我的)(.{2,30})/g,
+      // English
+      /(?:I am|I'm|I work as|I like|I love)\s+(.{3,50})/gi,
     ];
     
     for (const pattern of factPatterns) {

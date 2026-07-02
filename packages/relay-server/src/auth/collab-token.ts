@@ -23,34 +23,46 @@ export interface CollabTokenPayload {
   canWrite: boolean; // false => read-only collaborator
 }
 
+// Verification accepts the primary RELAY_SHARED_SECRET plus the comma-separated
+// RELAY_SHARED_SECRET_PREVIOUS secrets, for zero-downtime secret rotation.
 const SHARED_SECRET = process.env.RELAY_SHARED_SECRET ?? "";
+const PREVIOUS_SECRETS = (process.env.RELAY_SHARED_SECRET_PREVIOUS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const VERIFY_SECRETS = [SHARED_SECRET, ...PREVIOUS_SECRETS].filter(Boolean);
 
 function base64UrlDecode(data: string): string {
   return Buffer.from(data, "base64url").toString("utf-8");
 }
 
-function sign(header: string, payload: string): string {
-  return createHmac("sha256", SHARED_SECRET)
+function signWith(secret: string, header: string, payload: string): string {
+  return createHmac("sha256", secret)
     .update(`${header}.${payload}`)
     .digest("base64url");
 }
 
 export function verifyCollabToken(token: string): CollabTokenPayload | null {
-  if (!SHARED_SECRET) return null;
+  if (VERIFY_SECRETS.length === 0) return null;
 
   const parts = token.split(".");
   if (parts.length !== 3) return null;
 
   const [header, payload, signature] = parts;
-  const expectedSig = sign(header, payload);
 
-  // Constant-time comparison
-  if (signature.length !== expectedSig.length) return null;
-  let mismatch = 0;
-  for (let i = 0; i < signature.length; i++) {
-    mismatch |= signature.charCodeAt(i) ^ expectedSig.charCodeAt(i);
+  // Accept a signature from ANY currently-valid secret (rotation overlap).
+  // Compare against every secret without early-exit to keep timing uniform.
+  let matched = false;
+  for (const secret of VERIFY_SECRETS) {
+    const expectedSig = signWith(secret, header, payload);
+    if (signature.length !== expectedSig.length) continue;
+    let mismatch = 0;
+    for (let i = 0; i < signature.length; i++) {
+      mismatch |= signature.charCodeAt(i) ^ expectedSig.charCodeAt(i);
+    }
+    if (mismatch === 0) matched = true;
   }
-  if (mismatch !== 0) return null;
+  if (!matched) return null;
 
   try {
     const decoded = JSON.parse(base64UrlDecode(payload)) as CollabTokenPayload;

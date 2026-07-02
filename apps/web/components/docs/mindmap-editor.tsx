@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronDown, Circle, Smile, Image as ImageIcon, ArrowUp, ArrowDown, History } from "lucide-react";
+import { ChevronLeft, ChevronDown, Circle, Smile, Image as ImageIcon, ArrowUp, ArrowDown, History, Share2, Link2, Users } from "lucide-react";
 import type { MindElixirData, MindElixirInstance, Operation, Theme } from "mind-elixir";
+import type { YMapEvent } from "yjs";
 import { en as meEn, ko as meKo, ja as meJa, zh_CN as meZh, type LangPack } from "mind-elixir/i18n";
 import "mind-elixir/style.css";
 import { toast } from "sonner";
@@ -11,6 +12,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "@/components/ui/dropdown-menu";
 import { SummaryButton } from "./summary-button";
 import { VersionHistoryPanel } from "./version-history-panel";
+import { ShareDialog } from "@/components/dashboard/share-dialog";
+import { ShareToTeamsDialog } from "@/components/dashboard/share-to-teams-dialog";
 
 // Built-in mind-elixir context-menu language packs, keyed by our app locales.
 const ME_LOCALE: Record<string, LangPack> = { en: meEn, ko: meKo, ja: meJa, zh: meZh };
@@ -30,6 +33,83 @@ interface MindmapEditorProps {
 type SaveStatus = "saved" | "saving" | "unsaved";
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
+// ── Collab token refresh ──────────────────────────────────────────────────────
+const COLLAB_TOKEN_REFRESH_SKEW_MS = 60_000;
+const COLLAB_RECONNECT_BASE_DELAY_MS = 1_000;
+const COLLAB_RECONNECT_MAX_DELAY_MS = 30_000;
+const HOCUSPOCUS_UNAUTHORIZED_CLOSE_CODE = 4401;
+
+function getJwtExpiryMs(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const decoded = JSON.parse(atob(padded)) as { exp?: unknown };
+    return typeof decoded.exp === "number" ? decoded.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function tokenNeedsRefresh(token: string): boolean {
+  const expiry = getJwtExpiryMs(token);
+  return expiry === null || expiry - Date.now() <= COLLAB_TOKEN_REFRESH_SKEW_MS;
+}
+
+// ── Per-node CRDT helpers ─────────────────────────────────────────────────────
+// The mindmap Y.Doc uses two maps instead of one whole-blob key:
+//   "mindmap:nodes"  — flat map of nodeId → JSON of node content (no children)
+//   "mindmap:meta"   — "structure" (parentId → orderedChildIds) + "direction"
+//
+// Two peers editing different nodes each write their own key in "mindmap:nodes"
+// so their changes merge at the entry level rather than clobbering the whole doc.
+
+type NodeStructure = Record<string, string[]>;
+
+function flattenNodes(nodeData: MindElixirData["nodeData"]): Record<string, string> {
+  const result: Record<string, string> = {};
+  const walk = (node: MindElixirData["nodeData"]) => {
+    const { children: _children, ...content } = node;
+    result[node.id] = JSON.stringify(content);
+    node.children?.forEach(walk);
+  };
+  walk(nodeData);
+  return result;
+}
+
+function extractStructure(nodeData: MindElixirData["nodeData"]): NodeStructure {
+  const result: NodeStructure = {};
+  const walk = (node: MindElixirData["nodeData"]) => {
+    result[node.id] = node.children?.map((c) => c.id) ?? [];
+    node.children?.forEach(walk);
+  };
+  walk(nodeData);
+  return result;
+}
+
+function reconstructNodeData(
+  flatNodes: Record<string, string>,
+  structure: NodeStructure,
+): MindElixirData["nodeData"] | null {
+  const allChildIds = new Set(Object.values(structure).flat());
+  const rootId = Object.keys(flatNodes).find((id) => !allChildIds.has(id));
+  if (!rootId) return null;
+  const build = (id: string): MindElixirData["nodeData"] | null => {
+    const raw = flatNodes[id];
+    if (!raw) return null;
+    try {
+      const content = JSON.parse(raw) as MindElixirData["nodeData"];
+      const childIds = structure[id] ?? [];
+      const children = childIds.map((cid) => build(cid)).filter(Boolean) as MindElixirData["nodeData"][];
+      return { ...content, ...(children.length > 0 ? { children } : {}) };
+    } catch {
+      return null;
+    }
+  };
+  return build(rootId);
+}
+
 
 // ── Theme mapped to the project's design tokens ──────────────────────────────
 // mind-elixir applies cssVar via element.style.setProperty, so `var(--token)`
@@ -77,6 +157,9 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
   const [title, setTitle] = React.useState(initialTitle);
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("saved");
   const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [shareMenuOpen, setShareMenuOpen] = React.useState(false);
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [teamShareOpen, setTeamShareOpen] = React.useState(false);
   const [colorOpen, setColorOpen] = React.useState(false);
   const [emojiOpen, setEmojiOpen] = React.useState(false);
   const [imageOpen, setImageOpen] = React.useState(false);
@@ -101,6 +184,11 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
   // Set when content changed since last index; on unmount we trigger a
   // process job (summary + embedding + EdgeQuake) so RAG sees the latest.
   const dirtyRef = React.useRef(false);
+  // Auth token refresh / reconnect state (mirrors doc-tabs collab pattern).
+  const collabSessionRef = React.useRef<CollabSession | null>(null);
+  const forceTokenRefreshRef = React.useRef(false);
+  const authReconnectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authReconnectAttemptsRef = React.useRef(0);
 
   const persist = React.useCallback(
     async (titleValue: string, data: MindElixirData) => {
@@ -282,24 +370,85 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
         const { HocuspocusProvider } = await import("@hocuspocus/provider");
         if (disposed) return;
 
-        const ydoc = new Y.Doc();
-        const provider = new HocuspocusProvider({ url: session.wsUrl, name: docId, token: session.token, document: ydoc });
-        const ymap = ydoc.getMap("mindmap");
+        // Store session in ref so the token-refresh callback can update it.
+        collabSessionRef.current = session;
 
-        // Apply a peer's state. Skips echoes (same JSON) and, while the local
-        // user is mid-edit, defers the update instead of yanking the canvas —
-        // the deferred state is flushed once they go idle.
+        // Async token provider — refreshes when the JWT nears expiry. Mirrors
+        // the same pattern used by doc-tabs.tsx (getTokenForConnect).
+        const getTokenForConnect = async (): Promise<string> => {
+          const current = collabSessionRef.current!;
+          if (!forceTokenRefreshRef.current && !tokenNeedsRefresh(current.token)) return current.token;
+          try {
+            const res = await fetch(`/api/documents/${docId}/collab-token`, { cache: "no-store" });
+            if (res.ok) {
+              const fresh = (await res.json()) as CollabSession;
+              if (fresh?.token) {
+                collabSessionRef.current = fresh;
+                forceTokenRefreshRef.current = false;
+                return fresh.token;
+              }
+            }
+          } catch {
+            // Fall back to last known token; auth-failure loop will retry.
+          }
+          forceTokenRefreshRef.current = false;
+          return current.token;
+        };
+
+        const ydoc = new Y.Doc();
+        const provider = new HocuspocusProvider({ url: session.wsUrl, name: docId, token: getTokenForConnect, document: ydoc });
+
+        // Per-node CRDT maps: "mindmap:nodes" holds one entry per node (keyed
+        // by node ID); "mindmap:meta" holds the tree structure + direction.
+        // Concurrent edits to different nodes merge at the Y.Map entry level
+        // rather than replacing the whole document.
+        const ynodes = ydoc.getMap<string>("mindmap:nodes");
+        const ymeta = ydoc.getMap<string>("mindmap:meta");
+
+        // Helper: write the full mindmap state into the two Y.Maps.
+        const writeToYDoc = (data: MindElixirData) => {
+          const newFlatNodes = flattenNodes(data.nodeData);
+          const structure = extractStructure(data.nodeData);
+          ydoc.transact(() => {
+            // Update / add nodes.
+            for (const [id, content] of Object.entries(newFlatNodes)) {
+              ynodes.set(id, content);
+            }
+            // Delete nodes that were removed.
+            for (const id of [...ynodes.keys()]) {
+              if (!newFlatNodes[id]) ynodes.delete(id);
+            }
+            ymeta.set("structure", JSON.stringify(structure));
+            ymeta.set("direction", String(data.direction ?? 2));
+          });
+        };
+
+        // Apply a peer's state. Reconstructs the tree from the per-node maps,
+        // skips echoes, and defers while the local user is mid-edit.
         const applyRemote = () => {
-          const raw = ymap.get("data");
-          if (typeof raw !== "string" || raw === lastJsonRef.current) return;
+          const structureRaw = ymeta.get("structure");
+          if (!structureRaw) return;
+          const flatNodes: Record<string, string> = Object.fromEntries(ynodes.entries());
+          let structure: NodeStructure;
+          try {
+            structure = JSON.parse(structureRaw) as NodeStructure;
+          } catch {
+            return;
+          }
+          const nodeData = reconstructNodeData(flatNodes, structure);
+          if (!nodeData) return;
+          const directionRaw = ymeta.get("direction");
+          const direction = directionRaw !== undefined ? (parseInt(directionRaw, 10) as 0 | 1 | 2) : undefined;
+          const data: MindElixirData = { nodeData, ...(direction !== undefined ? { direction } : {}) };
+          const json = JSON.stringify(data);
+          if (json === lastJsonRef.current) return; // no actual change (echo guard)
           if (Date.now() - lastLocalEditRef.current < 1500) {
-            pendingRemoteRef.current = raw;
+            pendingRemoteRef.current = json; // defer while user is typing
             return;
           }
           pendingRemoteRef.current = null;
           try {
-            const data = JSON.parse(raw) as MindElixirData;
-            lastJsonRef.current = raw;
+            lastJsonRef.current = json;
             applyingRemote.current = true;
             mind.refresh(data);
             mind.changeTheme(PROJECT_THEME, true); // keep project theme after refresh
@@ -312,30 +461,82 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
 
         provider.on("synced", () => {
           setCollabState((s) => ({ connected: true, peers: s?.peers ?? 1, canWrite: session!.canWrite }));
-          if (typeof ymap.get("data") === "string") applyRemote();
-          else if (session!.canWrite) ymap.set("data", lastJsonRef.current);
+          if (ymeta.has("structure")) {
+            applyRemote();
+          } else if (session!.canWrite) {
+            // First writer seeds the shared doc from local data.
+            const seedData = JSON.parse(lastJsonRef.current) as MindElixirData;
+            writeToYDoc(seedData);
+          }
         });
         provider.on("status", (e: { status: string }) =>
           setCollabState((s) => ({ connected: e.status === "connected", peers: s?.peers ?? 1, canWrite: session!.canWrite })),
         );
-        ymap.observe((event) => {
-          if (!event.transaction.local) applyRemote();
+
+        // ── Auth reconnect (exponential backoff, mirrors doc-tabs) ──────────
+        const scheduleAuthReconnect = () => {
+          if (authReconnectTimerRef.current) return;
+          forceTokenRefreshRef.current = true;
+          authReconnectAttemptsRef.current += 1;
+          const delay = Math.min(
+            COLLAB_RECONNECT_MAX_DELAY_MS,
+            COLLAB_RECONNECT_BASE_DELAY_MS * 2 ** Math.min(authReconnectAttemptsRef.current - 1, 5),
+          );
+          authReconnectTimerRef.current = setTimeout(() => {
+            authReconnectTimerRef.current = null;
+            void provider.connect();
+          }, delay);
+        };
+        provider.on("authenticated", () => {
+          authReconnectAttemptsRef.current = 0;
+          if (authReconnectTimerRef.current) {
+            clearTimeout(authReconnectTimerRef.current);
+            authReconnectTimerRef.current = null;
+          }
         });
+        provider.on("authenticationFailed", () => {
+          scheduleAuthReconnect();
+        });
+        provider.on("close", ({ event }: { event?: { code?: number; reason?: string } }) => {
+          if (event?.code === HOCUSPOCUS_UNAUTHORIZED_CLOSE_CODE) {
+            scheduleAuthReconnect();
+          }
+        });
+
+        // Observe both maps — fire applyRemote on any remote change.
+        const onRemoteChange = (event: YMapEvent<string>) => {
+          if (!event.transaction.local) applyRemote();
+        };
+        ynodes.observe(onRemoteChange);
+        ymeta.observe(onRemoteChange);
+
         // Flush a deferred peer update once the local user stops editing.
         const flush = setInterval(() => {
           if (pendingRemoteRef.current && Date.now() - lastLocalEditRef.current > 1500) applyRemote();
         }, 700);
+
         const awareness = provider.awareness;
         const onAwareness = () =>
           setCollabState((s) => ({ connected: s?.connected ?? false, peers: awareness ? awareness.getStates().size : 1, canWrite: session!.canWrite }));
         awareness?.on("change", onAwareness);
 
-        // Writable peers push their local map JSON into the shared doc.
-        pushRemote.current = session.canWrite ? (json) => ymap.set("data", json) : null;
+        // Writable peers push their local map state into the shared Y.Doc.
+        pushRemote.current = session.canWrite
+          ? (json: string) => {
+              const data = JSON.parse(json) as MindElixirData;
+              writeToYDoc(data);
+            }
+          : null;
         setCollabState({ connected: false, peers: 1, canWrite: session.canWrite });
 
         cleanupCollab.current = () => {
           clearInterval(flush);
+          if (authReconnectTimerRef.current) {
+            clearTimeout(authReconnectTimerRef.current);
+            authReconnectTimerRef.current = null;
+          }
+          ynodes.unobserve(onRemoteChange);
+          ymeta.unobserve(onRemoteChange);
           awareness?.off("change", onAwareness);
           provider.destroy();
           ydoc.destroy();
@@ -673,6 +874,45 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
           </span>
         </div>
 
+        {canEdit && (
+          <div className="relative">
+            <button
+              onClick={() => setShareMenuOpen((o) => !o)}
+              title={t("memory.share")}
+              aria-label={t("memory.share")}
+              aria-haspopup="menu"
+              aria-expanded={shareMenuOpen}
+              className="inline-flex items-center gap-1 shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Share2 className="size-4" />
+              <span className="hidden sm:inline">{t("memory.share")}</span>
+            </button>
+            {shareMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShareMenuOpen(false)} />
+                <div role="menu" className="absolute right-0 top-7 z-50 w-44 rounded-md border bg-popover shadow-md p-1">
+                  <button
+                    role="menuitem"
+                    onClick={() => { setShareMenuOpen(false); setShareOpen(true); }}
+                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-sm rounded-md text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Link2 className="size-4 text-muted-foreground" />
+                    {t("share.createLink")}
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => { setShareMenuOpen(false); setTeamShareOpen(true); }}
+                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-sm rounded-md text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Users className="size-4 text-muted-foreground" />
+                    {t("memory.shareWithTeams") ?? "Share with teams"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         <button
           onClick={() => setHistoryOpen(true)}
           title={t("docs.history.title")}
@@ -687,6 +927,8 @@ export function MindmapEditor({ docId, initialTitle, initialData, collab, onBack
       <div ref={containerRef} className="flex-1 w-full bg-background" />
 
       <VersionHistoryPanel docId={docId} open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} memory={{ id: docId }} />
+      <ShareToTeamsDialog open={teamShareOpen} onOpenChange={setTeamShareOpen} memoryId={docId} memoryName={title} />
     </div>
   );
 }

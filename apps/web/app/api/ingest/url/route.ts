@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     // Download and cache OG image locally (non-blocking for the response)
     if (fetched.metadata.ogImage) {
-      downloadOgImage(documentId, fetched.metadata.ogImage).then(async (result) => {
+      downloadOgImage(documentId, fetched.metadata.ogImage, url).then(async (result) => {
         if (result) {
           await updateDocument(documentId, {
             metadata: {

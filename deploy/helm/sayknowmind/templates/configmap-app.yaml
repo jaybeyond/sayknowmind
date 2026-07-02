@@ -12,6 +12,10 @@ data:
   BETTER_AUTH_URL: {{ include "sayknowmind.webPublicUrl" . | quote }}
   NEXT_PUBLIC_APP_URL: {{ include "sayknowmind.webPublicUrl" . | quote }}
   NEXT_PUBLIC_DEPLOY_MODE: {{ .Values.app.deployMode | quote }}
+  NEXT_PUBLIC_AUTH_MODE: {{ .Values.app.authMode | quote }}
+  {{- if .Values.app.saasAuthUrl }}
+  SAYKNOWWORK_AUTH_URL: {{ .Values.app.saasAuthUrl | quote }}
+  {{- end }}
   TRUSTED_ORIGINS: {{ include "sayknowmind.trustedOrigins" . | quote }}
   REQUIRE_EMAIL_VERIFICATION: {{ .Values.app.requireEmailVerification | quote }}
 

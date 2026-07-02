@@ -1,6 +1,6 @@
 import { pool } from "@/lib/db";
 import type { IngestStatus, IngestStatusResponse } from "@/lib/types";
-import { getDocument, updateDocument, insertEntities, assignDocumentCategory } from "./document-store";
+import { getDocument, updateDocument, insertEntities, assignDocumentCategory, ensureEqDocumentIdColumn } from "./document-store";
 import { generateSummary, extractEntities, suggestCategories, generateStructuredMetadata, describeImage, describeVideoFrame, type StructuredMetadata } from "./ai-processor";
 import { findSimilarCategoryByName, suggestFallbackCategory } from "./category-fallback";
 import { indexDocument, queryEdgeQuake } from "@/lib/edgequake/client";
@@ -430,7 +430,7 @@ async function processJob(job: JobRow): Promise<void> {
     }
     try {
       if (doc.content) {
-        await indexDocument({
+        const eqRes = await indexDocument({
           content: doc.content,
           title: doc.title ?? undefined,
           document_id: documentId,
@@ -438,10 +438,12 @@ async function processJob(job: JobRow): Promise<void> {
           userId,
           async_processing: false,
         });
-        // Mark document as indexed in PostgreSQL
+        // Mark document as indexed in PostgreSQL and store the EdgeQuake-assigned
+        // id so it can be de-indexed on later delete/edit (migration 064).
+        await ensureEqDocumentIdColumn();
         await pool.query(
-          `UPDATE documents SET indexed_at = NOW() WHERE id = $1`,
-          [documentId],
+          `UPDATE documents SET indexed_at = NOW(), eq_document_id = $2 WHERE id = $1`,
+          [documentId, eqRes.document_id ?? null],
         );
         edgeQuakeAvailable = true;
       } else {
