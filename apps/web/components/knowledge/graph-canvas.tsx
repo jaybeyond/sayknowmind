@@ -116,6 +116,12 @@ interface FGLink {
 // on a sparse graph (few/close nodes) over-zooms and renders giant blobs.
 const FIT_MAX_ZOOM = 3.5;
 
+// Node labels are only drawn once the user has zoomed in past this scale. At the
+// zoomed-out overview the nodes are packed close together, so constant-screen-size
+// labels overlap into an unreadable mess — hiding them keeps the overview clean
+// and reveals labels only when you zoom in to inspect. (Tune to taste.)
+const LABEL_ZOOM_THRESHOLD = 1.5;
+
 // Fit the graph into view. zoomToFit() on a single node has a zero-area bounding
 // box, so its computed scale blows up and the lone node fills the whole screen
 // as a giant circle — guard that case with a fixed, sane zoom instead.
@@ -472,14 +478,18 @@ export function GraphCanvas({
           ctx.fillStyle = color;
           ctx.fill();
 
-          // Label
-          const fontSize = Math.max(3.5, 11 / globalScale);
-          ctx.font = `500 ${fontSize}px Inter, system-ui, sans-serif`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "top";
-          ctx.fillStyle = labelColor;
-          const label = node.label.length > 22 ? node.label.slice(0, 20) + "..." : node.label;
-          ctx.fillText(label, x, y + size + 3);
+          // Label — only past a zoom threshold, so a zoomed-out overview shows
+          // clean nodes instead of a pile of overlapping text. The selected node
+          // keeps its label at any zoom so it stays identifiable.
+          if (globalScale >= LABEL_ZOOM_THRESHOLD || isSelected) {
+            const fontSize = Math.max(3.5, 11 / globalScale);
+            ctx.font = `500 ${fontSize}px Inter, system-ui, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            ctx.fillStyle = labelColor;
+            const label = node.label.length > 22 ? node.label.slice(0, 20) + "..." : node.label;
+            ctx.fillText(label, x, y + size + 3);
+          }
         }}
         nodePointerAreaPaint={() => {
           // Intentionally empty — disables ForceGraph2D's default shadow canvas hit detection.
