@@ -184,6 +184,7 @@ function FolderItem({
   onCreateSubfolder,
   t,
 }: FolderItemProps) {
+  const router = useRouter();
   const isActive = isHomePage && selectedCollection === category.id;
   const isRenaming = renamingId === category.id;
   const children = getChildren(category.id);
@@ -260,7 +261,9 @@ function FolderItem({
           onClick={(e) => {
             e.preventDefault();
             onSelect(category);
-            if (!isHomePage) window.location.href = "/";
+            // Client-side nav (not a full reload) so the persistent shell layout
+            // survives — the sidebar stays mounted and only the content swaps.
+            if (!isHomePage) router.push("/");
           }}
         >
           <Folder className="size-5" />
