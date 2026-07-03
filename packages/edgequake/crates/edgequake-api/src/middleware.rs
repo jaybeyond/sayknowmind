@@ -31,6 +31,7 @@ use axum::{
 };
 use edgequake_rate_limiter::RateLimiter;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{info, warn};
@@ -110,6 +111,11 @@ impl Default for AuthConfig {
                 "/live".to_string(),
                 "/swagger-ui".to_string(),
                 "/api-docs".to_string(),
+                // The auth endpoints must stay reachable even when enforcement is
+                // on — otherwise login/refresh would 401 before a token can be
+                // minted. (Note: /api/v1/auth/me is intentionally NOT public.)
+                "/api/v1/auth/login".to_string(),
+                "/api/v1/auth/refresh".to_string(),
             ],
         }
     }
@@ -130,10 +136,33 @@ impl AuthConfig {
         self.public_paths.iter().any(|p| path.starts_with(p))
     }
 
-    /// Validate an API key.
+    /// Validate an API key using a constant-time comparison.
+    ///
+    /// Both the presented key and each configured key are SHA-256 hashed and the
+    /// fixed-length digests compared without a content-dependent early return, so
+    /// a network attacker can't use response timing to recover the key. (Hashing
+    /// also equalizes the compare length regardless of the guessed key length.)
     pub fn validate_api_key(&self, key: &str) -> bool {
-        self.api_keys.iter().any(|k| k == key)
+        let presented = Sha256::digest(key.as_bytes());
+        self.api_keys.iter().any(|k| {
+            let configured = Sha256::digest(k.as_bytes());
+            constant_time_eq(presented.as_slice(), configured.as_slice())
+        })
     }
+}
+
+/// Constant-time equality over two byte slices. Returns `false` immediately on a
+/// length mismatch (not secret here — both inputs are fixed-size SHA-256
+/// digests), then compares every byte with no data-dependent branch.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }
 
 /// Authentication error response.
@@ -147,14 +176,27 @@ pub struct AuthError {
 #[derive(Clone)]
 pub struct AuthState {
     pub config: Arc<AuthConfig>,
+    /// Optional JWT verifier for the end-user principal. When present, a request
+    /// that carries a valid EdgeQuake-issued JWT (rather than the shared API key)
+    /// is accepted, and the verified `sub` overwrites any client-supplied
+    /// `X-User-ID` (anti-spoof). `None` → JWT path disabled (API-key only).
+    pub jwt: Option<Arc<edgequake_auth::JwtService>>,
 }
 
 impl AuthState {
-    /// Create new auth state.
+    /// Create new auth state (API-key only; no JWT verifier attached).
     pub fn new(config: AuthConfig) -> Self {
         Self {
             config: Arc::new(config),
+            jwt: None,
         }
+    }
+
+    /// Attach a JWT verifier so end-user JWTs are accepted alongside the shared
+    /// API key. Passing `None` leaves the middleware API-key-only.
+    pub fn with_jwt(mut self, jwt: Option<Arc<edgequake_auth::JwtService>>) -> Self {
+        self.jwt = jwt;
+        self
     }
 }
 
@@ -165,53 +207,70 @@ impl AuthState {
 /// @implements FEAT0808
 pub async fn api_key_auth(
     axum::extract::State(auth_state): axum::extract::State<AuthState>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Response {
     let config = &auth_state.config;
 
-    // Skip auth if disabled
+    // Skip auth if disabled. Default (EDGEQUAKE_API_KEY unset) → this returns
+    // here, so the middleware is byte-for-byte a pass-through vs. the pre-auth
+    // build. Enforcement only turns on when an operator sets the key.
     if !config.enabled {
         return next.run(request).await;
     }
 
-    // Skip auth for public paths
+    // Skip auth for public paths (health probes, docs, login/refresh).
     let path = request.uri().path();
     if config.is_public_path(path) {
         return next.run(request).await;
     }
 
-    // Try to get API key from headers
-    let api_key = extract_api_key(&request);
+    // A credential may be the shared API key OR an end-user JWT (same header).
+    let credential = extract_api_key(&request);
 
-    match api_key {
-        Some(key) if config.validate_api_key(&key) => {
-            // Valid API key, proceed
-            next.run(request).await
+    match credential {
+        // (1) Trusted-service principal — exact, constant-time shared-key match.
+        // The web app and MCP server send this. Client-supplied
+        // X-Tenant/Workspace/User-ID headers pass through unchanged; Postgres
+        // `readableClause` remains the sole isolation authority.
+        Some(ref key) if config.validate_api_key(key) => next.run(request).await,
+
+        // (2) End-user principal — a verifiable EdgeQuake JWT (e.g. dashboard).
+        // Overwrite X-User-ID with the verified `sub` so a caller can't claim a
+        // different user id than the one they authenticated as.
+        Some(ref token) => {
+            if let Some(jwt) = auth_state.jwt.as_ref() {
+                if let Ok(claims) = jwt.verify_token(token) {
+                    match HeaderValue::from_str(&claims.sub) {
+                        Ok(sub) => {
+                            request.headers_mut().insert("x-user-id", sub);
+                            return next.run(request).await;
+                        }
+                        // A non-ASCII `sub` can't be a header value; reject
+                        // rather than forward an unstamped identity.
+                        Err(_) => return unauthorized("Invalid token subject"),
+                    }
+                }
+            }
+            unauthorized("Invalid API key or token")
         }
-        Some(_) => {
-            // Invalid API key
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(AuthError {
-                    error: "unauthorized".to_string(),
-                    message: "Invalid API key".to_string(),
-                }),
-            )
-                .into_response()
-        }
-        None => {
-            // No API key provided
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(AuthError {
-                    error: "unauthorized".to_string(),
-                    message: "Missing API key. Provide via Authorization header (Bearer <key>) or X-API-Key header".to_string(),
-                }),
-            )
-                .into_response()
-        }
+
+        None => unauthorized(
+            "Missing credential. Provide Authorization: Bearer <key|jwt> or X-API-Key: <key>",
+        ),
     }
+}
+
+/// Build a 401 Unauthorized JSON response.
+fn unauthorized(message: &str) -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(AuthError {
+            error: "unauthorized".to_string(),
+            message: message.to_string(),
+        }),
+    )
+        .into_response()
 }
 
 /// Extract API key from request headers.

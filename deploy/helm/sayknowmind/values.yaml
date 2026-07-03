@@ -73,7 +73,8 @@ secrets:
   relaySharedSecret: "REPLACE_ME"
   searxngSecretKey: "REPLACE_ME"
   aiApiKey: ""
-  edgequakeApiKey: ""
+  edgequakeApiKey: ""          # shared key web+mcp+edgequake send; empty => auth OFF
+  jwtSecret: ""                # EdgeQuake JWT signing secret; set before enabling auth
   openaiApiKey: ""
   openrouterApiKey: ""
   telegramBotToken: ""
@@ -147,6 +148,9 @@ edgequake:
   image: ""                  # default: {{ registry }}/{{ imagePrefix }}-edgequake:{{ tag }}
   port: 8080
   replicas: 1                # stateless RAG engine — can scale, but uses Postgres/Redis backing
+  # Fail startup if JWT_SECRET is missing/placeholder. Leave false until you've
+  # set secrets.jwtSecret; flipping to true is the production hard-gate.
+  authStrict: false
   resources:
     requests: { cpu: 200m, memory: 512Mi }
     limits:   { cpu: "2",  memory: 4Gi }

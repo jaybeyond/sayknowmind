@@ -138,6 +138,19 @@ impl AuthConfig {
         // was short — and the real server never called from_env() at all. Now a
         // configured-but-weak secret aborts startup; an unset secret keeps the
         // placeholder only with a loud warning (acceptable for local dev only).
+        // EDGEQUAKE_AUTH_STRICT turns a missing/placeholder secret from a loud
+        // warning into a hard startup failure (fail-closed for production). It
+        // defaults off, so an unset value keeps the byte-identical dev behavior.
+        let strict = std::env::var("EDGEQUAKE_AUTH_STRICT")
+            .ok()
+            .map(|v| {
+                matches!(
+                    v.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                )
+            })
+            .unwrap_or(false);
+
         let jwt_secret = match std::env::var("JWT_SECRET") {
             Ok(s) if !s.trim().is_empty() => {
                 let s = s.trim().to_string();
@@ -150,6 +163,12 @@ impl AuthConfig {
                 s
             }
             _ => {
+                if strict {
+                    panic!(
+                        "JWT_SECRET is not set but EDGEQUAKE_AUTH_STRICT is enabled. \
+                         Set JWT_SECRET (>= {MIN_JWT_SECRET_BYTES} bytes, e.g. `openssl rand -hex 32`) before starting."
+                    );
+                }
                 tracing::warn!(
                     "JWT_SECRET is not set — falling back to a publicly-known placeholder signing key. \
                      EdgeQuake-issued JWTs are FORGEABLE. Set JWT_SECRET (>= {} bytes) before exposing this server.",

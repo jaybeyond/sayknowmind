@@ -89,13 +89,16 @@ impl Server {
         // unaffected; when set, every non-public route requires the key via
         // `Authorization: Bearer <key>` or `X-API-Key: <key>`.
         //
-        // NOTE before enabling: every EdgeQuake client must send the SAME key.
-        // The web app (apps/web lib/edgequake/client.ts) and MCP server already
-        // forward EDGEQUAKE_API_KEY; the dashboard currently sends a per-user JWT
-        // instead and must be updated first, or it will get 401s.
+        // Two principals are accepted once enforcement is on:
+        //   - Trusted service: the shared EDGEQUAKE_API_KEY (web app + MCP server
+        //     already forward it) — tenant/workspace/user headers pass through.
+        //   - End user: a valid EdgeQuake-issued JWT (the dashboard sends one);
+        //     the verified `sub` replaces any client-supplied X-User-ID.
+        // So the dashboard no longer has to be migrated to the shared key before
+        // enabling — its JWTs are honored directly.
         let auth_config = match std::env::var("EDGEQUAKE_API_KEY") {
             Ok(key) if !key.trim().is_empty() => {
-                info!("[auth] API-key authentication ENABLED (EDGEQUAKE_API_KEY set)");
+                info!("[auth] API-key authentication ENABLED (EDGEQUAKE_API_KEY set); end-user JWTs also accepted");
                 AuthConfig::with_api_keys(vec![key.trim().to_string()])
             }
             _ => {
@@ -103,7 +106,8 @@ impl Server {
                 AuthConfig::default()
             }
         };
-        let auth_state = AuthState::new(auth_config);
+        let auth_state =
+            AuthState::new(auth_config).with_jwt(Some(self.state.jwt_service.clone()));
 
         let mut app = create_router(self.state.clone())
             .layer(middleware::from_fn_with_state(auth_state, api_key_auth));

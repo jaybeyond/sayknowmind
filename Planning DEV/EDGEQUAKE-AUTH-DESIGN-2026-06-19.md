@@ -58,3 +58,28 @@ EdgeQuake HTTP API는 **기본적으로 전 라우트 무인증**이다. 수정�
 - **인간 결정(블라인드 출시 금지)**: dashboard가 실제로 배포되는 에디션인지 / Phase 3 scope-claim(멤버십 소스 + 네임스페이스 불일치) / `/ws/*`(브라우저가 Authorization 못 보냄)·`/metrics` 정책 / default-on 여부 / `AUTH_STRICT` panic-vs-warn / prod에서 `EDGEQUAKE_API_KEY`+`JWT_SECRET` 실제 플립(dashboard 재로그인 1회 강제, EC2 `.env`+Helm secret 동시 변경).
 
 **순추천**: B의 단계화 + A의 게이트 내부구현, A의 login 화이트리스트 갭 보완, A의 test-factory 주의 유지, scope-claim 바인딩은 멤버십+네임스페이스 결정 뒤로 격리.
+
+---
+
+## 구현 상태 — Phase 0~2 완료 (2026-07-03, session 2341a791)
+
+**전부 default-OFF. `EDGEQUAKE_API_KEY` 미설정 시 현행 배포와 바이트 동일.** 검증: `cargo check`(postgres+vision, sqlx offline) clean · edgequake-auth 34/34 · edgequake-api 475/475 · `helm template` clean · compose/values YAML parse OK.
+
+**Phase 0 (secret)** ✅
+- `edgequake-auth/src/config.rs::from_env()` — `EDGEQUAKE_AUTH_STRICT` 배선: JWT_SECRET 미설정/placeholder일 때 strict=true면 panic, 아니면 warn+placeholder(현행). set-but-weak는 기존대로 항상 panic.
+- `edgequake-api/src/state/memory.rs` — `new`(:46)·`new_memory`(:182) → `from_env()`; `test_state`(:272)는 `default()` 유지(결정성). `postgres.rs`는 이미 from_env(선행 커밋).
+
+**Phase 1 (게이트, inert)** ✅
+- `middleware.rs`: `validate_api_key` → SHA-256 상수시간 비교(기존 sha2 dep, 신규 crate 無). `AuthState`에 `jwt: Option<Arc<JwtService>>` + `.with_jwt()`. `api_key_auth` 이중 principal — 공유키 ct-매치→Service(헤더 통과) / 아니면 유효 JWT→`x-user-id`를 `sub`로 덮고 User / 아니면 401. `/api/v1/auth/{login,refresh}`를 public_paths에 추가.
+- `server.rs`: `AuthState::new(cfg).with_jwt(Some(self.state.jwt_service.clone()))`. 주석 갱신(대시보드 JWT 그대로 수용 → 키 강제 마이그레이션 불필요). `EDGEQUAKE_REQUIRE_AUTH`는 미추가(설계대로).
+- `routes.rs`: 오해성 "JWT-claims-first" 주석을 구현 모델(헤더 기반 tenant/workspace, JWT는 user id만)로 정정.
+
+**Phase 2 (plumbing, off)** ✅
+- `docker-compose.yml`: edgequake env에 `EDGEQUAKE_API_KEY`/`JWT_SECRET`/`EDGEQUAKE_AUTH_STRICT`(모두 `:-` 빈 기본) 추가. **mcp-server env에도 `EDGEQUAKE_API_KEY` 추가**(web은 이미 보유) → EdgeQuake 호출 3서비스(edgequake/web/mcp) 키 일관. health-only 클라(web `services/status`, mcp `health`)는 /health public path라 무관.
+- Helm: `edgequake.yaml`(키+JWT_SECRET secretKeyRef + AUTH_STRICT), `mcp-server.yaml`(키), `secret.yaml`(`JWT_SECRET`), `values.yaml`(`secrets.jwtSecret`, `edgequake.authStrict`).
+- `.env.example`: 3개 변수 + 활성화 순서 runbook(키+secret 설정 → web·mcp·edgequake 동시 재배포 → dashboard 로그인/JWT콜/공유키콜 검증 → 그 다음 strict/enforce).
+
+**여전히 OPEN (결정 게이트)**
+- **Phase 3** (tenant/workspace claim 바인딩) — 미구현(멤버십 소스 + 네임스페이스 불일치 선결).
+- **`/metrics` + `/ws/*` public-path 정책** — auth enable 전 결정 필요. 특히 브라우저 WebSocket은 `Authorization` 헤더를 못 보내므로, 지금 enforce하면 `/ws/*` 대시보드 진행률이 401. (default-off라 현재는 무해.)
+- **latent(무관/미수정)**: `processor/pdf_processing.rs:208` — `vision` feature OFF일 때 lib-test 컴파일 E0282(타입주석 필요). 프로젝트 기본 feature엔 vision ON이라 실배포 무영향.

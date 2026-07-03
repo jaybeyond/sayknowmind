@@ -66,6 +66,15 @@ services:
       EDGEQUAKE_DEFAULT_EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
       OLLAMA_HOST: http://ollama:11434
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # --- Optional EdgeQuake auth (default OFF) ---
+      # Unset EDGEQUAKE_API_KEY => the API stays a byte-identical no-auth server.
+      # To enable: set the shared key AND a strong JWT_SECRET (>=32 bytes), then
+      # redeploy web + mcp-server + edgequake together (all send the same key)
+      # before requiring auth anywhere. EDGEQUAKE_AUTH_STRICT=true makes a
+      # missing/placeholder JWT_SECRET a hard startup failure. See .env.example.
+      EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      EDGEQUAKE_AUTH_STRICT: ${EDGEQUAKE_AUTH_STRICT:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -234,6 +243,9 @@ services:
       - "${MCP_PORT:-8082}:8082"
     environment:
       EDGEQUAKE_URL: http://edgequake:8080
+      # Same shared key EdgeQuake enforces once auth is on (empty => no-op).
+      # Must match the edgequake + web services, or EdgeQuake calls 401.
+      EDGEQUAKE_API_KEY: ${EDGEQUAKE_API_KEY:-}
       AUTH_SECRET: ${BETTER_AUTH_SECRET}
       # Per-user API keys live in the user_mcp_keys table (issued via
       # /api/user/mcp-key from settings). The MCP server uses this

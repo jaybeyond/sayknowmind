@@ -61,6 +61,22 @@ spec:
                 secretKeyRef:
                   name: {{ include "sayknowmind.fullname" . }}-secrets
                   key: OPENROUTER_API_KEY
+            # Optional EdgeQuake auth (default OFF). Empty EDGEQUAKE_API_KEY =>
+            # no-auth server (unchanged). When both the shared key and JWT_SECRET
+            # are set, non-public routes require the shared key OR a valid
+            # end-user JWT. Keep the same EDGEQUAKE_API_KEY on web + mcp-server.
+            - name: EDGEQUAKE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: EDGEQUAKE_API_KEY
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: JWT_SECRET
+            - name: EDGEQUAKE_AUTH_STRICT
+              value: {{ .Values.edgequake.authStrict | default false | quote }}
           livenessProbe:
             httpGet: { path: /health, port: 8080 }
             initialDelaySeconds: 30

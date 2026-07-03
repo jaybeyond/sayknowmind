@@ -48,6 +48,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "sayknowmind.fullname" . }}-secrets
                   key: BETTER_AUTH_SECRET
+            # Same shared key EdgeQuake enforces (empty => no-op while auth OFF).
+            - name: EDGEQUAKE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sayknowmind.fullname" . }}-secrets
+                  key: EDGEQUAKE_API_KEY
           livenessProbe:
             httpGet: { path: /health, port: 8082 }
             initialDelaySeconds: 20

@@ -76,10 +76,13 @@
 //!
 //! # Multi-Tenancy
 //!
-//! Tenant context is automatically extracted from:
-//! 1. JWT claims (`tenant_id`, `workspace_id`)
-//! 2. Headers (`X-Tenant-ID`, `X-Workspace-ID`)
-//! 3. Default tenant (for non-authenticated deployments)
+//! Tenant/workspace context is read from the `X-Tenant-ID` / `X-Workspace-ID`
+//! request headers (set by the caller). The auth middleware forwards them
+//! unchanged for a trusted-service caller (shared API key); for a verified
+//! end-user JWT it additionally overwrites `X-User-ID` with the token `sub`.
+//! Binding tenant/workspace *from* JWT claims is a separate, not-yet-wired step
+//! (it needs a user→workspace membership source); until then the app layer
+//! (`readableClause`) remains the isolation authority.
 
 use axum::{
     routing::{delete, get, patch, post, put},
