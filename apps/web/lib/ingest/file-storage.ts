@@ -77,10 +77,20 @@ export async function downloadOgImage(
     // Skip if too large (>2MB) or empty
     if (buffer.length === 0 || buffer.length > 2 * 1024 * 1024) return null;
 
+    // base64 is the durable copy (persisted to the document row) — compute it
+    // FIRST and never let a disk failure lose it. On Railway the working dir is
+    // ephemeral/often unwritable, so `saveFile` throwing must NOT drop the image;
+    // the disk copy is only a fast-path cache for the og route.
+    const base64 = buffer.toString("base64");
+
     const ext = contentType.split("/")[1]?.split(";")[0]?.replace("jpeg", "jpg") || "png";
     const fileName = `og.${ext}`;
-    const relativePath = await saveFile(documentId, fileName, buffer);
-    const base64 = buffer.toString("base64");
+    let relativePath = `${documentId}/${fileName}`;
+    try {
+      relativePath = await saveFile(documentId, fileName, buffer);
+    } catch {
+      // Ephemeral/read-only FS (Railway): keep going, base64 is the source of truth.
+    }
 
     return { relativePath, base64, contentType };
   } catch {
