@@ -106,8 +106,7 @@ impl Server {
                 AuthConfig::default()
             }
         };
-        let auth_state =
-            AuthState::new(auth_config).with_jwt(Some(self.state.jwt_service.clone()));
+        let auth_state = AuthState::new(auth_config).with_jwt(Some(self.state.jwt_service.clone()));
 
         let mut app = create_router(self.state.clone())
             .layer(middleware::from_fn_with_state(auth_state, api_key_auth));
