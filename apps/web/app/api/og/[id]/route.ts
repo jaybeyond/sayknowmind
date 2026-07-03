@@ -1,22 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDocument } from "@/lib/ingest/document-store";
-import { getFile, downloadOgImage } from "@/lib/ingest/file-storage";
-import { updateDocument } from "@/lib/ingest/document-store";
-import { validateUrl, safeFetch } from "@/lib/ingest/url-fetcher";
+import { getFile } from "@/lib/ingest/file-storage";
+import { cacheOgImageForDocument } from "@/lib/ingest/og-image";
 import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { readableClause } from "@/lib/visibility";
-
-/** SSRF guard: true only if the URL is well-formed and resolves to a public address. */
-async function isSafeUrl(url: string | null): Promise<boolean> {
-  if (!url) return false;
-  try {
-    await validateUrl(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 const PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <rect width="1200" height="630" fill="#1D1D1D"/>
@@ -108,86 +96,33 @@ export async function GET(
     });
   }
 
-  // Find external URL or re-fetch from document page. Both fetches hit
-  // attacker-influenced URLs server-side, so SSRF-guard them (reject private /
-  // internal targets) before fetching, reusing the ingest validator.
-  const docUrl = doc.url as string | null;
-  const fromMeta = findExternalUrl(meta);
-  const fromPage =
-    fromMeta || !(await isSafeUrl(docUrl)) ? null : await fetchOgImageFromPage(docUrl);
-  const externalUrl = fromMeta ?? fromPage;
-  trace.fromMeta = fromMeta;
-  trace.fromPage = fromPage;
-  trace.externalUrl = externalUrl;
-
-  if (externalUrl && (await isSafeUrl(externalUrl))) {
-    try {
-      const result = await downloadOgImage(documentId, externalUrl, docUrl ?? undefined);
-      trace.downloadResult = result ? { contentType: result.contentType, size: result.base64.length } : null;
-
-      if (result) {
-        // Cache for next time
-        updateDocument(documentId, {
-          metadata: {
-            ogImage: `/api/og/${documentId}`,
-            ogImageOriginal: externalUrl,
-            ogImageBase64: result.base64,
-            ogImageContentType: result.contentType,
-          },
-        }).catch(() => {});
-
-        trace.source = "downloaded";
-        if (debug) return NextResponse.json(trace);
-
-        const buffer = Buffer.from(result.base64, "base64");
-        return new NextResponse(new Uint8Array(buffer), {
-          headers: {
-            "Content-Type": result.contentType,
-            "Content-Length": String(buffer.length),
-            "Cache-Control": cacheControl,
-          },
-        });
-      }
-    } catch (err) {
-      trace.downloadError = String(err);
-    }
+  // No stored copy — resolve the external image (from metadata, else by
+  // re-scraping the source page), download it, and persist base64 on the row so
+  // the next request is served from the DB. SSRF guards live in the shared
+  // helper (every candidate URL is re-validated before fetch). Never let a
+  // resolve/download/persist error 500 the image request — fall to a placeholder.
+  let cached: { base64: string; contentType: string } | null = null;
+  try {
+    cached = await cacheOgImageForDocument(documentId, doc);
+  } catch (err) {
+    trace.downloadError = String(err);
+  }
+  if (cached) {
+    trace.source = "downloaded";
+    if (debug) return NextResponse.json(trace);
+    const buffer = Buffer.from(cached.base64, "base64");
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": cached.contentType,
+        "Content-Length": String(buffer.length),
+        "Cache-Control": cacheControl,
+      },
+    });
   }
 
   trace.source = "placeholder";
   if (debug) return NextResponse.json(trace);
   return servePlaceholder();
-}
-
-function findExternalUrl(meta: Record<string, unknown>): string | null {
-  if (typeof meta.ogImageOriginal === "string" && meta.ogImageOriginal.startsWith("http")) {
-    return meta.ogImageOriginal;
-  }
-  if (typeof meta.ogImage === "string" && meta.ogImage.startsWith("http")) {
-    return meta.ogImage;
-  }
-  return null;
-}
-
-/** Fetch the document's page and extract og:image from HTML meta tags */
-async function fetchOgImageFromPage(docUrl: string | null): Promise<string | null> {
-  if (!docUrl || !docUrl.startsWith("http")) return null;
-  try {
-    const res = await safeFetch(docUrl, {
-      headers: { "User-Agent": "SayknowMind-Bot/1.0" },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    // Extract og:image or twitter:image
-    const match = html.match(
-      /<meta[^>]+(?:property=["']og:image["']|name=["']twitter:image["'])[^>]+content=["']([^"']+)["']/i
-    ) ?? html.match(
-      /<meta[^>]+content=["']([^"']+)["'][^>]+(?:property=["']og:image["']|name=["']twitter:image["'])/i
-    );
-    return match?.[1] ?? null;
-  } catch {
-    return null;
-  }
 }
 
 function servePlaceholder() {

@@ -43,7 +43,9 @@ impl AppState {
         task_queue: edgequake_tasks::SharedTaskQueue,
         workspace_service: SharedWorkspaceService,
     ) -> Self {
-        let auth_config = AuthConfig::default();
+        // from_env() so a configured JWT_SECRET actually signs/verifies tokens
+        // (default() would hardcode the forgeable placeholder). No-op when unset.
+        let auth_config = AuthConfig::from_env();
         let jwt_service = Arc::new(JwtService::new(auth_config.clone()));
         let password_service = Arc::new(PasswordService::new(auth_config.clone()));
         let rbac_service = Arc::new(RbacService::new());
@@ -178,8 +180,8 @@ impl AppState {
                 Arc::clone(&vector_storage) as Arc<dyn edgequake_storage::traits::VectorStorage>,
             ));
 
-        // Create auth services
-        let auth_config = AuthConfig::default();
+        // Create auth services (from_env picks up a real JWT_SECRET; no-op when unset)
+        let auth_config = AuthConfig::from_env();
         let jwt_service = Arc::new(JwtService::new(auth_config.clone()));
         let password_service = Arc::new(PasswordService::new(auth_config.clone()));
         let rbac_service = Arc::new(RbacService::new());
