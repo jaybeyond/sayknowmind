@@ -202,6 +202,25 @@ function buildDocumentsUrl(params: {
   return `/api/documents?${sp.toString()}`;
 }
 
+/**
+ * Category ids the current selection scopes the SERVER fetch to, or undefined
+ * for unscoped views ("all", gallery). Includes descendant folders so a parent
+ * shows its children's memories, mirroring getFilteredMemories. Without this
+ * scoping, fetchMemories only loads the newest PAGE_SIZE memories and a
+ * collection whose items fall outside that window looks empty even though its
+ * count says otherwise.
+ */
+function scopedCategoryIds(state: {
+  selectedCollection: string;
+  selectedTab: string | null;
+}): string[] | undefined {
+  if (state.selectedTab) return [state.selectedTab];
+  const sel = state.selectedCollection;
+  if (!sel || sel === "all" || sel === "gallery") return undefined;
+  const { getDescendantIds } = useCategoriesStore.getState();
+  return [sel, ...getDescendantIds(sel)];
+}
+
 export const useMemoryStore = create<MemoryState>((set, get) => ({
   memories: [],
   archivedMemories: [],
@@ -226,10 +245,21 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   isLoadingMore: false,
   error: null,
 
-  setSelectedCollection: (collectionId) => set({ selectedCollection: collectionId, selectedTab: null, openEditor: null, sourceTypeFilter: null }),
-  setSelectedTab: (tabId) => set({ selectedTab: tabId }),
+  // Selection changes refetch so the list is server-scoped to the collection —
+  // the client-side filter alone only sees the currently loaded page(s).
+  setSelectedCollection: (collectionId) => {
+    set({ selectedCollection: collectionId, selectedTab: null, openEditor: null, sourceTypeFilter: null });
+    void get().fetchMemories();
+  },
+  setSelectedTab: (tabId) => {
+    set({ selectedTab: tabId });
+    void get().fetchMemories();
+  },
   setOpenEditor: (editor) => set({ openEditor: editor }),
-  selectFolder: (collectionId, sourceType) => set({ selectedCollection: collectionId, selectedTab: null, openEditor: null, sourceTypeFilter: sourceType }),
+  selectFolder: (collectionId, sourceType) => {
+    set({ selectedCollection: collectionId, selectedTab: null, openEditor: null, sourceTypeFilter: sourceType });
+    void get().fetchMemories();
+  },
 
   toggleTag: (tagId) =>
     set((state) => ({
@@ -490,6 +520,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
         limit: PAGE_SIZE,
         status: "active",
         q: searchQuery || undefined,
+        categoryId: scopedCategoryIds(get())?.join(","),
       });
       const res = await fetch(url);
 
@@ -536,6 +567,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
         limit: PAGE_SIZE,
         status: "active",
         q: searchQuery || undefined,
+        categoryId: scopedCategoryIds(get())?.join(","),
       });
       const res = await fetch(url);
       if (requestId !== fetchMemoriesRequestId) return;

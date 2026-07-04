@@ -257,6 +257,8 @@
   "emptyState": {
     "allDocuments": "Nothing saved yet",
     "allDocumentsCta": "Save your first document",
+    "collection": "Nothing in this collection yet",
+    "collectionCta": "Add documents here, or open All Memories and assign this collection to existing items. Processed knowledge always appears in All Memories.",
     "favorites": "No favorites yet",
     "favoritesCta": "Star a document to add it here",
     "archive": "Archive is empty",

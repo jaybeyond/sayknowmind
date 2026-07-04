@@ -21,7 +21,12 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 50)));
   const offset = (page - 1) * limit;
   const search = searchParams.get("q")?.trim() ?? "";
-  const categoryId = searchParams.get("categoryId") ?? "";
+  // Comma-separated list so a folder can include its descendant folders in one
+  // query (the sidebar passes parent + children). A single id works as before.
+  const categoryIds = (searchParams.get("categoryId") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const sourceType = searchParams.get("sourceType") ?? "";
   const isFavorite = searchParams.get("isFavorite");
 
@@ -48,16 +53,16 @@ export async function GET(request: NextRequest) {
       paramIdx++;
     }
 
-    if (categoryId) {
+    if (categoryIds.length > 0) {
       conditions.push(
         `EXISTS (
           SELECT 1 FROM document_categories dc
           JOIN categories c ON c.id = dc.category_id
-          WHERE dc.document_id = d.id AND dc.category_id = $${paramIdx}
+          WHERE dc.document_id = d.id AND dc.category_id = ANY($${paramIdx})
             AND ${readableClause("c", 2, 1, "category")}
         )`,
       );
-      params.push(categoryId);
+      params.push(categoryIds);
       paramIdx++;
     }
 

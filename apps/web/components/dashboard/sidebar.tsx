@@ -79,6 +79,17 @@ const navItemKeys = [
 
 function InsightsWidget() {
   const { t } = useTranslation();
+  const router = useRouter();
+  // The stat tiles LOOK like metric entry points, so make them act like ones:
+  // clicking lands on the All Memories list (sorted newest-first) instead of
+  // being a dead end that reads as an unfinished feature.
+  const goToMemories = React.useCallback(() => {
+    const s = useMemoryStore.getState();
+    s.setSelectedCollection("all");
+    s.clearTags();
+    s.setSortBy("date-newest");
+    router.push("/");
+  }, [router]);
   const [insights, setInsights] = React.useState<{
     totalDocuments: number;
     thisWeek: number;
@@ -119,14 +130,22 @@ function InsightsWidget() {
         {t("insights.title")}
       </h4>
       <div className="grid grid-cols-2 gap-2 text-center">
-        <div className="rounded-md bg-background p-2">
+        <button
+          type="button"
+          onClick={goToMemories}
+          className="rounded-md bg-background p-2 cursor-pointer hover:bg-accent transition-colors"
+        >
           <div className="text-lg font-bold">{insights.totalDocuments}</div>
           <div className="text-[10px] text-muted-foreground">{t("insights.total")}</div>
-        </div>
-        <div className="rounded-md bg-background p-2">
+        </button>
+        <button
+          type="button"
+          onClick={goToMemories}
+          className="rounded-md bg-background p-2 cursor-pointer hover:bg-accent transition-colors"
+        >
           <div className="text-lg font-bold text-primary">+{insights.thisWeek}</div>
           <div className="text-[10px] text-muted-foreground">{t("insights.thisWeek")}</div>
-        </div>
+        </button>
       </div>
       {insights.topCategories.length > 0 && (
         <div className="space-y-1">
@@ -400,7 +419,7 @@ function CategorySection({
 
   return (
     <SidebarGroup className="p-0">
-      <SidebarGroupLabel className="flex items-center gap-1.5 px-0 text-[10px] font-semibold tracking-wider text-muted-foreground">
+      <SidebarGroupLabel className="flex items-center gap-1.5 px-0 text-xs font-bold tracking-wider text-foreground/75">
         <button onClick={() => setOpen(!open)} className="flex items-center gap-1.5 cursor-pointer">
           <ChevronDown className={cn("size-3.5 transition-transform", !open && "-rotate-90")} />
           {label}
@@ -687,7 +706,7 @@ export function MemorySidebar({
         </div>
 
         <SidebarGroup className="p-0">
-          <SidebarGroupLabel className="flex items-center gap-1.5 px-0 text-[10px] font-semibold tracking-wider text-muted-foreground">
+          <SidebarGroupLabel className="flex items-center gap-1.5 px-0 text-xs font-bold tracking-wider text-foreground/75">
             <button
               onClick={() => setCollectionsOpen(!collectionsOpen)}
               className="flex items-center gap-1.5 cursor-pointer"
@@ -828,7 +847,7 @@ export function MemorySidebar({
         />
 
         <SidebarGroup className="p-0">
-          <SidebarGroupLabel className="flex items-center gap-1.5 px-0 text-[10px] font-semibold tracking-wider text-muted-foreground">
+          <SidebarGroupLabel className="flex items-center gap-1.5 px-0 text-xs font-bold tracking-wider text-foreground/75">
             <button
               onClick={() => setTagsOpen(!tagsOpen)}
               className="flex items-center gap-1.5 cursor-pointer"

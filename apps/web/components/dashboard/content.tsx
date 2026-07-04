@@ -630,10 +630,18 @@ export function MemoryContent() {
                   <BookOpen className="size-8 text-muted-foreground/50" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2">
-                  {searchQuery ? t("emptyState.search") : t("emptyState.allDocuments")}
+                  {searchQuery
+                    ? t("emptyState.search")
+                    : selectedCollection !== "all"
+                      ? t("emptyState.collection")
+                      : t("emptyState.allDocuments")}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-                  {searchQuery ? t("emptyState.searchCta") : t("emptyState.allDocumentsCta")}
+                  {searchQuery
+                    ? t("emptyState.searchCta")
+                    : selectedCollection !== "all"
+                      ? t("emptyState.collectionCta")
+                      : t("emptyState.allDocumentsCta")}
                 </p>
                 {hasActiveFilters && (
                   <Button

@@ -257,6 +257,8 @@
   "emptyState": {
     "allDocuments": "暂无保存内容",
     "allDocumentsCta": "保存你的第一个文档",
+    "collection": "该合集暂无内容",
+    "collectionCta": "可在此新增资料，或在「全部记忆」中为已有条目指定该合集。处理后的知识始终会显示在「全部记忆」里。",
     "favorites": "暂无收藏",
     "favoritesCta": "给文档加星标以添加到此处",
     "archive": "归档为空",
