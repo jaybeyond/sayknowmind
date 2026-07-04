@@ -154,35 +154,69 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch entities for selected documents. In entity-filter search, only show
-    // matching entity names; otherwise keep the full document context.
+    // Fetch entities for the selected documents.
+    //
+    // Only surface entities that actually CONNECT documents — i.e. the same name
+    // appears in >= 2 of the visible docs. A single-occurrence entity is a leaf:
+    // it adds a node and one edge but no structure. On a real library that noise
+    // dominates (one account had 1,724 docs but 13,652 distinct single-use
+    // entities → ~15k nodes → the graph couldn't render at all). Requiring a
+    // shared name keeps only meaningful links. An explicit entity *search* may
+    // still reach a rare name. A hard LIMIT backstops pathological cases.
     if (docIds.length > 0 && (!typeFilter || typeFilter === "entity")) {
       const entityParams: unknown[] = [docIds];
-      let entityQuery = `SELECT id, document_id, name, type, confidence
-         FROM entities
-         WHERE document_id = ANY($1)`;
-      if (typeFilter === "entity" && searchPattern) {
+      const isEntitySearch = typeFilter === "entity" && !!searchPattern;
+      let nameFilter = "";
+      if (isEntitySearch) {
         entityParams.push(searchPattern);
-        entityQuery += ` AND name ILIKE $2`;
+        nameFilter = ` AND e.name ILIKE $${entityParams.length}`;
       }
+      // Targeted search may want a rare entity; the default/all view must not
+      // pull in single-use entities.
+      const sharedJoin = isEntitySearch
+        ? ""
+        : `JOIN (
+             SELECT name FROM entities
+             WHERE document_id = ANY($1)
+             GROUP BY name HAVING COUNT(DISTINCT document_id) >= 2
+           ) shared ON shared.name = e.name`;
 
-      const entities = await pool.query(entityQuery, entityParams);
+      const entities = await pool.query(
+        `SELECT e.id, e.document_id, e.name, e.type, e.confidence
+           FROM entities e
+           ${sharedJoin}
+          WHERE e.document_id = ANY($1)${nameFilter}
+          LIMIT 2000`,
+        entityParams,
+      );
 
-      for (const entity of entities.rows) {
-        const existing = nodes.find((n) => n.label === entity.name && n.type === "entity");
-        const confidence = Number(entity.confidence ?? 0.5);
-        addNode(nodes, nodeIds, {
-          id: existing?.id ?? entity.id,
-          label: entity.name,
-          type: "entity",
-          x: 0,
-          y: 0,
-          size: 4 + confidence * 6,
-          color: "#FF2E63",
-        });
+      // Dedup entity nodes by name in O(n) via a Map (was an O(n^2) nodes.find).
+      const entityRows = entities.rows as Array<{
+        id: string;
+        document_id: string;
+        name: string;
+        confidence: number | string | null;
+      }>;
+      const entityIdByName = new Map<string, string>();
+      for (const entity of entityRows) {
+        let entityNodeId: string | undefined = entityIdByName.get(entity.name);
+        if (!entityNodeId) {
+          entityNodeId = entity.id;
+          entityIdByName.set(entity.name, entityNodeId);
+          const confidence = Number(entity.confidence ?? 0.5);
+          addNode(nodes, nodeIds, {
+            id: entityNodeId,
+            label: entity.name,
+            type: "entity",
+            x: 0,
+            y: 0,
+            size: 4 + confidence * 6,
+            color: "#FF2E63",
+          });
+        }
         edges.push({
           source: entity.document_id,
-          target: existing?.id ?? entity.id,
+          target: entityNodeId,
           type: "mentions",
           label: "mentions",
         });
