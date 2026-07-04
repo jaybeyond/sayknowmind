@@ -268,6 +268,10 @@ export function GraphCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, edges]);
 
+  // Above this node count the graph is dense enough that per-frame extras (link
+  // particles) hurt more than they help; used to keep a full library smooth.
+  const isLargeGraph = data.nodes.length > 300;
+
   // Sync nodeMapRef outside of render to satisfy React 19 rules-of-hooks
   useEffect(() => {
     nodeMapRef.current = data.nodeMap;
@@ -498,11 +502,14 @@ export function GraphCanvas({
         }}
         linkColor={() => linkColorValue}
         linkWidth={0.8}
-        linkDirectionalParticles={1}
+        // Animated link particles are the main per-frame cost. On a large graph
+        // (e.g. a full 1700-memory library) they tank the frame rate, so turn them
+        // off past a node threshold and let the force sim settle sooner.
+        linkDirectionalParticles={isLargeGraph ? 0 : 1}
         linkDirectionalParticleWidth={1.5}
         linkDirectionalParticleSpeed={0.004}
         linkDirectionalParticleColor={() => particleColor}
-        cooldownTicks={120}
+        cooldownTicks={isLargeGraph ? 60 : 120}
         d3AlphaDecay={0.02}
         d3VelocityDecay={0.3}
         enableNodeDrag={false}

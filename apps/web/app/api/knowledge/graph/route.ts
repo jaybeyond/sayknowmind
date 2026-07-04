@@ -56,6 +56,17 @@ export async function GET(request: NextRequest) {
   const requestedType = request.nextUrl.searchParams.get("type") ?? undefined;
   const typeFilter = requestedType && allowedTypes.has(requestedType) ? requestedType : undefined;
 
+  // How many documents to pull into the graph. The old hard cap of 100 meant an
+  // account with (say) 1700 memories only ever saw its 100 most-recent docs — the
+  // rest of the "brain" was invisible. Default is generous enough to expose a
+  // full library; `?limit=` overrides it, clamped so a pathological account can't
+  // ask for an unbounded render. (Integer + clamp => safe to interpolate below.)
+  const limitParam = Number(request.nextUrl.searchParams.get("limit"));
+  const docLimit = Math.min(
+    Math.max(Number.isFinite(limitParam) ? Math.trunc(limitParam) : 2000, 1),
+    5000,
+  );
+
   try {
     // Always build from PostgreSQL for full document+entity+category+tag graph.
     // EdgeQuake graph only has entities, so it cannot render the complete graph.
@@ -95,7 +106,7 @@ export async function GET(request: NextRequest) {
          )`;
     }
 
-    docQuery += ` ORDER BY d.updated_at DESC LIMIT 100`;
+    docQuery += ` ORDER BY d.updated_at DESC LIMIT ${docLimit}`;
     const docs = await pool.query(docQuery, docParams);
     addDocuments(documents, docs.rows);
 
@@ -112,7 +123,7 @@ export async function GET(request: NextRequest) {
              AND ${orgScopeClause("t", 3)}
              AND (t.name ILIKE $2 OR t.canonical_name ILIKE $2)
            ORDER BY d.updated_at DESC
-           LIMIT 100`,
+           LIMIT ${docLimit}`,
           [userId, searchPattern, organizationId],
         );
         addDocuments(documents, tagMatchedDocs.rows);
@@ -121,7 +132,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const docRows = [...documents.values()].slice(0, 100);
+    const docRows = [...documents.values()].slice(0, docLimit);
     const docIds = docRows.map((d) => d.id);
     const includeDocumentContext = !typeFilter
       || typeFilter === "document"
