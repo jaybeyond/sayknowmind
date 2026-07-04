@@ -159,10 +159,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch entities for the selected documents — ALL of them (the brain view
-    // is expected to show every doc, entity, category and tag). Ranked so that
+    // Everything below depends only on docIds, so the six remaining queries are
+    // independent of one another. Fire them all in parallel — sequential awaits
+    // made the API latency the SUM of six round trips instead of the slowest
+    // one. Promises are constructed in the original query order and the results
+    // are processed in that same order, so node/edge ordering is unchanged.
+    // Blocks that tolerated missing migrations (tags, relations, related) keep
+    // that tolerance via per-promise .catch(() => null).
+
+    // Entities for the selected documents — ALL of them (the brain view is
+    // expected to show every doc, entity, category and tag). Ranked so that
     // doc-connecting names come first and, if the sanity backstop ever kicks in
     // on a pathological account, the least informative rows drop first.
+    let entitiesPromise = null;
     if (docIds.length > 0 && (!typeFilter || typeFilter === "entity")) {
       const entityParams: unknown[] = [docIds];
       const isEntitySearch = typeFilter === "entity" && !!searchPattern;
@@ -172,7 +181,7 @@ export async function GET(request: NextRequest) {
         nameFilter = ` AND e.name ILIKE $${entityParams.length}`;
       }
 
-      const entities = await pool.query(
+      entitiesPromise = pool.query(
         `WITH ranked AS (
            SELECT e.id, e.document_id, e.name, e.type, e.confidence,
                   COUNT(*) OVER (PARTITION BY e.name) AS name_count
@@ -185,7 +194,148 @@ export async function GET(request: NextRequest) {
           LIMIT 20000`,
         entityParams,
       );
+    }
 
+    // Categories. Search narrows categories by name for category-filter mode,
+    // and by either name or matched document context in the all-types view.
+    let catsPromise = null;
+    let docCatsPromise = null;
+    if (!typeFilter || typeFilter === "category") {
+      // params[0]=userId ($1), params[1]=organizationId ($2) — fixed positions
+      const catParams: unknown[] = [userId, organizationId];
+      let catQuery = `SELECT DISTINCT c.id, c.name, c.parent_id
+         FROM categories c`;
+
+      if (searchPattern && !typeFilter && docIds.length > 0) {
+        catQuery += ` LEFT JOIN document_categories dc ON dc.category_id = c.id`;
+      }
+
+      catQuery += ` WHERE ${readableClause("c", 2, 1, "category")}`;
+
+      if (searchPattern) {
+        catParams.push(searchPattern);
+        if (!typeFilter && docIds.length > 0) {
+          catParams.push(docIds);
+          catQuery += ` AND (c.name ILIKE $3 OR dc.document_id = ANY($4))`;
+        } else {
+          catQuery += ` AND c.name ILIKE $3`;
+        }
+      }
+
+      catQuery += ` ORDER BY c.name LIMIT 1000`;
+      catsPromise = pool.query(catQuery, catParams);
+
+      if (docIds.length > 0) {
+        docCatsPromise = pool.query(
+          `SELECT dc.document_id, dc.category_id
+           FROM document_categories dc
+           JOIN categories c ON c.id = dc.category_id
+           WHERE dc.document_id = ANY($1) AND ${readableClause("c", 3, 2, "category")}`,
+          [docIds, userId, organizationId],
+        );
+      }
+    }
+
+    // Tags and document-tag edges. Tag-filter search narrows to matching tag
+    // labels, while all-types search keeps tag context for matched docs. Tags
+    // are introduced by a later migration; keep the graph usable if it has not
+    // been applied yet.
+    let tagsPromise = null;
+    let docTagsPromise = null;
+    if (docIds.length > 0 && (!typeFilter || typeFilter === "tag")) {
+      // params[0]=userId ($1), params[1]=docIds ($2), params[2]=organizationId ($3) — fixed
+      const tagParams: unknown[] = [userId, docIds, organizationId];
+      let tagWhere = `${orgScopeClause("t", 3)} AND dt.document_id = ANY($2)`;
+      if (typeFilter === "tag" && searchPattern) {
+        tagParams.push(searchPattern);
+        tagWhere += ` AND (t.name ILIKE $4 OR t.canonical_name ILIKE $4)`;
+      }
+
+      tagsPromise = pool
+        .query(
+          `SELECT t.id, t.name, t.canonical_name, COUNT(DISTINCT dt.document_id)::int AS document_count
+           FROM tags t
+           JOIN document_tags dt ON dt.tag_id = t.id
+           WHERE ${tagWhere}
+           GROUP BY t.id, t.name, t.canonical_name
+           ORDER BY document_count DESC, t.name
+           LIMIT 5000`,
+          tagParams,
+        )
+        .catch((err: unknown) => {
+          console.warn("[knowledge/graph] Tags unavailable:", err);
+          return null;
+        });
+
+      docTagsPromise = pool
+        .query(
+          `SELECT dt.document_id, dt.tag_id
+           FROM document_tags dt
+           JOIN tags t ON t.id = dt.tag_id
+           WHERE ${tagWhere}`,
+          tagParams,
+        )
+        .catch(() => null);
+    }
+
+    // Document-document similarity edges (from document_relations)
+    let relationsPromise = null;
+    if (docIds.length > 0 && (!typeFilter || typeFilter === "document")) {
+      relationsPromise = pool
+        .query(
+          `SELECT document_id, related_document_id, score, relation_type
+           FROM document_relations
+           WHERE document_id = ANY($1) AND related_document_id = ANY($1)
+           AND score > 0.5`,
+          [docIds],
+        )
+        .catch(() => null); /* document_relations may not exist yet */
+    }
+
+    // Obsidian-style doc↔doc links inferred from shared tags: two docs sharing
+    // >= 2 tags are directly related. Mega-tags (attached to >100 of the visible
+    // docs) are excluded — they aren't discriminative and a single 400-doc tag
+    // alone would contribute ~80k pairs (quadratic blowup). Ordered by strength
+    // with a hard cap so a pathological account can't explode the payload.
+    // (Verified on prod: 1,724 docs → ~6.5k pairs, ~200ms.)
+    let relatedPromise = null;
+    if (docIds.length > 0 && !typeFilter && !searchPattern) {
+      relatedPromise = pool
+        .query(
+          `WITH dt AS (
+             SELECT document_id, tag_id FROM document_tags WHERE document_id = ANY($1)
+           ),
+           usable AS (
+             SELECT tag_id FROM dt GROUP BY tag_id HAVING count(*) BETWEEN 2 AND 100
+           )
+           SELECT a.document_id AS d1, b.document_id AS d2, count(*) AS shared
+             FROM dt a
+             JOIN dt b ON a.tag_id = b.tag_id AND a.document_id < b.document_id
+            WHERE a.tag_id IN (SELECT tag_id FROM usable)
+            GROUP BY 1, 2
+           HAVING count(*) >= 2
+            ORDER BY count(*) DESC, 1, 2
+            LIMIT 8000`,
+          [docIds],
+        )
+        .catch((err: unknown) => {
+          console.warn("[knowledge/graph] Related-docs edges unavailable:", err);
+          return null;
+        });
+    }
+
+    const [entities, cats, docCats, tags, docTags, relations, related] =
+      await Promise.all([
+        entitiesPromise,
+        catsPromise,
+        docCatsPromise,
+        tagsPromise,
+        docTagsPromise,
+        relationsPromise,
+        relatedPromise,
+      ]);
+
+    if (entities) {
       // Dedup entity nodes by name in O(n) via a Map (was an O(n^2) nodes.find).
       const entityRows = entities.rows as Array<{
         id: string;
@@ -219,32 +369,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch categories. Search narrows categories by name for category-filter
-    // mode, and by either name or matched document context in the all-types view.
-    if (!typeFilter || typeFilter === "category") {
-      // params[0]=userId ($1), params[1]=organizationId ($2) — fixed positions
-      const catParams: unknown[] = [userId, organizationId];
-      let catQuery = `SELECT DISTINCT c.id, c.name, c.parent_id
-         FROM categories c`;
-
-      if (searchPattern && !typeFilter && docIds.length > 0) {
-        catQuery += ` LEFT JOIN document_categories dc ON dc.category_id = c.id`;
-      }
-
-      catQuery += ` WHERE ${readableClause("c", 2, 1, "category")}`;
-
-      if (searchPattern) {
-        catParams.push(searchPattern);
-        if (!typeFilter && docIds.length > 0) {
-          catParams.push(docIds);
-          catQuery += ` AND (c.name ILIKE $3 OR dc.document_id = ANY($4))`;
-        } else {
-          catQuery += ` AND c.name ILIKE $3`;
-        }
-      }
-
-      catQuery += ` ORDER BY c.name LIMIT 1000`;
-      const cats = await pool.query(catQuery, catParams);
+    if (cats) {
       for (const cat of cats.rows) {
         addNode(nodes, nodeIds, {
           id: cat.id,
@@ -259,133 +384,56 @@ export async function GET(request: NextRequest) {
           edges.push({ source: cat.parent_id, target: cat.id, type: "parent", label: "parent" });
         }
       }
+    }
 
-      if (docIds.length > 0) {
-        const docCats = await pool.query(
-          `SELECT dc.document_id, dc.category_id
-           FROM document_categories dc
-           JOIN categories c ON c.id = dc.category_id
-           WHERE dc.document_id = ANY($1) AND ${readableClause("c", 3, 2, "category")}`,
-          [docIds, userId, organizationId],
-        );
-        for (const dc of docCats.rows) {
-          edges.push({ source: dc.document_id, target: dc.category_id, type: "belongs_to", label: "belongs_to" });
-        }
+    if (docCats) {
+      for (const dc of docCats.rows) {
+        edges.push({ source: dc.document_id, target: dc.category_id, type: "belongs_to", label: "belongs_to" });
       }
     }
 
-    // Fetch tags and document-tag edges. Tag-filter search narrows to matching
-    // tag labels, while all-types search keeps tag context for matched docs.
-    if (docIds.length > 0 && (!typeFilter || typeFilter === "tag")) {
-      try {
-        // params[0]=userId ($1), params[1]=docIds ($2), params[2]=organizationId ($3) — fixed
-        const tagParams: unknown[] = [userId, docIds, organizationId];
-        let tagWhere = `${orgScopeClause("t", 3)} AND dt.document_id = ANY($2)`;
-        if (typeFilter === "tag" && searchPattern) {
-          tagParams.push(searchPattern);
-          tagWhere += ` AND (t.name ILIKE $4 OR t.canonical_name ILIKE $4)`;
-        }
-
-        const tags = await pool.query(
-          `SELECT t.id, t.name, t.canonical_name, COUNT(DISTINCT dt.document_id)::int AS document_count
-           FROM tags t
-           JOIN document_tags dt ON dt.tag_id = t.id
-           WHERE ${tagWhere}
-           GROUP BY t.id, t.name, t.canonical_name
-           ORDER BY document_count DESC, t.name
-           LIMIT 5000`,
-          tagParams,
-        );
-
-        for (const tag of tags.rows) {
-          addNode(nodes, nodeIds, {
-            id: tag.id,
-            label: tag.name,
-            type: "tag",
-            x: 0,
-            y: 0,
-            // Tags are the graph's connective hubs — scale them with how many
-            // docs they bind (up to a cap) so they pop out of the document mass
-            // instead of drowning in it.
-            size: 6 + Math.min(Math.round(Number(tag.document_count ?? 1) / 2), 14),
-            color: "#22C55E",
-          });
-        }
-
-        const docTags = await pool.query(
-          `SELECT dt.document_id, dt.tag_id
-           FROM document_tags dt
-           JOIN tags t ON t.id = dt.tag_id
-           WHERE ${tagWhere}`,
-          tagParams,
-        );
-
-        for (const dt of docTags.rows) {
-          edges.push({
-            source: dt.document_id,
-            target: dt.tag_id,
-            type: "tagged_with",
-            label: "tagged_with",
-          });
-        }
-      } catch (err) {
-        // Tags are introduced by a later migration; keep graph usable if it has
-        // not been applied yet.
-        console.warn("[knowledge/graph] Tags unavailable:", err);
+    if (tags) {
+      for (const tag of tags.rows) {
+        addNode(nodes, nodeIds, {
+          id: tag.id,
+          label: tag.name,
+          type: "tag",
+          x: 0,
+          y: 0,
+          // Tags are the graph's connective hubs — scale them with how many
+          // docs they bind (up to a cap) so they pop out of the document mass
+          // instead of drowning in it.
+          size: 6 + Math.min(Math.round(Number(tag.document_count ?? 1) / 2), 14),
+          color: "#22C55E",
+        });
       }
     }
 
-    // Document-document similarity edges (from document_relations)
-    if (docIds.length > 0 && (!typeFilter || typeFilter === "document")) {
-      try {
-        const relations = await pool.query(
-          `SELECT document_id, related_document_id, score, relation_type
-           FROM document_relations
-           WHERE document_id = ANY($1) AND related_document_id = ANY($1)
-           AND score > 0.5`,
-          [docIds],
-        );
-        for (const rel of relations.rows) {
-          edges.push({
-            source: rel.document_id,
-            target: rel.related_document_id,
-            type: rel.relation_type ?? "similar",
-            label: rel.relation_type ?? "similar",
-          });
-        }
-      } catch { /* document_relations may not exist yet */ }
+    if (docTags) {
+      for (const dt of docTags.rows) {
+        edges.push({
+          source: dt.document_id,
+          target: dt.tag_id,
+          type: "tagged_with",
+          label: "tagged_with",
+        });
+      }
     }
 
-    // Obsidian-style doc↔doc links inferred from shared tags: two docs sharing
-    // >= 2 tags are directly related. Mega-tags (attached to >100 of the visible
-    // docs) are excluded — they aren't discriminative and a single 400-doc tag
-    // alone would contribute ~80k pairs (quadratic blowup). Ordered by strength
-    // with a hard cap so a pathological account can't explode the payload.
-    // (Verified on prod: 1,724 docs → ~6.5k pairs, ~200ms.)
-    if (docIds.length > 0 && !typeFilter && !searchPattern) {
-      try {
-        const related = await pool.query(
-          `WITH dt AS (
-             SELECT document_id, tag_id FROM document_tags WHERE document_id = ANY($1)
-           ),
-           usable AS (
-             SELECT tag_id FROM dt GROUP BY tag_id HAVING count(*) BETWEEN 2 AND 100
-           )
-           SELECT a.document_id AS d1, b.document_id AS d2, count(*) AS shared
-             FROM dt a
-             JOIN dt b ON a.tag_id = b.tag_id AND a.document_id < b.document_id
-            WHERE a.tag_id IN (SELECT tag_id FROM usable)
-            GROUP BY 1, 2
-           HAVING count(*) >= 2
-            ORDER BY count(*) DESC, 1, 2
-            LIMIT 8000`,
-          [docIds],
-        );
-        for (const rel of related.rows) {
-          edges.push({ source: rel.d1, target: rel.d2, type: "related", label: "related" });
-        }
-      } catch (err) {
-        console.warn("[knowledge/graph] Related-docs edges unavailable:", err);
+    if (relations) {
+      for (const rel of relations.rows) {
+        edges.push({
+          source: rel.document_id,
+          target: rel.related_document_id,
+          type: rel.relation_type ?? "similar",
+          label: rel.relation_type ?? "similar",
+        });
+      }
+    }
+
+    if (related) {
+      for (const rel of related.rows) {
+        edges.push({ source: rel.d1, target: rel.d2, type: "related", label: "related" });
       }
     }
 

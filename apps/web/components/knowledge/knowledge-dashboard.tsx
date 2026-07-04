@@ -50,6 +50,48 @@ const graphEvents = new Set([
   "ingest:completed",
 ]);
 
+// Session-scoped cache of the last default-view graph (no search, no filter).
+// The full-brain payload takes a while to fetch and settle, so revisits paint
+// the previous graph instantly and reconcile via a silent refetch. Best-effort:
+// oversized graphs that blow the storage quota simply skip caching, and any
+// fetch failure clears it so a stale brain never outlives an auth change.
+const GRAPH_CACHE_KEY = "skm.graph-cache.v1";
+
+type CachedGraph = { nodes: GraphNode[]; edges: GraphEdge[] };
+
+function readGraphCache(): CachedGraph | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(GRAPH_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedGraph;
+    if (!Array.isArray(parsed?.nodes) || !Array.isArray(parsed?.edges)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeGraphCache(graph: CachedGraph) {
+  try {
+    window.sessionStorage.setItem(GRAPH_CACHE_KEY, JSON.stringify(graph));
+  } catch { /* quota exceeded — skip */ }
+}
+
+function clearGraphCache() {
+  try {
+    window.sessionStorage.removeItem(GRAPH_CACHE_KEY);
+  } catch { /* ignore */ }
+}
+
+function graphSignature(nodes: GraphNode[], edges: GraphEdge[]): string {
+  return (
+    nodes.map((n) => `${n.id}:${n.type}:${n.label}`).sort().join(",") +
+    "|" +
+    edges.map((e) => `${e.source}->${e.target}:${e.type}`).sort().join(",")
+  );
+}
+
 function getSseEventName(block: string): string | null {
   const eventLine = block
     .split("\n")
@@ -90,20 +132,21 @@ export function KnowledgeDashboard() {
       const data = await res.json();
       const newNodes: GraphNode[] = data.nodes ?? [];
       const newEdges: GraphEdge[] = data.edges ?? [];
-      const sig =
-        newNodes.map((n) => `${n.id}:${n.type}:${n.label}`).sort().join(",") +
-        "|" +
-        newEdges.map((e) => `${e.source}->${e.target}:${e.type}`).sort().join(",");
+      const sig = graphSignature(newNodes, newEdges);
       if (sig !== graphSigRef.current) {
         graphSigRef.current = sig;
         setNodes(newNodes);
         setEdges(newEdges);
+      }
+      if (!trimmedSearch && filter === "all") {
+        writeGraphCache({ nodes: newNodes, edges: newEdges });
       }
       if (!options.silent) {
         setAutoFitToken((value) => value + 1);
       }
     } catch (err) {
       console.error("Failed to load graph:", err);
+      clearGraphCache();
       if (!options.silent) {
         graphSigRef.current = "";
         setNodes([]);
@@ -114,8 +157,27 @@ export function KnowledgeDashboard() {
     }
   }, [search, filter]);
 
+  // First mount: if a cached default-view graph exists, paint it immediately
+  // (no skeleton) and reconcile with a silent refetch — the signature dedupe
+  // makes an unchanged graph a no-op, so nothing visibly re-settles. Seeding
+  // happens in an effect (not a useState initializer) because this component
+  // is server-rendered and sessionStorage would mismatch hydration. Later runs
+  // (search/filter changes) keep the normal skeleton behaviour.
+  const seededFromCacheRef = useRef(false);
   useEffect(() => {
-    fetchGraph();
+    let silent = false;
+    if (!seededFromCacheRef.current) {
+      seededFromCacheRef.current = true;
+      const cached = readGraphCache();
+      if (cached) {
+        graphSigRef.current = graphSignature(cached.nodes, cached.edges);
+        setNodes(cached.nodes);
+        setEdges(cached.edges);
+        setLoading(false);
+        silent = true;
+      }
+    }
+    void fetchGraph({ silent });
   }, [fetchGraph]);
 
   useEffect(() => {

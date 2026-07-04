@@ -581,10 +581,14 @@ export function GraphCanvas({
         linkDirectionalParticleWidth={1.5}
         linkDirectionalParticleSpeed={0.004}
         linkDirectionalParticleColor={() => particleColor}
-        // A big graph needs MORE settling ticks, not fewer: at alphaDecay 0.02 the
-        // sim needs ~230 ticks to converge, and freezing it early leaves the layout
-        // stuck mid-explosion (stringy/bizarre instead of the organic cloud).
-        cooldownTicks={isLargeGraph ? 300 : 120}
+        // A big graph needs ~300 total ticks to converge (alphaDecay 0.02) —
+        // freezing earlier leaves the layout stuck mid-explosion. But RENDERING
+        // each tick is what makes loading feel slow: at thousands of nodes the
+        // per-frame canvas draw dominates, so 300 rendered frames take tens of
+        // seconds. Run the first half as warmup (simulation only, no drawing —
+        // far faster per tick) and render only the settling tail.
+        warmupTicks={isLargeGraph ? 150 : 0}
+        cooldownTicks={isLargeGraph ? 150 : 120}
         onEngineStop={handleEngineStop}
         d3AlphaDecay={0.02}
         d3VelocityDecay={0.3}
