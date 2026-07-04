@@ -4,6 +4,7 @@ import { AuthGate } from "@/components/dashboard/auth-gate";
 import { MemorySidebar } from "@/components/dashboard/sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { PublicGallery } from "@/components/gallery/public-gallery";
+import { ChunkWarmup } from "@/components/perf/chunk-warmup";
 
 /**
  * Persistent dashboard shell. Rendered by the (shell) layout, so the sidebar +
@@ -22,6 +23,7 @@ export function ShellClient({ children }: { children: React.ReactNode }) {
         <SidebarProvider className="bg-sidebar">
           <MemorySidebar />
           <div className="h-svh overflow-hidden lg:p-2 w-full">{children}</div>
+          <ChunkWarmup />
         </SidebarProvider>
       }
       guest={<PublicGallery />}
