@@ -122,6 +122,10 @@ const FIT_MAX_ZOOM = 3.5;
 // and reveals labels only when you zoom in to inspect. (Tune to taste.)
 const LABEL_ZOOM_THRESHOLD = 1.5;
 
+// Hub nodes (tags / categories) are few and structurally meaningful, so their
+// labels reveal earlier than the document mass.
+const HUB_LABEL_ZOOM_THRESHOLD = 0.8;
+
 // Fit the graph into view. zoomToFit() on a single node has a zero-area bounding
 // box, so its computed scale blows up and the lone node fills the whole screen
 // as a giant circle — guard that case with a fixed, sane zoom instead.
@@ -483,10 +487,17 @@ export function GraphCanvas({
           ctx.fill();
 
           // Label — only past a zoom threshold, so a zoomed-out overview shows
-          // clean nodes instead of a pile of overlapping text. The selected node
-          // keeps its label at any zoom so it stays identifiable.
-          if (globalScale >= LABEL_ZOOM_THRESHOLD || isSelected) {
-            const fontSize = Math.max(3.5, 11 / globalScale);
+          // clean nodes instead of a pile of overlapping text. Hub nodes (tags,
+          // categories — a few hundred at most) reveal earlier than the doc mass
+          // so the structure reads first. The selected node always keeps its label.
+          const labelThreshold =
+            node.type === "tag" || node.type === "category"
+              ? HUB_LABEL_ZOOM_THRESHOLD
+              : LABEL_ZOOM_THRESHOLD;
+          if (globalScale >= labelThreshold || isSelected) {
+            // Constant ON-SCREEN size: 11px regardless of zoom (no lower floor —
+            // the old Math.max(3.5, ...) floor made labels GROW past ~3x zoom).
+            const fontSize = 11 / globalScale;
             ctx.font = `500 ${fontSize}px Inter, system-ui, sans-serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "top";
@@ -503,13 +514,15 @@ export function GraphCanvas({
         linkColor={() => linkColorValue}
         linkWidth={0.8}
         // Animated link particles are the main per-frame cost. On a large graph
-        // (e.g. a full 1700-memory library) they tank the frame rate, so turn them
-        // off past a node threshold and let the force sim settle sooner.
+        // (e.g. a full 1700-memory library) they tank the frame rate — turn them off.
         linkDirectionalParticles={isLargeGraph ? 0 : 1}
         linkDirectionalParticleWidth={1.5}
         linkDirectionalParticleSpeed={0.004}
         linkDirectionalParticleColor={() => particleColor}
-        cooldownTicks={isLargeGraph ? 60 : 120}
+        // A big graph needs MORE settling ticks, not fewer: at alphaDecay 0.02 the
+        // sim needs ~230 ticks to converge, and freezing it early leaves the layout
+        // stuck mid-explosion (stringy/bizarre instead of the organic cloud).
+        cooldownTicks={isLargeGraph ? 300 : 120}
         d3AlphaDecay={0.02}
         d3VelocityDecay={0.3}
         enableNodeDrag={false}

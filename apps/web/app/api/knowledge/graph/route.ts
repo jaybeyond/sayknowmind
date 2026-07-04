@@ -313,7 +313,10 @@ export async function GET(request: NextRequest) {
             type: "tag",
             x: 0,
             y: 0,
-            size: 5 + Math.min(Number(tag.document_count ?? 1), 6),
+            // Tags are the graph's connective hubs — scale them with how many
+            // docs they bind (up to a cap) so they pop out of the document mass
+            // instead of drowning in it.
+            size: 6 + Math.min(Math.round(Number(tag.document_count ?? 1) / 2), 14),
             color: "#22C55E",
           });
         }
