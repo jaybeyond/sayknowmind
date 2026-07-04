@@ -202,7 +202,7 @@ export function GraphCanvas({
   const savedPositionsRef = useRef<SavedPositions>(savedPositions);
   const [draggingNode, setDraggingNode] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [sizeMultiplier, setSizeMultiplier] = useState(1);
+  const [sizeMultiplier, setSizeMultiplier] = useState(0.1);
 
   // Theme-aware colors
   const labelColor = isDark ? "#ffffffcc" : "#1a1a2ecc";
@@ -534,9 +534,11 @@ export function GraphCanvas({
           const x = node.x ?? 0;
           const y = node.y ?? 0;
 
-          // Glow
+          // Glow — proportional to the node (a fixed +2 halo would dwarf nodes
+          // shrunk far below 1x via the size slider). ×1.4 matches the old
+          // (size + 2) look at the former 1x default (baseSize 5 → 7).
           ctx.beginPath();
-          ctx.arc(x, y, size + 2, 0, 2 * Math.PI);
+          ctx.arc(x, y, size * 1.4, 0, 2 * Math.PI);
           ctx.fillStyle = color + "30";
           ctx.fill();
 
@@ -622,14 +624,14 @@ export function GraphCanvas({
         <span className="text-[10px] text-muted-foreground">{t("knowledge.nodeSize")}</span>
         <input
           type="range"
-          min={0.5}
+          min={0.01}
           max={3}
-          step={0.1}
+          step={0.01}
           value={sizeMultiplier}
           onChange={(e) => setSizeMultiplier(parseFloat(e.target.value))}
           className="w-20 h-1 accent-primary"
         />
-        <span className="text-[10px] text-muted-foreground tabular-nums w-6">{sizeMultiplier.toFixed(1)}x</span>
+        <span className="text-[10px] text-muted-foreground tabular-nums w-9">{sizeMultiplier.toFixed(2)}x</span>
       </div>
 
       {/* Legend — moved to top-left so it doesn't overlap the controls */}
