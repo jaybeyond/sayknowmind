@@ -100,11 +100,34 @@ interface FGNode {
   baseSize: number;
   x?: number;
   y?: number;
+  // d3-force velocity — written by our compaction force (Obsidian-style pull
+  // toward the origin) in addition to the built-in forces.
+  vx?: number;
+  vy?: number;
   // d3-force fixed position — set while dragging to pin the node to the cursor,
   // left set after a drag so the manual placement sticks (undefined = free).
   fx?: number;
   fy?: number;
   _original: GraphNode;
+}
+
+// A d3-force "positioning" force that pulls every free node toward the origin,
+// proportional to distance (the classic forceX(0)+forceY(0) trick). This is what
+// compacts a sprawling force layout into Obsidian's circular cloud and stops
+// disconnected fragments from drifting off into long strings.
+function makeCompactionForce(strength: number) {
+  let nodes: FGNode[] = [];
+  const force = (alpha: number) => {
+    for (const n of nodes) {
+      if (n.fx != null || n.fy != null) continue; // don't fight pinned nodes
+      n.vx = (n.vx ?? 0) - (n.x ?? 0) * strength * alpha;
+      n.vy = (n.vy ?? 0) - (n.y ?? 0) * strength * alpha;
+    }
+  };
+  force.initialize = (ns: FGNode[]) => {
+    nodes = ns;
+  };
+  return force;
 }
 
 interface FGLink {
@@ -236,7 +259,10 @@ export function GraphCanvas({
       };
       // Restore a previously-dragged position: seed coords and pin it there so
       // the saved layout is honoured (unsaved nodes stay free for auto-layout).
-      const saved = savedPositions[n.id];
+      // Skipped for large graphs — a handful of pins saved against an earlier
+      // (small or broken) layout scatters weirdly inside a 3k-node auto layout,
+      // and hand-arranging a library that size isn't meaningful anyway.
+      const saved = nodes.length <= 300 ? savedPositions[n.id] : undefined;
       if (saved) {
         fgNode.x = saved.x;
         fgNode.y = saved.y;
@@ -279,6 +305,22 @@ export function GraphCanvas({
   // Above this node count the graph is dense enough that per-frame extras (link
   // particles) hurt more than they help; used to keep a full library smooth.
   const isLargeGraph = data.nodes.length > 300;
+
+  // Obsidian-style circular layout: add a gentle pull toward the origin and cap
+  // how far the charge repulsion reaches. Without these, hub-and-spoke clusters
+  // and disconnected fragments repel each other indefinitely and the layout
+  // spreads into a stringy sprawl instead of settling as a round cloud.
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg) return;
+    fg.d3Force("compact", makeCompactionForce(isLargeGraph ? 0.06 : 0.03));
+    const charge = fg.d3Force("charge") as
+      | { strength?: (s: number) => void; distanceMax?: (d: number) => void }
+      | undefined;
+    charge?.strength?.(-30);
+    charge?.distanceMax?.(250);
+    fg.d3ReheatSimulation();
+  }, [data, isLargeGraph]);
 
   // Sync nodeMapRef outside of render to satisfy React 19 rules-of-hooks
   useEffect(() => {
