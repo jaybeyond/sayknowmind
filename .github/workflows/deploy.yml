@@ -122,13 +122,21 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            set -e
             cd /opt/sayknowmind
             export TAG=${{ steps.tag.outputs.tag }}
             export REGISTRY=${{ env.REGISTRY }}
             export IMAGE_PREFIX=${{ env.IMAGE_PREFIX }}
+            # Sync the server checkout FIRST — compose services use build:
+            # directives, so without this the deploy rebuilt whatever commit
+            # happened to be on disk, not the one being deployed. --ff-only so
+            # a hand-patched (diverged) server fails loudly instead of losing
+            # its changes.
+            git fetch origin
+            git merge --ff-only origin/main
             # Use the repo's docker-compose.yml (all services: postgres, edgequake,
             # relay-server, web, etc.). Pull image: services first, then up with
             # --build so services using build: directives pick up the new commit.
             docker compose pull 2>/dev/null || true
             docker compose up -d --build --remove-orphans
-            echo "Deployed $TAG"
+            echo "Deployed $TAG ($(git rev-parse --short HEAD))"
