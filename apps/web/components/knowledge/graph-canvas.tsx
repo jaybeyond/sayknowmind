@@ -518,8 +518,8 @@ export function GraphCanvas({
         maxZoom={1e5}
       />
 
-      {/* Controls */}
-      <div className="absolute top-4 left-4 flex flex-col gap-1.5">
+      {/* Controls — bottom-left, inside the chart (legend swapped to top-left) */}
+      <div className="absolute bottom-4 left-4 flex flex-col gap-1.5">
         <button
           onClick={handleZoomIn}
           className="p-1.5 rounded-md bg-background/70 backdrop-blur-sm border border-border/50 hover:bg-muted transition-colors"
@@ -558,8 +558,8 @@ export function GraphCanvas({
         <span className="text-[10px] text-muted-foreground tabular-nums w-6">{sizeMultiplier.toFixed(1)}x</span>
       </div>
 
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 flex gap-3 bg-background/70 backdrop-blur-sm rounded-lg px-3 py-2 border border-border/50">
+      {/* Legend — moved to top-left so it doesn't overlap the controls */}
+      <div className="absolute top-4 left-4 flex gap-3 bg-background/70 backdrop-blur-sm rounded-lg px-3 py-2 border border-border/50">
         {Object.entries(NODE_COLORS).map(([type, color]) => (
           <div key={type} className="flex items-center gap-1.5">
             <div
