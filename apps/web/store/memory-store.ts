@@ -156,6 +156,8 @@ interface MemoryState {
   /** Select a folder and scope the list to a document type in one step
    *  (used by the Documents / Mind maps sidebar sections). */
   selectFolder: (collectionId: string, sourceType: "doc" | "mindmap" | null) => void;
+  /** Paint the cached snapshot for the current scope, if one exists. */
+  applyScopeCache: () => void;
   toggleTag: (tagId: string) => void;
   clearTags: () => void;
   setSearchQuery: (query: string) => void;
@@ -221,6 +223,20 @@ function scopedCategoryIds(state: {
   return [sel, ...getDescendantIds(sel)];
 }
 
+/**
+ * Session cache of the last fetched page(s) per collection scope, so switching
+ * back to a scope paints instantly instead of waiting a full round trip — the
+ * refetch still runs and reconciles. Only unsearched views are cached (search
+ * results are query-dependent). Mutations can leave an entry briefly stale;
+ * the reconciling fetch fires on every scope switch, so it self-corrects.
+ */
+type ScopeSnapshot = { memories: Memory[]; totalCount: number; hasMore: boolean; page: number };
+const scopeCache = new Map<string, ScopeSnapshot>();
+
+function scopeCacheKey(state: { selectedCollection: string; selectedTab: string | null }): string {
+  return scopedCategoryIds(state)?.join(",") ?? "all";
+}
+
 export const useMemoryStore = create<MemoryState>((set, get) => ({
   memories: [],
   archivedMemories: [],
@@ -246,19 +262,37 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   error: null,
 
   // Selection changes refetch so the list is server-scoped to the collection —
-  // the client-side filter alone only sees the currently loaded page(s).
+  // the client-side filter alone only sees the currently loaded page(s). A
+  // cached snapshot of the scope (if any) paints instantly while the refetch
+  // reconciles in the background.
   setSelectedCollection: (collectionId) => {
     set({ selectedCollection: collectionId, selectedTab: null, openEditor: null, sourceTypeFilter: null });
+    get().applyScopeCache();
     void get().fetchMemories();
   },
   setSelectedTab: (tabId) => {
     set({ selectedTab: tabId });
+    get().applyScopeCache();
     void get().fetchMemories();
   },
   setOpenEditor: (editor) => set({ openEditor: editor }),
   selectFolder: (collectionId, sourceType) => {
     set({ selectedCollection: collectionId, selectedTab: null, openEditor: null, sourceTypeFilter: sourceType });
+    get().applyScopeCache();
     void get().fetchMemories();
+  },
+
+  applyScopeCache: () => {
+    const cached = scopeCache.get(scopeCacheKey(get()));
+    if (cached) {
+      set({
+        memories: cached.memories,
+        totalCount: cached.totalCount,
+        hasMore: cached.hasMore,
+        page: cached.page,
+        isLoading: false,
+      });
+    }
   },
 
   toggleTag: (tagId) =>
@@ -511,9 +545,13 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
 
   /** Fetch first page of active memories (resets pagination) */
   fetchMemories: async () => {
-    const { searchQuery, memories } = get();
+    const { searchQuery } = get();
     const requestId = ++fetchMemoriesRequestId;
-    set({ isLoading: memories.length === 0, isLoadingMore: false, error: null });
+    const cacheKey = scopeCacheKey(get());
+    // Skeleton only when the user currently SEES nothing — if the visible
+    // (client-filtered) list has items (from the cache or a previous page),
+    // reconcile silently instead of flashing a loader over real content.
+    set({ isLoading: get().getFilteredMemories().length === 0, isLoadingMore: false, error: null });
     try {
       const url = buildDocumentsUrl({
         page: 1,
@@ -537,6 +575,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       const hasMore = typeof data.pagination?.hasMore === "boolean"
         ? data.pagination.hasMore
         : docs.length >= PAGE_SIZE && docs.length < total;
+
+      if (!searchQuery) {
+        scopeCache.set(cacheKey, { memories: docs, totalCount: total, hasMore, page: 1 });
+      }
 
       set({
         memories: docs,
@@ -586,6 +628,14 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
         const hasMoreFromApi = typeof data.pagination?.hasMore === "boolean"
           ? data.pagination.hasMore
           : docs.length > 0 && merged.length < total;
+        if (!searchQuery) {
+          scopeCache.set(scopeCacheKey(state), {
+            memories: merged,
+            totalCount: total || state.totalCount,
+            hasMore: hasMoreFromApi,
+            page: docs.length > 0 ? nextPage : state.page,
+          });
+        }
         return {
           memories: merged,
           page: docs.length > 0 ? nextPage : state.page,

@@ -11,7 +11,14 @@ import { StatsCards } from "./stats-cards";
 import { GalleryCard, type GalleryItem } from "@/components/gallery/gallery-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { X, FileUp, BookOpen, Plus, RefreshCw, Globe } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { X, FileUp, BookOpen, Plus, RefreshCw, Globe, FileText, Network, FileSpreadsheet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -257,6 +264,33 @@ export function MemoryContent() {
       }
     },
     [setOpenEditor],
+  );
+
+  // Create a doc/mindmap/sheet from the empty state, assigned to the current
+  // collection (mirrors the header "+" menu, which creates unassigned).
+  const handleCreateInCollection = useCallback(
+    async (type: "doc" | "mindmap" | "sheet") => {
+      try {
+        const res = await fetch("/api/docs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type,
+            categoryId:
+              selectedCollection !== "all" && selectedCollection !== "gallery"
+                ? selectedCollection
+                : undefined,
+          }),
+        });
+        if (!res.ok) return;
+        const { id } = (await res.json()) as { id: string };
+        setOpenEditor({ type: type === "mindmap" ? "mindmap" : "doc", id });
+        void fetchMemories();
+      } catch {
+        /* ignore */
+      }
+    },
+    [selectedCollection, setOpenEditor, fetchMemories],
   );
   const [reprocessing, setReprocessing] = useState(false);
   const [addingTab, setAddingTab] = useState(false);
@@ -654,10 +688,36 @@ export function MemoryContent() {
                   </Button>
                 )}
                 {!searchQuery && (
-                  <Button onClick={() => setDialogOpen(true)} size="sm">
-                    <Plus className="size-4 mr-2" />
-                    {t("content.addFirst")}
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm">
+                        <Plus className="size-4 mr-2" />
+                        {t("content.addFirst")}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    {/* Same entries as the header "+" menu, so the empty state
+                        offers every creatable type, not just memories. */}
+                    <DropdownMenuContent align="center" className="w-44">
+                      <DropdownMenuItem onClick={() => setDialogOpen(true)}>
+                        <Plus className="size-4 mr-2" />
+                        {t("header.addMemory")}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleCreateInCollection("doc")}>
+                        <FileText className="size-4 mr-2" />
+                        {t("header.newDoc")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleCreateInCollection("mindmap")}>
+                        <Network className="size-4 mr-2" />
+                        {t("header.newMindmap")}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleCreateInCollection("sheet")}>
+                        <FileSpreadsheet className="size-4 mr-2 text-emerald-600" />
+                        {t("office.new.sheet")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
             )}
