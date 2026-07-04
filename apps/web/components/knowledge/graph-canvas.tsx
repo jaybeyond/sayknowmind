@@ -239,6 +239,20 @@ export function GraphCanvas({
     }
   }, [dimensions.width, dimensions.height, nodes.length]);
 
+  // The force sim keeps expanding for hundreds of ticks after load, so a fit
+  // fired at load time ends up too zoomed-in and the settled cloud spills out
+  // of view. Fit ONCE more when the engine stops — then leave the camera alone
+  // so it never fights the user's own pan/zoom.
+  const needsSettleFitRef = useRef(false);
+  useEffect(() => {
+    needsSettleFitRef.current = true;
+  }, [nodes, edges]);
+  const handleEngineStop = useCallback(() => {
+    if (!needsSettleFitRef.current) return;
+    needsSettleFitRef.current = false;
+    fitGraph(fgRef.current, nodes.length, 500, 60);
+  }, [nodes.length]);
+
   // Build graph data — useMemo keeps a stable reference so d3-force only
   // re-lays-out when nodes/edges actually change (the parent dedupes no-op
   // refreshes, so this rarely recomputes).
@@ -313,7 +327,7 @@ export function GraphCanvas({
   useEffect(() => {
     const fg = fgRef.current;
     if (!fg) return;
-    fg.d3Force("compact", makeCompactionForce(isLargeGraph ? 0.06 : 0.03));
+    fg.d3Force("compact", makeCompactionForce(isLargeGraph ? 0.1 : 0.03));
     const charge = fg.d3Force("charge") as
       | { strength?: (s: number) => void; distanceMax?: (d: number) => void }
       | undefined;
@@ -569,6 +583,7 @@ export function GraphCanvas({
         // sim needs ~230 ticks to converge, and freezing it early leaves the layout
         // stuck mid-explosion (stringy/bizarre instead of the organic cloud).
         cooldownTicks={isLargeGraph ? 300 : 120}
+        onEngineStop={handleEngineStop}
         d3AlphaDecay={0.02}
         d3VelocityDecay={0.3}
         enableNodeDrag={false}

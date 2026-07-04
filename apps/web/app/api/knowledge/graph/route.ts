@@ -159,13 +159,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch entities for the selected documents.
-    //
-    // Every doc's entities are part of the brain, but on a large library the raw
-    // set explodes (one account: 1,724 docs → 13,652 entity rows). So rank them —
-    // entities whose name appears in >= 2 docs first (they CONNECT documents),
-    // then highest-confidence singles — and cap the total. The graph stays
-    // renderable while still showing each document's concepts.
+    // Fetch entities for the selected documents — ALL of them (the brain view
+    // is expected to show every doc, entity, category and tag). Ranked so that
+    // doc-connecting names come first and, if the sanity backstop ever kicks in
+    // on a pathological account, the least informative rows drop first.
     if (docIds.length > 0 && (!typeFilter || typeFilter === "entity")) {
       const entityParams: unknown[] = [docIds];
       const isEntitySearch = typeFilter === "entity" && !!searchPattern;
@@ -185,7 +182,7 @@ export async function GET(request: NextRequest) {
          SELECT id, document_id, name, type, confidence
            FROM ranked
           ORDER BY (name_count > 1) DESC, confidence DESC NULLS LAST, name
-          LIMIT 1500`,
+          LIMIT 20000`,
         entityParams,
       );
 
@@ -246,7 +243,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      catQuery += ` ORDER BY c.name LIMIT 100`;
+      catQuery += ` ORDER BY c.name LIMIT 1000`;
       const cats = await pool.query(catQuery, catParams);
       for (const cat of cats.rows) {
         addNode(nodes, nodeIds, {
@@ -296,7 +293,7 @@ export async function GET(request: NextRequest) {
            WHERE ${tagWhere}
            GROUP BY t.id, t.name, t.canonical_name
            ORDER BY document_count DESC, t.name
-           LIMIT 100`,
+           LIMIT 5000`,
           tagParams,
         );
 
