@@ -30,6 +30,8 @@ interface GraphNode {
   id: string;
   type: string;
   label: string;
+  /** Server-computed node size (e.g. tag hubs scale with how many docs they bind). */
+  size?: number;
   properties?: Record<string, unknown>;
 }
 
@@ -227,7 +229,9 @@ export function GraphCanvas({
         label: n.label,
         type: n.type,
         color: NODE_COLORS[n.type] ?? DEFAULT_COLOR,
-        baseSize: BASE_SIZES[n.type] ?? 5,
+        // Prefer the server-computed size (tag hubs scale with doc count,
+        // entities with confidence); BASE_SIZES is only the fallback.
+        baseSize: n.size ?? BASE_SIZES[n.type] ?? 5,
         _original: n,
       };
       // Restore a previously-dragged position: seed coords and pin it there so

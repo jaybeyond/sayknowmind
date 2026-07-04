@@ -161,13 +161,11 @@ export async function GET(request: NextRequest) {
 
     // Fetch entities for the selected documents.
     //
-    // Only surface entities that actually CONNECT documents — i.e. the same name
-    // appears in >= 2 of the visible docs. A single-occurrence entity is a leaf:
-    // it adds a node and one edge but no structure. On a real library that noise
-    // dominates (one account had 1,724 docs but 13,652 distinct single-use
-    // entities → ~15k nodes → the graph couldn't render at all). Requiring a
-    // shared name keeps only meaningful links. An explicit entity *search* may
-    // still reach a rare name. A hard LIMIT backstops pathological cases.
+    // Every doc's entities are part of the brain, but on a large library the raw
+    // set explodes (one account: 1,724 docs → 13,652 entity rows). So rank them —
+    // entities whose name appears in >= 2 docs first (they CONNECT documents),
+    // then highest-confidence singles — and cap the total. The graph stays
+    // renderable while still showing each document's concepts.
     if (docIds.length > 0 && (!typeFilter || typeFilter === "entity")) {
       const entityParams: unknown[] = [docIds];
       const isEntitySearch = typeFilter === "entity" && !!searchPattern;
@@ -176,22 +174,18 @@ export async function GET(request: NextRequest) {
         entityParams.push(searchPattern);
         nameFilter = ` AND e.name ILIKE $${entityParams.length}`;
       }
-      // Targeted search may want a rare entity; the default/all view must not
-      // pull in single-use entities.
-      const sharedJoin = isEntitySearch
-        ? ""
-        : `JOIN (
-             SELECT name FROM entities
-             WHERE document_id = ANY($1)
-             GROUP BY name HAVING COUNT(DISTINCT document_id) >= 2
-           ) shared ON shared.name = e.name`;
 
       const entities = await pool.query(
-        `SELECT e.id, e.document_id, e.name, e.type, e.confidence
-           FROM entities e
-           ${sharedJoin}
-          WHERE e.document_id = ANY($1)${nameFilter}
-          LIMIT 2000`,
+        `WITH ranked AS (
+           SELECT e.id, e.document_id, e.name, e.type, e.confidence,
+                  COUNT(*) OVER (PARTITION BY e.name) AS name_count
+             FROM entities e
+            WHERE e.document_id = ANY($1)${nameFilter}
+         )
+         SELECT id, document_id, name, type, confidence
+           FROM ranked
+          ORDER BY (name_count > 1) DESC, confidence DESC NULLS LAST, name
+          LIMIT 1500`,
         entityParams,
       );
 
