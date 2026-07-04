@@ -118,9 +118,11 @@ describe("Property 53: captureDocumentVersion", () => {
       await captureDocumentVersion("d1", "u", { db, force: true });
     }
     expect(await versionCount("d1")).toBe(50);
-    // the newest content must survive pruning
+    // The newest content must survive pruning. Order with the same id
+    // tiebreaker the store uses — rapid inserts can land on the same
+    // clock_timestamp() tick, and created_at alone is then nondeterministic.
     const r = await pg.query<{ content: string }>(
-      `SELECT content FROM document_versions WHERE document_id = 'd1' ORDER BY created_at DESC LIMIT 1`,
+      `SELECT content FROM document_versions WHERE document_id = 'd1' ORDER BY created_at DESC, id DESC LIMIT 1`,
     );
     expect(r.rows[0].content).toBe("content-59");
   });

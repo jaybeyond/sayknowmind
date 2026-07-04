@@ -28,8 +28,10 @@ export function sanitizeString(input: unknown, maxLength: number = 10_000): stri
   if (typeof input !== "string") return null;
   // Remove null bytes
   let clean = input.replace(/\0/g, "");
-  // Trim and enforce max length
-  clean = clean.trim().slice(0, maxLength);
+  // Trim, enforce max length, then trim again — the cut can expose trailing
+  // whitespace (e.g. "! !" sliced to 2 is "! "), and callers rely on trimmed
+  // output.
+  clean = clean.trim().slice(0, maxLength).trim();
   return clean || null;
 }
 
