@@ -61,7 +61,12 @@ export async function GET(request: NextRequest) {
   // rest of the "brain" was invisible. Default is generous enough to expose a
   // full library; `?limit=` overrides it, clamped so a pathological account can't
   // ask for an unbounded render. (Integer + clamp => safe to interpolate below.)
-  const limitParam = Number(request.nextUrl.searchParams.get("limit"));
+  // NB: searchParams.get() returns null when absent, and Number(null) === 0 —
+  // which the old clamp silently turned into LIMIT 1 (the whole graph collapsed
+  // to a single document). Treat absent/blank as "use the default".
+  const rawLimit = request.nextUrl.searchParams.get("limit");
+  const limitParam =
+    rawLimit === null || rawLimit.trim() === "" ? Number.NaN : Number(rawLimit);
   const docLimit = Math.min(
     Math.max(Number.isFinite(limitParam) ? Math.trunc(limitParam) : 2000, 1),
     5000,
