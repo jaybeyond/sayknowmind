@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { type Memory } from "@/store/memory-store";
 import {
   X,
@@ -48,6 +48,24 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
     setCurrentMemory(memory);
   }, [memory]);
 
+  // Close on outside click. The share/edit dialogs and dropdowns portal to
+  // <body> (outside the panel node), so interacting with them must not count
+  // as "outside" — otherwise the panel unmounts mid-dialog.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!memory) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const el = panelRef.current;
+      const target = e.target as HTMLElement | null;
+      if (!el || !target) return;
+      if (el.contains(target)) return;
+      if (target.closest?.('[role="dialog"], [data-radix-popper-content-wrapper]')) return;
+      onClose();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [memory, onClose]);
+
   const displayed = currentMemory ?? memory;
   const memoryId = displayed?.id;
 
@@ -69,6 +87,7 @@ export function MemoryDetailPanel({ memory, onClose }: MemoryDetailPanelProps) {
 
   return (
     <div
+      ref={panelRef}
       className={cn(
         "fixed inset-y-0 right-0 z-40 w-full max-w-md bg-background border-l border-border shadow-xl",
         "transform transition-transform duration-200 ease-out",
