@@ -28,15 +28,15 @@ export async function GET() {
            AND d.created_at >= NOW() - INTERVAL '7 days'`,
         [userId, organizationId],
       ),
-      // Top 3 categories
+      // Top 3 categories (id included so the sidebar widget can link into them)
       pool.query(
-        `SELECT c.name, COUNT(dc.document_id) as count
+        `SELECT c.id, c.name, COUNT(dc.document_id) as count
          FROM document_categories dc
          JOIN categories c ON c.id = dc.category_id
          JOIN documents d ON d.id = dc.document_id
          WHERE ${readableClause("d", 2, 1, "document")}
            AND ${readableClause("c", 2, 1, "category")}
-         GROUP BY c.name
+         GROUP BY c.id, c.name
          ORDER BY count DESC LIMIT 3`,
         [userId, organizationId],
       ),
@@ -65,7 +65,8 @@ export async function GET() {
     return NextResponse.json({
       totalDocuments: parseInt(totalRes.rows[0].count, 10),
       thisWeek: parseInt(weekRes.rows[0].count, 10),
-      topCategories: topCatsRes.rows.map((r: { name: string; count: string }) => ({
+      topCategories: topCatsRes.rows.map((r: { id: string; name: string; count: string }) => ({
+        id: r.id,
         name: r.name,
         count: parseInt(r.count, 10),
       })),

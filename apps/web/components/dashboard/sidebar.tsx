@@ -90,10 +90,21 @@ function InsightsWidget() {
     s.setSortBy("date-newest");
     router.push("/");
   }, [router]);
+  // Clicking a top-category row scopes the memories list to that collection —
+  // same dead-end complaint as the stat tiles, same cure.
+  const goToCollection = React.useCallback(
+    (categoryId: string) => {
+      const s = useMemoryStore.getState();
+      s.setSelectedCollection(categoryId);
+      s.clearTags();
+      router.push("/");
+    },
+    [router],
+  );
   const [insights, setInsights] = React.useState<{
     totalDocuments: number;
     thisWeek: number;
-    topCategories: Array<{ name: string; count: number }>;
+    topCategories: Array<{ id?: string; name: string; count: number }>;
     pendingJobs: number;
   } | null>(null);
   // Change signal: the memory store is refreshed by the SSE stream (see
@@ -149,12 +160,24 @@ function InsightsWidget() {
       </div>
       {insights.topCategories.length > 0 && (
         <div className="space-y-1">
-          {insights.topCategories.map((cat) => (
-            <div key={cat.name} className="flex items-center justify-between text-xs">
-              <span className="truncate text-muted-foreground">{cat.name}</span>
-              <span className="text-muted-foreground/60 shrink-0">{cat.count}</span>
-            </div>
-          ))}
+          {insights.topCategories.map((cat) =>
+            cat.id ? (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => goToCollection(cat.id!)}
+                className="flex w-full items-center justify-between text-xs cursor-pointer rounded-sm px-1 -mx-1 py-0.5 hover:bg-accent transition-colors"
+              >
+                <span className="truncate text-muted-foreground">{cat.name}</span>
+                <span className="text-muted-foreground/60 shrink-0">{cat.count}</span>
+              </button>
+            ) : (
+              <div key={cat.name} className="flex items-center justify-between text-xs">
+                <span className="truncate text-muted-foreground">{cat.name}</span>
+                <span className="text-muted-foreground/60 shrink-0">{cat.count}</span>
+              </div>
+            ),
+          )}
         </div>
       )}
       {insights.pendingJobs > 0 && (
