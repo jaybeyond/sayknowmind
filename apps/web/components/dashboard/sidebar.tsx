@@ -232,6 +232,24 @@ function FolderItem({
   const children = getChildren(category.id);
   const [teamShareOpen, setTeamShareOpen] = React.useState(false);
 
+  // Memory count badge: self + descendant folders, matching what clicking the
+  // folder actually lists (folder selection includes descendants).
+  const allCategories = useCategoriesStore((s) => s.categories);
+  const memoryCount = React.useMemo(() => {
+    let total = category.documentCount ?? 0;
+    const queue = [category.id];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const c of allCategories) {
+        if (c.parent_id === current) {
+          total += c.documentCount ?? 0;
+          queue.push(c.id);
+        }
+      }
+    }
+    return total;
+  }, [allCategories, category.id, category.documentCount]);
+
   const renderChildren = () =>
     children.map((child) => (
       <FolderItem
@@ -310,6 +328,10 @@ function FolderItem({
         >
           <Folder className="size-5" />
           <span className="flex-1 truncate">{category.name}</span>
+          {/* Count yields to the hover action buttons so the row doesn't crowd */}
+          <span className="text-[10px] text-muted-foreground/70 tabular-nums shrink-0 group-hover/cat:hidden">
+            {memoryCount}
+          </span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
               <button className="opacity-0 group-hover/cat:opacity-100 p-0.5 rounded hover:bg-muted transition-opacity shrink-0" title={t("sidebar.newSubfolder")}>

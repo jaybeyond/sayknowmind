@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useMemoryStore } from "@/store/memory-store";
+import { useCategoriesStore } from "@/store/categories-store";
 
 /**
  * Hook that subscribes to the SSE stream at /api/events/stream using fetch.
@@ -10,6 +11,7 @@ import { useMemoryStore } from "@/store/memory-store";
  */
 export function useDocumentEvents() {
   const fetchMemories = useMemoryStore((s) => s.fetchMemories);
+  const fetchCategories = useCategoriesStore((s) => s.fetchCategories);
   const retryRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -48,6 +50,9 @@ export function useDocumentEvents() {
                 line.startsWith("event: ingest:completed") ||
                 line.startsWith("event: ingest:failed")) {
               fetchMemories();
+              // Folder count badges come from /api/categories, so document
+              // changes must refresh those too or the counts go stale.
+              fetchCategories();
             }
           }
         }
@@ -70,5 +75,5 @@ export function useDocumentEvents() {
       abortRef.current?.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [fetchMemories]);
+  }, [fetchMemories, fetchCategories]);
 }

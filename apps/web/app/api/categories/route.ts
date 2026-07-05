@@ -39,7 +39,13 @@ export async function GET(request: NextRequest) {
     // Build graph structure
     const graph = buildGraph(categories, docCounts);
 
-    return NextResponse.json({ categories, tree, graph });
+    // Counts on the flat list too — the sidebar folder rows consume this shape.
+    const categoriesWithCounts = categories.map((c) => ({
+      ...c,
+      documentCount: docCounts.get(c.id) ?? 0,
+    }));
+
+    return NextResponse.json({ categories: categoriesWithCounts, tree, graph });
   } catch (err) {
     console.error("[categories] GET error:", err);
     return NextResponse.json(

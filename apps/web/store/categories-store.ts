@@ -10,6 +10,8 @@ export interface CategoryItem {
   path: string;
   parent_id: string | null;
   kind: CategoryKind;
+  /** Memories directly assigned to this category (server-computed). */
+  documentCount?: number;
 }
 
 interface CategoriesState {
