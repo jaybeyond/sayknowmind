@@ -25,26 +25,40 @@ const CONFIG_PATH = join(process.cwd(), ".sayknowmind-providers.json");
 
 const EMPTY: ProviderConfig = { activeProviderId: "", providers: [] };
 
-/** Well-known providers that can be auto-configured from env vars. */
+/**
+ * Well-known providers auto-configured from env vars. Each expands into one
+ * ProviderEntry per model (see getEnvProviders), so a provider can carry an
+ * ordered fallback cascade — the cloud-ai loop tries them in order.
+ */
 const ENV_PROVIDERS: Array<{
   envKey: string;
   id: string;
   baseUrl: string;
-  model: string;
+  models: string[];
 }> = [
   {
     envKey: "OPENROUTER_API_KEY",
     id: "openrouter",
     baseUrl: "https://openrouter.ai/api",
-    // Cheap, fast, vision-capable default for the shared free tier. (The old
-    // gemini-2.0-flash-001 was retired from OpenRouter — 404 no endpoints.)
-    model: "google/gemini-2.5-flash-lite",
+    // Shared free-tier cascade: primary first, then fallbacks. Free OpenRouter
+    // models are frequently rate-limited (429), and reasoning models can return
+    // empty content within budget — the cloud-ai cascade falls through to the
+    // next entry on any such failure, so listing several keeps the free tier
+    // resilient. All validated as existing + free on OpenRouter (2026-07).
+    models: [
+      "poolside/laguna-m.1:free",
+      "google/gemma-4-31b-it:free",
+      "nvidia/nemotron-3-super-120b-a12b:free",
+      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "nvidia/nemotron-nano-9b-v2:free",
+      "openai/gpt-oss-20b:free",
+    ],
   },
   {
     envKey: "OPENAI_API_KEY",
     id: "openai",
     baseUrl: "https://api.openai.com",
-    model: "gpt-4o-mini",
+    models: ["gpt-4o-mini"],
   },
 ];
 
@@ -74,7 +88,9 @@ function getEnvProviders(): ProviderEntry[] {
   for (const ep of ENV_PROVIDERS) {
     const key = process.env[ep.envKey];
     if (key && key.length > 10 && !key.startsWith("<")) {
-      entries.push({ id: ep.id, apiKey: key, model: ep.model, baseUrl: ep.baseUrl });
+      for (const model of ep.models) {
+        entries.push({ id: ep.id, apiKey: key, model, baseUrl: ep.baseUrl });
+      }
     }
   }
   return entries;
