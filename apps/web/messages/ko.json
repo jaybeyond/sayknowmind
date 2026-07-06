@@ -1065,6 +1065,7 @@
     "clearDue": "지우기",
     "online": "접속 중",
     "description": "설명",
-    "descriptionPlaceholder": "세부 내용을 추가…"
+    "descriptionPlaceholder": "세부 내용을 추가…",
+    "startDate": "시작일"
   }
 }

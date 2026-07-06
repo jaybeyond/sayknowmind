@@ -1065,6 +1065,7 @@
     "clearDue": "クリア",
     "online": "オンライン",
     "description": "説明",
-    "descriptionPlaceholder": "詳細を追加…"
+    "descriptionPlaceholder": "詳細を追加…",
+    "startDate": "開始日"
   }
 }

@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
   const priority = isValidPriority(body.priority) ? body.priority : "no-priority";
   const description = typeof body.description === "string" ? body.description : null;
   const assigneeId = typeof body.assigneeId === "string" && body.assigneeId ? body.assigneeId : null;
+  const startDate = typeof body.startDate === "string" && body.startDate ? body.startDate : null;
   const dueDate = typeof body.dueDate === "string" && body.dueDate ? body.dueDate : null;
   const documentId = typeof body.documentId === "string" && body.documentId ? body.documentId : null;
 
@@ -81,12 +82,12 @@ export async function POST(request: NextRequest) {
     const inserted = await pool.query(
       `INSERT INTO work_items
          (user_id, organization_id, identifier, title, description, status,
-          priority, assignee_id, due_date, document_id, rank, completed_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, CASE WHEN $6 = 'completed' THEN now() ELSE NULL END)
+          priority, assignee_id, start_date, due_date, document_id, rank, completed_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, CASE WHEN $6 = 'completed' THEN now() ELSE NULL END)
        RETURNING id`,
       [
         ctx.userId, ctx.organizationId, identifier, title, description, status,
-        priority, safeAssignee, dueDate, documentId, rank,
+        priority, safeAssignee, startDate, dueDate, documentId, rank,
       ],
     );
 

@@ -43,6 +43,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (typeof body.title === "string" && body.title.trim()) push("title", body.title.trim());
   if (typeof body.description === "string") push("description", body.description);
   if (isValidPriority(body.priority)) push("priority", body.priority);
+  if (typeof body.startDate === "string" || body.startDate === null) push("start_date", body.startDate || null);
   if (typeof body.dueDate === "string" || body.dueDate === null) push("due_date", body.dueDate || null);
   if (typeof body.rank === "string") push("rank", body.rank);
 

@@ -110,6 +110,7 @@ jobs:
           apply db/migrations/066_rls_org_backstop.sql
           apply db/migrations/067_add_tasks.sql
           apply db/migrations/068_work_items_due_datetime.sql
+          apply db/migrations/069_work_items_start_date.sql
 
           # better-auth rateLimit (no migration file ships this)
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c '

@@ -77,6 +77,7 @@ export interface Task {
   assignee: { id: string; name: string | null; email: string | null; image: string | null } | null;
   labels: TaskLabel[];
   rank: string | null;
+  startDate: string | null;
   dueDate: string | null;
   documentId: string | null;
   createdAt: string;

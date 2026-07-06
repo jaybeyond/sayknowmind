@@ -16,6 +16,7 @@ interface WorkItemRow {
   priority: string;
   labels: TaskLabel[] | null;
   rank: string | null;
+  start_date: string | null;
   due_date: string | null;
   document_id: string | null;
   created_at: string;
@@ -40,6 +41,7 @@ export function mapWorkItem(r: WorkItemRow): Task {
       : null,
     labels: Array.isArray(r.labels) ? r.labels : [],
     rank: r.rank,
+    startDate: r.start_date,
     dueDate: r.due_date,
     documentId: r.document_id,
     createdAt: r.created_at,
@@ -50,8 +52,8 @@ export function mapWorkItem(r: WorkItemRow): Task {
 
 const SELECT_COLUMNS = `
   w.id, w.identifier, w.title, w.description, w.status, w.priority,
-  w.labels, w.rank, w.due_date, w.document_id, w.created_at, w.updated_at,
-  w.completed_at, w.assignee_id,
+  w.labels, w.rank, w.start_date, w.due_date, w.document_id, w.created_at,
+  w.updated_at, w.completed_at, w.assignee_id,
   u.name AS assignee_name, u.email AS assignee_email, u.image AS assignee_image
 `;
 

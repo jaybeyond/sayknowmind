@@ -146,9 +146,14 @@ export function TaskDetailSheet() {
                   )}
                 </Field>
 
-                <Field label={t("tasks.setDue")}>
-                  <DueDateField value={task.dueDate} status={task.status} onChange={(iso) => updateTask(task.id, { dueDate: iso })} />
-                </Field>
+                <div className="flex gap-6">
+                  <Field label={t("tasks.startDate")}>
+                    <DueDateField value={task.startDate} onChange={(iso) => updateTask(task.id, { startDate: iso })} />
+                  </Field>
+                  <Field label={t("tasks.setDue")}>
+                    <DueDateField value={task.dueDate} status={task.status} onChange={(iso) => updateTask(task.id, { dueDate: iso })} />
+                  </Field>
+                </div>
               </div>
 
               {/* Description */}

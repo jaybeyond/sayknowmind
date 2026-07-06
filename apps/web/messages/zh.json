@@ -1065,6 +1065,7 @@
     "clearDue": "清除",
     "online": "在线",
     "description": "描述",
-    "descriptionPlaceholder": "添加更多细节…"
+    "descriptionPlaceholder": "添加更多细节…",
+    "startDate": "开始日期"
   }
 }
