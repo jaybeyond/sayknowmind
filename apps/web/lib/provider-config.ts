@@ -44,14 +44,17 @@ const ENV_PROVIDERS: Array<{
     // models are frequently rate-limited (429), and reasoning models can return
     // empty content within budget — the cloud-ai cascade falls through to the
     // next entry on any such failure, so listing several keeps the free tier
-    // resilient. All validated as existing + free on OpenRouter (2026-07).
+    // resilient. Ordered fast/reliable non-reasoning first (gpt-oss + nemotron
+    // omni returned clean content immediately); the slower reasoning models
+    // (laguna, nemotron-nano-v2) sit at the back. All validated as existing +
+    // free on OpenRouter (2026-07).
     models: [
-      "poolside/laguna-m.1:free",
+      "openai/gpt-oss-20b:free",
+      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
       "google/gemma-4-31b-it:free",
       "nvidia/nemotron-3-super-120b-a12b:free",
-      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
       "nvidia/nemotron-nano-9b-v2:free",
-      "openai/gpt-oss-20b:free",
+      "poolside/laguna-m.1:free",
     ],
   },
   {
