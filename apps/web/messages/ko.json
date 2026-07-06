@@ -1060,6 +1060,8 @@
     },
     "today": "오늘",
     "emptyGroup": "작업 없음",
-    "unscheduledCount": "미일정 {{count}}건"
+    "unscheduledCount": "미일정 {{count}}건",
+    "setDue": "날짜 설정",
+    "clearDue": "지우기"
   }
 }

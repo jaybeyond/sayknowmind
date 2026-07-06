@@ -1060,6 +1060,8 @@
     },
     "today": "Today",
     "emptyGroup": "No tasks",
-    "unscheduledCount": "{{count}} unscheduled"
+    "unscheduledCount": "{{count}} unscheduled",
+    "setDue": "Set date",
+    "clearDue": "Clear"
   }
 }

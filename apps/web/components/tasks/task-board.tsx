@@ -8,11 +8,13 @@ import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TaskCard } from "./task-card";
+import { DueDateField } from "./due-date-field";
 
 function QuickAdd({ status, onDone }: { status: TaskStatusId; onDone: () => void }) {
   const { t } = useTranslation();
   const createTask = useTasksStore((s) => s.createTask);
   const [title, setTitle] = useState("");
+  const [dueDate, setDueDate] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -26,12 +28,20 @@ function QuickAdd({ status, onDone }: { status: TaskStatusId; onDone: () => void
       return;
     }
     setTitle("");
-    await createTask({ title: trimmed, status });
+    setDueDate(null);
+    await createTask({ title: trimmed, status, dueDate });
     onDone();
   };
 
   return (
-    <div className="rounded-lg border border-primary/40 bg-background p-2">
+    <div
+      className="rounded-lg border border-primary/40 bg-background p-2 space-y-1.5"
+      // Submit only when focus leaves the whole form (not when moving to the
+      // date picker inside it) — otherwise picking a due date would submit.
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) void submit();
+      }}
+    >
       <textarea
         ref={inputRef}
         value={title}
@@ -44,11 +54,11 @@ function QuickAdd({ status, onDone }: { status: TaskStatusId; onDone: () => void
             onDone();
           }
         }}
-        onBlur={() => void submit()}
         placeholder={t("tasks.newTaskPlaceholder")}
         rows={2}
         className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
+      <DueDateField value={dueDate} status={status} size="xs" onChange={setDueDate} />
     </div>
   );
 }

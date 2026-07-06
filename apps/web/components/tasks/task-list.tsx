@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, Plus, Trash2, CalendarDays } from "lucide-react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -17,15 +17,14 @@ import { TASK_STATUSES, TASK_PRIORITIES, type Task, type TaskStatusId } from "@/
 import { useTasksStore } from "@/store/tasks-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { PRIORITY_DOT, initials, isOverdue } from "./shared";
+import { PRIORITY_DOT, initials } from "./shared";
+import { DueDateField } from "./due-date-field";
 
 function TaskRow({ task }: { task: Task }) {
   const { t } = useTranslation();
   const updateTask = useTasksStore((s) => s.updateTask);
   const deleteTask = useTasksStore((s) => s.deleteTask);
   const members = useTasksStore((s) => s.members);
-  const due = task.dueDate ? new Date(task.dueDate) : null;
-  const overdue = isOverdue(task.dueDate, task.status);
 
   return (
     <div className="group/row flex items-center gap-3 px-3 py-2 border-b border-border/60 hover:bg-muted/40 transition-colors">
@@ -34,12 +33,9 @@ function TaskRow({ task }: { task: Task }) {
         {task.identifier}
       </span>
       <span className="flex-1 text-sm truncate">{task.title}</span>
-      {due && (
-        <span className={cn("inline-flex items-center gap-1 text-[11px] shrink-0", overdue ? "text-destructive" : "text-muted-foreground")}>
-          <CalendarDays className="size-3" />
-          {due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-        </span>
-      )}
+      <span className="shrink-0">
+        <DueDateField value={task.dueDate} status={task.status} onChange={(iso) => updateTask(task.id, { dueDate: iso })} />
+      </span>
       {task.assignee ? (
         <Avatar className="size-5 shrink-0">
           {task.assignee.image && <AvatarImage src={task.assignee.image} alt="" />}
@@ -107,12 +103,14 @@ function StatusGroup({ status, tasks }: { status: (typeof TASK_STATUSES)[number]
   const [open, setOpen] = useState(true);
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
+  const [dueDate, setDueDate] = useState<string | null>(null);
 
   const submit = async () => {
     const trimmed = title.trim();
     setTitle("");
+    setDueDate(null);
     setAdding(false);
-    if (trimmed) await createTask({ title: trimmed, status: status.id });
+    if (trimmed) await createTask({ title: trimmed, status: status.id, dueDate });
   };
 
   return (
@@ -131,19 +129,22 @@ function StatusGroup({ status, tasks }: { status: (typeof TASK_STATUSES)[number]
       {open && (
         <>
           {adding && (
-            <div className="px-3 py-2 border-b border-border/60">
+            <div
+              className="px-3 py-2 border-b border-border/60 flex items-center gap-3"
+              onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) void submit(); }}
+            >
               <input
                 autoFocus
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void submit();
-                  else if (e.key === "Escape") { setAdding(false); setTitle(""); }
+                  else if (e.key === "Escape") { setAdding(false); setTitle(""); setDueDate(null); }
                 }}
-                onBlur={() => void submit()}
                 placeholder={t("tasks.newTaskPlaceholder")}
-                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
+              <DueDateField value={dueDate} status={status.id} onChange={setDueDate} />
             </div>
           )}
           {tasks.map((task) => <TaskRow key={task.id} task={task} />)}

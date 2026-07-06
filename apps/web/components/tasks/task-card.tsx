@@ -11,24 +11,13 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Trash2, CalendarDays } from "lucide-react";
+import { MoreHorizontal, Trash2 } from "lucide-react";
 import { TASK_PRIORITIES, TASK_STATUSES, type Task } from "@/lib/tasks/constants";
 import { useTasksStore } from "@/store/tasks-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-
-const PRIORITY_DOT: Record<string, string> = {
-  urgent: "bg-red-500",
-  high: "bg-orange-500",
-  medium: "bg-yellow-500",
-  low: "bg-sky-500",
-  "no-priority": "bg-muted-foreground/30",
-};
-
-function initials(name: string | null, email: string | null): string {
-  const src = (name || email || "?").trim();
-  return src.slice(0, 2).toUpperCase();
-}
+import { PRIORITY_DOT, initials } from "./shared";
+import { DueDateField } from "./due-date-field";
 
 export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: string) => void }) {
   const { t } = useTranslation();
@@ -37,8 +26,6 @@ export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: 
   const members = useTasksStore((s) => s.members);
 
   const priority = TASK_PRIORITIES.find((p) => p.id === task.priority);
-  const due = task.dueDate ? new Date(task.dueDate) : null;
-  const overdue = due ? due < new Date(new Date().toDateString()) && task.status !== "completed" : false;
 
   return (
     <div
@@ -117,7 +104,7 @@ export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: 
 
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          {task.labels.slice(0, 2).map((l) => (
+          {task.labels.slice(0, 1).map((l) => (
             <span
               key={l.id}
               className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border border-border"
@@ -126,12 +113,12 @@ export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: 
               <span className="truncate max-w-16">{l.name}</span>
             </span>
           ))}
-          {due && (
-            <span className={cn("inline-flex items-center gap-1 text-[10px]", overdue ? "text-destructive" : "text-muted-foreground")}>
-              <CalendarDays className="size-3" />
-              {due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-            </span>
-          )}
+          <DueDateField
+            value={task.dueDate}
+            status={task.status}
+            size="xs"
+            onChange={(iso) => updateTask(task.id, { dueDate: iso })}
+          />
         </div>
         {task.assignee && (
           <Avatar className="size-5 shrink-0">

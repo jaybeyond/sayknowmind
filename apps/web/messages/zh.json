@@ -1060,6 +1060,8 @@
     },
     "today": "今天",
     "emptyGroup": "暂无任务",
-    "unscheduledCount": "{{count}} 项未排期"
+    "unscheduledCount": "{{count}} 项未排期",
+    "setDue": "设置日期",
+    "clearDue": "清除"
   }
 }
