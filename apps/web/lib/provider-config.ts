@@ -36,7 +36,9 @@ const ENV_PROVIDERS: Array<{
     envKey: "OPENROUTER_API_KEY",
     id: "openrouter",
     baseUrl: "https://openrouter.ai/api",
-    model: "google/gemini-2.0-flash-001",
+    // Cheap, fast, vision-capable default for the shared free tier. (The old
+    // gemini-2.0-flash-001 was retired from OpenRouter — 404 no endpoints.)
+    model: "google/gemini-2.5-flash-lite",
   },
   {
     envKey: "OPENAI_API_KEY",
