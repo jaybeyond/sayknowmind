@@ -24,6 +24,7 @@ export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: 
   const updateTask = useTasksStore((s) => s.updateTask);
   const deleteTask = useTasksStore((s) => s.deleteTask);
   const members = useTasksStore((s) => s.members);
+  const openTask = useTasksStore((s) => s.openTask);
 
   const priority = TASK_PRIORITIES.find((p) => p.id === task.priority);
 
@@ -100,7 +101,12 @@ export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: 
         </DropdownMenu>
       </div>
 
-      <p className="mt-1.5 text-sm leading-snug line-clamp-3">{task.title}</p>
+      <button
+        onClick={() => openTask(task.id)}
+        className="mt-1.5 text-sm leading-snug line-clamp-3 text-left w-full hover:text-primary transition-colors"
+      >
+        {task.title}
+      </button>
 
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">

@@ -24,6 +24,7 @@ function monthGrid(year: number, month: number): Date[] {
 export function TaskCalendar() {
   const { t } = useTranslation();
   const tasks = useTasksStore((s) => s.tasks);
+  const openTask = useTasksStore((s) => s.openTask);
   const [cursor, setCursor] = useState(() => {
     const n = new Date();
     return { year: n.getFullYear(), month: n.getMonth() };
@@ -104,10 +105,15 @@ export function TaskCalendar() {
                 {day.getDate()}
               </span>
               {dayTasks.slice(0, 3).map((task) => (
-                <div key={task.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 bg-muted/60 truncate" title={task.title}>
+                <button
+                  key={task.id}
+                  onClick={() => openTask(task.id)}
+                  className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 bg-muted/60 hover:bg-muted truncate w-full text-left transition-colors"
+                  title={task.title}
+                >
                   <span className="size-1.5 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLOR[task.status] }} />
                   <span className="truncate">{task.title}</span>
-                </div>
+                </button>
               ))}
               {dayTasks.length > 3 && (
                 <span className="text-[10px] text-muted-foreground px-1">+{dayTasks.length - 3}</span>

@@ -1062,6 +1062,9 @@
     "emptyGroup": "暂无任务",
     "unscheduledCount": "{{count}} 项未排期",
     "setDue": "设置日期",
-    "clearDue": "清除"
+    "clearDue": "清除",
+    "online": "在线",
+    "description": "描述",
+    "descriptionPlaceholder": "添加更多细节…"
   }
 }

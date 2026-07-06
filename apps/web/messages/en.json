@@ -1062,6 +1062,9 @@
     "emptyGroup": "No tasks",
     "unscheduledCount": "{{count}} unscheduled",
     "setDue": "Set date",
-    "clearDue": "Clear"
+    "clearDue": "Clear",
+    "online": "Online",
+    "description": "Description",
+    "descriptionPlaceholder": "Add more detail…"
   }
 }

@@ -22,6 +22,8 @@ interface TasksState {
   members: TaskMember[];
   isLoading: boolean;
   error: string | null;
+  /** Task open in the detail sheet (edit from any view), or null. */
+  selectedTaskId: string | null;
 
   fetchTasks: () => Promise<void>;
   fetchMembers: () => Promise<void>;
@@ -30,6 +32,8 @@ interface TasksState {
   /** Optimistic status move (drag-and-drop between board columns). */
   moveTask: (id: string, status: TaskStatusId) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
+  openTask: (id: string) => void;
+  closeTask: () => void;
 }
 
 export const useTasksStore = create<TasksState>((set, get) => ({
@@ -37,6 +41,10 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   members: [],
   isLoading: true,
   error: null,
+  selectedTaskId: null,
+
+  openTask: (id) => set({ selectedTaskId: id }),
+  closeTask: () => set({ selectedTaskId: null }),
 
   fetchTasks: async () => {
     set({ isLoading: get().tasks.length === 0, error: null });
@@ -119,7 +127,10 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   deleteTask: async (id) => {
     const prev = get().tasks;
-    set({ tasks: prev.filter((t) => t.id !== id) });
+    set({
+      tasks: prev.filter((t) => t.id !== id),
+      selectedTaskId: get().selectedTaskId === id ? null : get().selectedTaskId,
+    });
     try {
       const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("delete failed");

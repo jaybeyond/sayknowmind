@@ -1062,6 +1062,9 @@
     "emptyGroup": "タスクなし",
     "unscheduledCount": "未定 {{count}}件",
     "setDue": "日付を設定",
-    "clearDue": "クリア"
+    "clearDue": "クリア",
+    "online": "オンライン",
+    "description": "説明",
+    "descriptionPlaceholder": "詳細を追加…"
   }
 }

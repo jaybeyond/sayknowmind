@@ -25,6 +25,7 @@ function TaskRow({ task }: { task: Task }) {
   const updateTask = useTasksStore((s) => s.updateTask);
   const deleteTask = useTasksStore((s) => s.deleteTask);
   const members = useTasksStore((s) => s.members);
+  const openTask = useTasksStore((s) => s.openTask);
 
   return (
     <div className="group/row flex items-center gap-3 px-3 py-2 border-b border-border/60 hover:bg-muted/40 transition-colors">
@@ -32,7 +33,9 @@ function TaskRow({ task }: { task: Task }) {
       <span className="text-[11px] font-medium text-muted-foreground tabular-nums w-16 shrink-0 truncate">
         {task.identifier}
       </span>
-      <span className="flex-1 text-sm truncate">{task.title}</span>
+      <button onClick={() => openTask(task.id)} className="flex-1 text-sm truncate text-left hover:text-primary transition-colors">
+        {task.title}
+      </button>
       <span className="shrink-0">
         <DueDateField value={task.dueDate} status={task.status} onChange={(iso) => updateTask(task.id, { dueDate: iso })} />
       </span>

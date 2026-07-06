@@ -24,6 +24,7 @@ function taskSpan(task: Task): { start: Date; end: Date } {
 export function TaskTimeline() {
   const { t } = useTranslation();
   const tasks = useTasksStore((s) => s.tasks);
+  const openTask = useTasksStore((s) => s.openTask);
 
   const { rows, days, rangeStart } = useMemo(() => {
     if (tasks.length === 0) return { rows: [] as Task[], days: [] as Date[], rangeStart: new Date() };
@@ -89,19 +90,23 @@ export function TaskTimeline() {
           const length = Math.max(1, Math.round((end.getTime() - start.getTime()) / DAY_MS) + 1);
           return (
             <div key={task.id} className="flex items-center border-b border-border/40 hover:bg-muted/30">
-              <div className="w-56 shrink-0 border-r border-border px-3 py-2 flex items-center gap-2 min-w-0">
+              <button
+                onClick={() => openTask(task.id)}
+                className="w-56 shrink-0 border-r border-border px-3 py-2 flex items-center gap-2 min-w-0 text-left hover:bg-muted/40 transition-colors"
+              >
                 <span className={cn("size-2 rounded-full shrink-0", PRIORITY_DOT[task.priority])} />
                 <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{task.identifier}</span>
                 <span className="text-sm truncate">{task.title}</span>
-              </div>
+              </button>
               <div className="relative py-2" style={{ width: days.length * COL, height: 36 }}>
-                <div
-                  className="absolute top-1/2 -translate-y-1/2 h-5 rounded-md flex items-center px-2 text-[10px] text-white/95 truncate shadow-sm"
+                <button
+                  onClick={() => openTask(task.id)}
+                  className="absolute top-1/2 -translate-y-1/2 h-5 rounded-md flex items-center px-2 text-[10px] text-white/95 truncate shadow-sm hover:brightness-110 transition-all cursor-pointer"
                   style={{ left: offset * COL + 2, width: length * COL - 4, backgroundColor: STATUS_COLOR[task.status] }}
                   title={task.title}
                 >
                   <span className="truncate">{task.title}</span>
-                </div>
+                </button>
               </div>
             </div>
           );
