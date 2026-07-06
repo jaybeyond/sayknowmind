@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
+import { getUserOrgs } from "@/lib/tasks/store";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +20,17 @@ export async function GET() {
     );
   }
   try {
+    // Union of members across every org the caller belongs to, deduped — so the
+    // assignee picker covers personal + team work in the cross-org task view.
+    const orgs = await getUserOrgs(ctx.userId);
+    if (orgs.allIds.length === 0) return NextResponse.json({ members: [] });
     const res = await pool.query(
-      `SELECT u.id, u.name, u.email, u.image
+      `SELECT DISTINCT u.id, u.name, u.email, u.image
          FROM member m
          JOIN "user" u ON u.id = m."userId"
-        WHERE m."organizationId" = $1
+        WHERE m."organizationId" = ANY($1)
         ORDER BY u.name ASC NULLS LAST, u.email ASC`,
-      [ctx.organizationId],
+      [orgs.allIds],
     );
     return NextResponse.json({ members: res.rows });
   } catch (err) {

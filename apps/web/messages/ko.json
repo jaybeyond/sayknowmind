@@ -1066,6 +1066,11 @@
     "online": "접속 중",
     "description": "설명",
     "descriptionPlaceholder": "세부 내용을 추가…",
-    "startDate": "시작일"
+    "startDate": "시작일",
+    "scope": {
+      "all": "전체",
+      "personal": "개인",
+      "team": "팀"
+    }
   }
 }

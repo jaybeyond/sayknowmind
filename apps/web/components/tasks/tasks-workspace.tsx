@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SquareKanban, List, CalendarDays, GanttChartSquare } from "lucide-react";
-import { useTasksStore } from "@/store/tasks-store";
+import { useTasksStore, type TaskScope } from "@/store/tasks-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { TaskBoard } from "./task-board";
@@ -23,6 +23,12 @@ const VIEWS: { id: ViewId; icon: typeof List; labelKey: string }[] = [
 
 const VIEW_STORAGE_KEY = "skm.tasks.view";
 
+const SCOPES: { id: TaskScope; labelKey: string }[] = [
+  { id: "all", labelKey: "tasks.scope.all" },
+  { id: "personal", labelKey: "tasks.scope.personal" },
+  { id: "team", labelKey: "tasks.scope.team" },
+];
+
 /**
  * Owns the Tasks feature shell: fetches tasks + members once, renders the
  * view switcher, and swaps between the board/list/calendar/timeline views —
@@ -32,6 +38,8 @@ export function TasksWorkspace() {
   const { t } = useTranslation();
   const fetchTasks = useTasksStore((s) => s.fetchTasks);
   const fetchMembers = useTasksStore((s) => s.fetchMembers);
+  const scope = useTasksStore((s) => s.scope);
+  const setScope = useTasksStore((s) => s.setScope);
   const [view, setView] = useState<ViewId>("board");
 
   // Restore the last-used view. Done in an effect (not a lazy useState init)
@@ -75,9 +83,22 @@ export function TasksWorkspace() {
             <span className="hidden sm:inline">{t(v.labelKey)}</span>
           </button>
         ))}
-        <div className="ml-auto">
-          <PresenceBar />
+        {/* Scope filter: personal / team / all */}
+        <div className="ml-auto flex items-center gap-1 rounded-md border border-border p-0.5">
+          {SCOPES.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setScope(s.id)}
+              className={cn(
+                "px-2 py-1 rounded text-xs font-medium transition-colors",
+                scope === s.id ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t(s.labelKey)}
+            </button>
+          ))}
         </div>
+        <PresenceBar />
       </div>
 
       {view === "board" && <TaskBoard />}

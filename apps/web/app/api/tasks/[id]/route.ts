@@ -3,8 +3,7 @@ import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { isValidPriority, isValidStatus, isDoneStatus } from "@/lib/tasks/constants";
-import { getWorkItem } from "@/lib/tasks/store";
-import { orgScopeClause } from "@/lib/visibility";
+import { getWorkItem, getUserOrgs, isAssignableUser } from "@/lib/tasks/store";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +30,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
 
+  const orgs = await getUserOrgs(ctx.userId);
+
   // Build the SET list from only the provided, valid fields. $1 = id,
-  // $2 = organizationId (the scope guard); mutable fields start at $3.
+  // $2 = the caller's org ids (the cross-org scope guard); mutable fields
+  // start at $3.
   const sets: string[] = [];
-  const values: unknown[] = [id, ctx.organizationId];
+  const values: unknown[] = [id, orgs.allIds];
   const push = (col: string, val: unknown) => {
     values.push(val);
     sets.push(`${col} = $${values.length}`);
@@ -49,14 +51,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   if ("assigneeId" in body) {
     const assigneeId = typeof body.assigneeId === "string" && body.assigneeId ? body.assigneeId : null;
-    let safe: string | null = null;
-    if (assigneeId) {
-      const m = await pool.query(
-        `SELECT 1 FROM member WHERE "userId" = $1 AND "organizationId" = $2 LIMIT 1`,
-        [assigneeId, ctx.organizationId],
-      );
-      if (m.rows.length > 0) safe = assigneeId;
-    }
+    const safe = assigneeId && (await isAssignableUser(assigneeId, orgs.allIds)) ? assigneeId : null;
     push("assignee_id", safe);
   }
 
@@ -79,7 +74,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const res = await pool.query(
       `UPDATE work_items w SET ${sets.join(", ")}
-        WHERE w.id = $1 AND ${orgScopeClause("w", 2)}
+        WHERE w.id = $1 AND w.organization_id = ANY($2)
         RETURNING w.id`,
       values,
     );
@@ -107,9 +102,10 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { id } = await params;
 
   try {
+    const orgs = await getUserOrgs(ctx.userId);
     const res = await pool.query(
-      `DELETE FROM work_items w WHERE w.id = $1 AND ${orgScopeClause("w", 2)} RETURNING w.id`,
-      [id, ctx.organizationId],
+      `DELETE FROM work_items w WHERE w.id = $1 AND w.organization_id = ANY($2) RETURNING w.id`,
+      [id, orgs.allIds],
     );
     if (res.rows.length === 0) {
       return NextResponse.json(

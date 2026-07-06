@@ -1066,6 +1066,11 @@
     "online": "Online",
     "description": "Description",
     "descriptionPlaceholder": "Add more detail…",
-    "startDate": "Start date"
+    "startDate": "Start date",
+    "scope": {
+      "all": "All",
+      "personal": "Personal",
+      "team": "Team"
+    }
   }
 }

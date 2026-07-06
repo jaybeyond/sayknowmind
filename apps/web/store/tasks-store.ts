@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import type { Task, TaskStatusId, TaskPriorityId } from "@/lib/tasks/constants";
 
+/** Which slice of tasks the board shows: personal org, team orgs, or all. */
+export type TaskScope = "all" | "personal" | "team";
+
 export interface TaskMember {
   id: string;
   name: string | null;
@@ -25,7 +28,10 @@ interface TasksState {
   error: string | null;
   /** Task open in the detail sheet (edit from any view), or null. */
   selectedTaskId: string | null;
+  /** Personal / team / all scope filter for the board. */
+  scope: TaskScope;
 
+  setScope: (scope: TaskScope) => void;
   fetchTasks: () => Promise<void>;
   fetchMembers: () => Promise<void>;
   createTask: (input: CreateTaskInput) => Promise<Task | null>;
@@ -43,14 +49,20 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   isLoading: true,
   error: null,
   selectedTaskId: null,
+  scope: "all",
 
   openTask: (id) => set({ selectedTaskId: id }),
   closeTask: () => set({ selectedTaskId: null }),
 
+  setScope: (scope) => {
+    set({ scope });
+    void get().fetchTasks();
+  },
+
   fetchTasks: async () => {
     set({ isLoading: get().tasks.length === 0, error: null });
     try {
-      const res = await fetch("/api/tasks");
+      const res = await fetch(`/api/tasks?scope=${get().scope}`);
       if (!res.ok) {
         set({ isLoading: false, error: res.status === 401 ? null : "Failed to load tasks" });
         return;

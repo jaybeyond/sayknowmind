@@ -1066,6 +1066,11 @@
     "online": "オンライン",
     "description": "説明",
     "descriptionPlaceholder": "詳細を追加…",
-    "startDate": "開始日"
+    "startDate": "開始日",
+    "scope": {
+      "all": "すべて",
+      "personal": "個人",
+      "team": "チーム"
+    }
   }
 }

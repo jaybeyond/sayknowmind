@@ -38,7 +38,7 @@ describe("Tasks API", () => {
 
   it("rejects unauthenticated list requests with 401", async () => {
     mocks.getOrgContext.mockResolvedValueOnce(null);
-    const res = await getTasks();
+    const res = await getTasks(new NextRequest("http://localhost/api/tasks"));
     expect(res.status).toBe(401);
   });
 
@@ -54,6 +54,7 @@ describe("Tasks API", () => {
     mocks.query.mockImplementation(async (sql: string) => {
       const s = sql.replace(/\s+/g, " ").trim();
       executed.push(s);
+      if (s.includes("JOIN organization o")) return { rows: [{ id: "org-1", is_personal: false }] };
       if (s.includes("work_item_counters")) return { rows: [{ last_number: 7 }] };
       if (s.startsWith("INSERT INTO work_items")) return { rows: [{ id: "wi-1" }] };
       if (s.includes("FROM work_items w")) {
@@ -77,7 +78,8 @@ describe("Tasks API", () => {
     let insertParams: unknown[] = [];
     mocks.query.mockImplementation(async (sql: string, params?: unknown[]) => {
       const s = sql.replace(/\s+/g, " ").trim();
-      if (s.startsWith("SELECT 1 FROM member")) return { rows: [] }; // not a member
+      if (s.includes("JOIN organization o")) return { rows: [{ id: "org-1", is_personal: false }] };
+      if (s.startsWith("SELECT 1 FROM member")) return { rows: [] }; // not a member of any caller org
       if (s.includes("work_item_counters")) return { rows: [{ last_number: 1 }] };
       if (s.startsWith("INSERT INTO work_items")) { insertParams = params ?? []; return { rows: [{ id: "wi-2" }] }; }
       if (s.includes("FROM work_items w")) return { rows: [{ id: "wi-2", identifier: "TASK-1", title: "x", status: "backlog", priority: "no-priority", labels: [], assignee_id: null, created_at: "t", updated_at: "t" }] };
@@ -96,6 +98,7 @@ describe("Tasks API", () => {
     const updates: string[] = [];
     mocks.query.mockImplementation(async (sql: string) => {
       const s = sql.replace(/\s+/g, " ").trim();
+      if (s.includes("JOIN organization o")) return { rows: [{ id: "org-1", is_personal: false }] };
       if (s.startsWith("UPDATE work_items")) { updates.push(s); return { rows: [{ id: "wi-1" }] }; }
       if (s.includes("FROM work_items w")) return { rows: [{ id: "wi-1", identifier: "TASK-1", title: "x", status: "completed", priority: "low", labels: [], assignee_id: null, created_at: "t", updated_at: "t" }] };
       return { rows: [] };
@@ -117,10 +120,38 @@ describe("Tasks API", () => {
   });
 
   it("rejects a patch with no valid fields", async () => {
+    mocks.query.mockResolvedValue({ rows: [{ id: "org-1", is_personal: false }] });
     const res = await patchTask(
       new NextRequest("http://localhost/api/tasks/wi-1", { method: "PATCH", body: JSON.stringify({ bogus: 1 }) }),
       { params: Promise.resolve({ id: "wi-1" }) },
     );
     expect(res.status).toBe(400);
+  });
+
+  it("scopes the list to personal vs team vs all orgs", async () => {
+    // getUserOrgs returns one personal + one team org for the caller.
+    const captured: Array<{ sql: string; params: unknown[] }> = [];
+    mocks.query.mockImplementation(async (sql: string, params?: unknown[]) => {
+      const s = sql.replace(/\s+/g, " ").trim();
+      if (s.includes("JOIN organization o")) {
+        return { rows: [{ id: "org-personal", is_personal: true }, { id: "org-team", is_personal: false }] };
+      }
+      if (s.includes("FROM work_items w")) {
+        captured.push({ sql: s, params: params ?? [] });
+        return { rows: [] };
+      }
+      return { rows: [] };
+    });
+
+    await getTasks(new NextRequest("http://localhost/api/tasks?scope=personal"));
+    await getTasks(new NextRequest("http://localhost/api/tasks?scope=team"));
+    await getTasks(new NextRequest("http://localhost/api/tasks?scope=all"));
+
+    // Each list query passes the resolved org-id set as its first param.
+    expect(captured[0].params[0]).toEqual(["org-personal"]);
+    expect(captured[1].params[0]).toEqual(["org-team"]);
+    expect(captured[2].params[0]).toEqual(expect.arrayContaining(["org-personal", "org-team"]));
+    // The visibility predicate keeps another member's private task hidden.
+    expect(captured[0].sql).toContain("privacy_level <> 'private'");
   });
 });

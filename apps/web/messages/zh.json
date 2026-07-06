@@ -1066,6 +1066,11 @@
     "online": "在线",
     "description": "描述",
     "descriptionPlaceholder": "添加更多细节…",
-    "startDate": "开始日期"
+    "startDate": "开始日期",
+    "scope": {
+      "all": "全部",
+      "personal": "个人",
+      "team": "团队"
+    }
   }
 }

@@ -4,8 +4,46 @@
  */
 import { pool } from "@/lib/db";
 import type { OrgContext } from "@/lib/org-context";
-import { orgScopeClause } from "@/lib/visibility";
 import type { Task, TaskLabel } from "./constants";
+
+/** Which slice of the caller's work items to return. */
+export type TaskScope = "all" | "personal" | "team";
+
+interface UserOrgs {
+  /** The caller's personal org id (slug personal-<userId>), or null. */
+  personalId: string | null;
+  /** Team org ids (every membership that isn't the personal org). */
+  teamIds: string[];
+  /** All org ids the caller belongs to. */
+  allIds: string[];
+}
+
+/** Every org the caller belongs to, split into personal vs team. */
+export async function getUserOrgs(userId: string): Promise<UserOrgs> {
+  const res = await pool.query(
+    `SELECT o.id, (o.slug = $2) AS is_personal
+       FROM member m
+       JOIN organization o ON o.id = m."organizationId"
+      WHERE m."userId" = $1`,
+    [userId, `personal-${userId}`],
+  );
+  let personalId: string | null = null;
+  const teamIds: string[] = [];
+  const allIds: string[] = [];
+  for (const r of res.rows as Array<{ id: string; is_personal: boolean }>) {
+    allIds.push(r.id);
+    if (r.is_personal) personalId = r.id;
+    else teamIds.push(r.id);
+  }
+  return { personalId, teamIds, allIds };
+}
+
+/** Org ids that a given scope resolves to, for the caller's memberships. */
+function orgIdsForScope(orgs: UserOrgs, scope: TaskScope): string[] {
+  if (scope === "personal") return orgs.personalId ? [orgs.personalId] : [];
+  if (scope === "team") return orgs.teamIds;
+  return orgs.allIds;
+}
 
 interface WorkItemRow {
   id: string;
@@ -57,29 +95,60 @@ const SELECT_COLUMNS = `
   u.name AS assignee_name, u.email AS assignee_email, u.image AS assignee_image
 `;
 
-/** List every work item visible to the caller's org, newest-ranked first. */
-export async function listWorkItems(ctx: OrgContext): Promise<Task[]> {
+// A work item is visible to the caller when it belongs to one of their orgs
+// AND is either shared, created by them, or assigned to them — so one member's
+// private task never leaks to the rest of the org. $orgs is a text[] of org ids,
+// $me is the caller's user id.
+const VISIBILITY = (orgsParam: number, meParam: number) =>
+  `w.organization_id = ANY($${orgsParam})
+   AND (w.privacy_level <> 'private' OR w.user_id = $${meParam} OR w.assignee_id = $${meParam})`;
+
+/**
+ * List work items across the caller's orgs, filtered by scope (personal / team
+ * / all), newest-ranked first. Spans every membership — not just the active
+ * org — so the Tasks page can show personal and team work together.
+ */
+export async function listWorkItems(ctx: OrgContext, scope: TaskScope = "all"): Promise<Task[]> {
+  const orgs = await getUserOrgs(ctx.userId);
+  const orgIds = orgIdsForScope(orgs, scope);
+  if (orgIds.length === 0) return [];
   const res = await pool.query(
     `SELECT ${SELECT_COLUMNS}
        FROM work_items w
        LEFT JOIN "user" u ON u.id = w.assignee_id
-      WHERE ${orgScopeClause("w", 1)}
+      WHERE ${VISIBILITY(1, 2)}
       ORDER BY w.rank DESC NULLS LAST, w.created_at DESC`,
-    [ctx.organizationId],
+    [orgIds, ctx.userId],
   );
   return res.rows.map(mapWorkItem);
 }
 
-/** Fetch one work item by id, org-scoped. */
+/** Fetch one work item by id, visible to the caller across any of their orgs. */
 export async function getWorkItem(id: string, ctx: OrgContext): Promise<Task | null> {
+  const orgs = await getUserOrgs(ctx.userId);
+  if (orgs.allIds.length === 0) return null;
   const res = await pool.query(
     `SELECT ${SELECT_COLUMNS}
        FROM work_items w
        LEFT JOIN "user" u ON u.id = w.assignee_id
-      WHERE w.id = $1 AND ${orgScopeClause("w", 2)}`,
-    [id, ctx.organizationId],
+      WHERE w.id = $1 AND ${VISIBILITY(2, 3)}`,
+    [id, orgs.allIds, ctx.userId],
   );
   return res.rows[0] ? mapWorkItem(res.rows[0]) : null;
+}
+
+/**
+ * A candidate assignee is allowed if they share at least one org with the
+ * caller — prevents assigning a task to a total stranger while still working
+ * across the caller's personal + team orgs.
+ */
+export async function isAssignableUser(candidateId: string, callerOrgIds: string[]): Promise<boolean> {
+  if (callerOrgIds.length === 0) return false;
+  const res = await pool.query(
+    `SELECT 1 FROM member WHERE "userId" = $1 AND "organizationId" = ANY($2) LIMIT 1`,
+    [candidateId, callerOrgIds],
+  );
+  return res.rows.length > 0;
 }
 
 /**

@@ -3,7 +3,14 @@ import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { isValidPriority, isValidStatus } from "@/lib/tasks/constants";
-import { listWorkItems, getWorkItem, nextIdentifierNumber } from "@/lib/tasks/store";
+import {
+  listWorkItems,
+  getWorkItem,
+  nextIdentifierNumber,
+  getUserOrgs,
+  isAssignableUser,
+  type TaskScope,
+} from "@/lib/tasks/store";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +21,16 @@ function unauthorized() {
   );
 }
 
-/** GET /api/tasks — list all work items in the caller's org. */
-export async function GET() {
+const VALID_SCOPES = new Set<TaskScope>(["all", "personal", "team"]);
+
+/** GET /api/tasks?scope=all|personal|team — list work items across the caller's orgs. */
+export async function GET(request: NextRequest) {
   const ctx = await getOrgContext();
   if (!ctx) return unauthorized();
+  const rawScope = request.nextUrl.searchParams.get("scope");
+  const scope: TaskScope = rawScope && VALID_SCOPES.has(rawScope as TaskScope) ? (rawScope as TaskScope) : "all";
   try {
-    const tasks = await listWorkItems(ctx);
+    const tasks = await listWorkItems(ctx, scope);
     return NextResponse.json({ tasks });
   } catch (err) {
     console.error("[tasks] GET error:", err);
@@ -62,15 +73,12 @@ export async function POST(request: NextRequest) {
   const documentId = typeof body.documentId === "string" && body.documentId ? body.documentId : null;
 
   try {
-    // If an assignee was named, it must be a member of this org — otherwise a
-    // caller could assign a task to any user id. Silently drop an invalid one.
+    // If an assignee was named, they must share an org with the caller —
+    // otherwise a caller could assign a task to any user id. Drop an invalid one.
     let safeAssignee: string | null = null;
     if (assigneeId) {
-      const m = await pool.query(
-        `SELECT 1 FROM member WHERE "userId" = $1 AND "organizationId" = $2 LIMIT 1`,
-        [assigneeId, ctx.organizationId],
-      );
-      if (m.rows.length > 0) safeAssignee = assigneeId;
+      const orgs = await getUserOrgs(ctx.userId);
+      if (await isAssignableUser(assigneeId, orgs.allIds)) safeAssignee = assigneeId;
     }
 
     const num = await nextIdentifierNumber(ctx.organizationId);
