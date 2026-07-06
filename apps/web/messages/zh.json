@@ -21,6 +21,7 @@
     "allMemories": "全部记忆",
     "chat": "对话",
     "knowledge": "知识图谱",
+    "tasks": "任务",
     "categories": "分类",
     "settings": "设置",
     "toggle": "切换侧边栏",
@@ -1026,5 +1027,30 @@
     "blockSubtext": "插入可编辑的思维导图",
     "blockGroup": "嵌入",
     "blockDefaultTopic": "中心主题"
+  },
+  "tasks": {
+    "title": "任务",
+    "addTask": "添加任务",
+    "newTaskPlaceholder": "需要做什么？",
+    "delete": "删除",
+    "assign": "指派",
+    "unassigned": "未指派",
+    "setStatus": "移动到",
+    "setPriority": "优先级",
+    "status": {
+      "backlog": "待办池",
+      "todo": "待办",
+      "inProgress": "进行中",
+      "review": "评审中",
+      "completed": "完成",
+      "paused": "暂停"
+    },
+    "priority": {
+      "urgent": "紧急",
+      "high": "高",
+      "medium": "中",
+      "low": "低",
+      "none": "无优先级"
+    }
   }
 }

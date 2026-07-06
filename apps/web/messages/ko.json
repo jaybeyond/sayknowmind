@@ -21,6 +21,7 @@
     "allMemories": "전체 메모리",
     "chat": "채팅",
     "knowledge": "지식 그래프",
+    "tasks": "작업",
     "categories": "카테고리",
     "settings": "설정",
     "toggle": "사이드바 토글",
@@ -1026,5 +1027,30 @@
     "blockSubtext": "편집 가능한 마인드맵 삽입",
     "blockGroup": "임베드",
     "blockDefaultTopic": "중심 주제"
+  },
+  "tasks": {
+    "title": "작업",
+    "addTask": "작업 추가",
+    "newTaskPlaceholder": "무엇을 해야 하나요?",
+    "delete": "삭제",
+    "assign": "담당자 지정",
+    "unassigned": "미지정",
+    "setStatus": "상태 변경",
+    "setPriority": "우선순위",
+    "status": {
+      "backlog": "백로그",
+      "todo": "할 일",
+      "inProgress": "진행 중",
+      "review": "검토 중",
+      "completed": "완료",
+      "paused": "보류"
+    },
+    "priority": {
+      "urgent": "긴급",
+      "high": "높음",
+      "medium": "보통",
+      "low": "낮음",
+      "none": "우선순위 없음"
+    }
   }
 }

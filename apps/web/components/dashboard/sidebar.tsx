@@ -50,6 +50,7 @@ import {
   Trash2,
   MessageSquare,
   Network,
+  SquareKanban,
   MoreHorizontal,
   Pencil,
   X,
@@ -68,6 +69,7 @@ import { useDocumentEvents } from "@/lib/use-document-events";
 import { toast } from "sonner";
 
 const navItemKeys = [
+  { icon: SquareKanban, key: "sidebar.tasks", href: "/tasks" },
   { icon: Star, key: "sidebar.favorites", href: "/favorites" },
   { icon: Archive, key: "sidebar.archive", href: "/archive" },
   { icon: Trash2, key: "sidebar.trash", href: "/trash" },

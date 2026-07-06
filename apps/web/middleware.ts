@@ -23,6 +23,7 @@ const protectedPaths = [
   "/api/tags",
   "/api/knowledge",
   "/api/documents",
+  "/api/tasks",
   "/api/sync",
   "/api/services",
   "/api/models",
@@ -32,6 +33,7 @@ const protectedPaths = [
   "/knowledge",
   "/categories",
   "/published",
+  "/tasks",
 ];
 
 // Routes that should redirect to home if already authenticated
@@ -135,6 +137,8 @@ export const config = {
     "/settings/:path*",
     "/knowledge/:path*",
     "/categories/:path*",
+    "/tasks/:path*",
+    "/tasks",
     "/chat/:path*",
     "/chat",
     // Protected API routes
@@ -147,6 +151,8 @@ export const config = {
     "/api/categories/:path*",
     "/api/knowledge/:path*",
     "/api/documents/:path*",
+    "/api/tasks",
+    "/api/tasks/:path*",
     "/api/sync/:path*",
     "/api/services/:path*",
     "/api/models",

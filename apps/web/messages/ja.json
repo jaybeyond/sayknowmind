@@ -21,6 +21,7 @@
     "allMemories": "すべてのメモリ",
     "chat": "チャット",
     "knowledge": "ナレッジグラフ",
+    "tasks": "タスク",
     "categories": "カテゴリ",
     "settings": "設定",
     "toggle": "サイドバーの切り替え",
@@ -1026,5 +1027,30 @@
     "blockSubtext": "編集可能なマインドマップを挿入",
     "blockGroup": "埋め込み",
     "blockDefaultTopic": "中心テーマ"
+  },
+  "tasks": {
+    "title": "タスク",
+    "addTask": "タスクを追加",
+    "newTaskPlaceholder": "何をしますか？",
+    "delete": "削除",
+    "assign": "担当者",
+    "unassigned": "未割り当て",
+    "setStatus": "移動",
+    "setPriority": "優先度",
+    "status": {
+      "backlog": "バックログ",
+      "todo": "未着手",
+      "inProgress": "進行中",
+      "review": "レビュー中",
+      "completed": "完了",
+      "paused": "保留"
+    },
+    "priority": {
+      "urgent": "緊急",
+      "high": "高",
+      "medium": "中",
+      "low": "低",
+      "none": "優先度なし"
+    }
   }
 }

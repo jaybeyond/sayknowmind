@@ -21,6 +21,7 @@
     "allMemories": "All Memories",
     "chat": "Chat",
     "knowledge": "Knowledge Graph",
+    "tasks": "Tasks",
     "categories": "Categories",
     "settings": "Settings",
     "toggle": "Toggle Sidebar",
@@ -1026,5 +1027,30 @@
     "blockSubtext": "Insert an editable mind map",
     "blockGroup": "Embeds",
     "blockDefaultTopic": "Central idea"
+  },
+  "tasks": {
+    "title": "Tasks",
+    "addTask": "Add task",
+    "newTaskPlaceholder": "What needs to be done?",
+    "delete": "Delete",
+    "assign": "Assign",
+    "unassigned": "Unassigned",
+    "setStatus": "Move to",
+    "setPriority": "Priority",
+    "status": {
+      "backlog": "Backlog",
+      "todo": "Todo",
+      "inProgress": "In Progress",
+      "review": "In Review",
+      "completed": "Done",
+      "paused": "Paused"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "none": "No priority"
+    }
   }
 }
