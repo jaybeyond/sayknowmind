@@ -125,15 +125,8 @@ export function TaskBoard() {
   const { t } = useTranslation();
   const tasks = useTasksStore((s) => s.tasks);
   const isLoading = useTasksStore((s) => s.isLoading);
-  const fetchTasks = useTasksStore((s) => s.fetchTasks);
-  const fetchMembers = useTasksStore((s) => s.fetchMembers);
   const moveTask = useTasksStore((s) => s.moveTask);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchTasks();
-    fetchMembers();
-  }, [fetchTasks, fetchMembers]);
 
   const byStatus = useMemo(() => {
     const map = new Map<TaskStatusId, Task[]>();

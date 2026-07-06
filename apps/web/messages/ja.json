@@ -1051,6 +1051,15 @@
       "medium": "中",
       "low": "低",
       "none": "優先度なし"
-    }
+    },
+    "view": {
+      "board": "ボード",
+      "list": "リスト",
+      "calendar": "カレンダー",
+      "timeline": "タイムライン"
+    },
+    "today": "今日",
+    "emptyGroup": "タスクなし",
+    "unscheduledCount": "未定 {{count}}件"
   }
 }

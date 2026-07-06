@@ -1051,6 +1051,15 @@
       "medium": "Medium",
       "low": "Low",
       "none": "No priority"
-    }
+    },
+    "view": {
+      "board": "Board",
+      "list": "List",
+      "calendar": "Calendar",
+      "timeline": "Timeline"
+    },
+    "today": "Today",
+    "emptyGroup": "No tasks",
+    "unscheduledCount": "{{count}} unscheduled"
   }
 }

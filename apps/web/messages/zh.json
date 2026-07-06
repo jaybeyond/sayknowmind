@@ -1051,6 +1051,15 @@
       "medium": "中",
       "low": "低",
       "none": "无优先级"
-    }
+    },
+    "view": {
+      "board": "看板",
+      "list": "列表",
+      "calendar": "日历",
+      "timeline": "时间线"
+    },
+    "today": "今天",
+    "emptyGroup": "暂无任务",
+    "unscheduledCount": "{{count}} 项未排期"
   }
 }

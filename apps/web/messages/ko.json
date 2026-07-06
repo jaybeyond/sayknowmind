@@ -1051,6 +1051,15 @@
       "medium": "보통",
       "low": "낮음",
       "none": "우선순위 없음"
-    }
+    },
+    "view": {
+      "board": "보드",
+      "list": "목록",
+      "calendar": "캘린더",
+      "timeline": "타임라인"
+    },
+    "today": "오늘",
+    "emptyGroup": "작업 없음",
+    "unscheduledCount": "미일정 {{count}}건"
   }
 }
