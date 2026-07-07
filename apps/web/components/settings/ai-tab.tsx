@@ -164,7 +164,7 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
   google: "https://generativelanguage.googleapis.com",
   upstage: "https://api.upstage.ai",
   nvidia: "https://integrate.api.nvidia.com",
-  venice: "https://api.venice.ai",
+  venice: "https://api.venice.ai/api",
   zai: "https://open.bigmodel.cn/api/paas",
 };
 
