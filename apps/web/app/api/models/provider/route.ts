@@ -42,22 +42,32 @@ export async function POST(request: NextRequest) {
 
   const base = baseUrl.replace(/\/$/, "");
 
-  // Per-provider model listing. Most providers are OpenAI-compatible
-  // (GET /v1/models, Bearer token, { data: [{ id }] }). Anthropic and Google
-  // use different auth, paths, and response shapes — without these branches
-  // only the OpenAI-compatible providers (OpenRouter, OpenAI, Grok, NVIDIA…)
-  // return a list and the rest come back empty.
+  // Per-provider model listing. Providers differ in path, auth, and response
+  // shape, so each returns an empty dropdown unless handled here:
+  //   • OpenAI-compatible (openrouter/openai/grok/nvidia/upstage/venice): GET
+  //     /v1/models, Bearer, { data: [{ id }] }
+  //   • anthropic:  same path but x-api-key + anthropic-version headers
+  //   • google:     GET /v1beta/models?key=…, { models: [{ name }] }
+  //   • zai:        GET /v4/models (Zhipu/GLM use v4, not v1), Bearer
+  //   • cloudflare: GET {account}/ai/models/search, Bearer, { result: [{ name }] }
   type ModelListResponse = {
-    data?: Array<{ id?: string }>;
+    data?: Array<{ id?: string; model?: string }>;
     models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
+    result?: Array<{ name?: string }>;
   };
+  // OpenAI-style { data: [{ id }] } (also tolerates { data: [{ model }] }).
+  const parseOpenAiLike = (d: ModelListResponse): string[] =>
+    (d.data ?? [])
+      .map((m) => m.id ?? m.model)
+      .filter((id): id is string => Boolean(id))
+      .sort();
+
   let url: string;
   let headers: Record<string, string>;
   let parse: (data: ModelListResponse) => string[];
 
   switch (providerId) {
     case "google":
-      // API key as query param; GET /v1beta/models → { models: [{ name, supportedGenerationMethods }] }
       url = `${base}/v1beta/models?key=${encodeURIComponent(apiKey)}`;
       headers = {};
       parse = (d) =>
@@ -68,18 +78,28 @@ export async function POST(request: NextRequest) {
           .sort();
       break;
     case "anthropic":
-      // x-api-key + anthropic-version headers (not Bearer); GET /v1/models → { data: [{ id }] }
       url = `${base}/v1/models`;
       headers = { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
-      parse = (d) =>
-        (d.data ?? []).map((m) => m.id).filter((id): id is string => Boolean(id)).sort();
+      parse = parseOpenAiLike;
       break;
-    default:
-      // OpenAI-compatible providers
-      url = `${base}/v1/models`;
+    case "zai":
+      // Zhipu/Z.AI (base …/api/paas) list models at /v4/models, not /v1/models.
+      url = `${base}/v4/models`;
+      headers = { Authorization: `Bearer ${apiKey}` };
+      parse = parseOpenAiLike;
+      break;
+    case "cloudflare":
+      // Workers AI catalog (base ends …/ai): /models/search → { result: [{ name }] }.
+      url = `${base}/models/search?task=Text%20Generation`;
       headers = { Authorization: `Bearer ${apiKey}` };
       parse = (d) =>
-        (d.data ?? []).map((m) => m.id).filter((id): id is string => Boolean(id)).sort();
+        (d.result ?? []).map((m) => m.name).filter((n): n is string => Boolean(n)).sort();
+      break;
+    default:
+      // OpenAI-compatible providers (openrouter, openai, grok, nvidia, upstage, venice)
+      url = `${base}/v1/models`;
+      headers = { Authorization: `Bearer ${apiKey}` };
+      parse = parseOpenAiLike;
   }
 
   try {
