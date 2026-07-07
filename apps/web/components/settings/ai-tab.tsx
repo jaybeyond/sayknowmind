@@ -178,6 +178,13 @@ function getBaseUrl(provider: ProviderDef, keyValues: Record<string, string>): s
   return PROVIDER_BASE_URLS[provider.id] ?? "";
 }
 
+/** A key loaded from the server comes back masked ("sk-or...wxyz" / "••••••").
+ *  It can't authenticate against a provider, so callers must skip live API
+ *  calls (model fetch) when the key is masked. Mirrors provider-db.isMaskedKey. */
+function isMaskedKey(key: string): boolean {
+  return key.includes("...") || key.includes("••••••");
+}
+
 // ─── Key field component ─────────────────────────────────────
 
 function KeyField({
@@ -235,6 +242,7 @@ function ProviderCard({
   onSetActive,
   modelValue,
   onModelChange,
+  onModelCommit,
   activeLabel,
   modelLabel,
   modelPlaceholder,
@@ -249,6 +257,7 @@ function ProviderCard({
   onSetActive: () => void;
   modelValue: string;
   onModelChange: (v: string) => void;
+  onModelCommit: (v: string) => void;
   activeLabel: string;
   modelLabel: string;
   modelPlaceholder: string;
@@ -266,6 +275,10 @@ function ProviderCard({
     const baseUrl = getBaseUrl(provider, values);
     const key = apiKey ?? mainValue;
     if (!baseUrl || !key) return;
+    // Masked key (loaded from server) → provider would 401 and wipe the saved
+    // model list. Skip; the saved model stays editable. Re-enter the real key
+    // to refresh the list.
+    if (isMaskedKey(key)) return;
     setLoadingModels(true);
     try {
       const res = await fetch("/api/models/provider", {
@@ -374,7 +387,7 @@ function ProviderCard({
             <select
               id={`model-${provider.id}`}
               value={modelValue}
-              onChange={(e) => onModelChange(e.target.value)}
+              onChange={(e) => { onModelChange(e.target.value); onModelCommit(e.target.value); }}
               className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">{modelPlaceholder}</option>
@@ -387,6 +400,7 @@ function ProviderCard({
               id={`model-${provider.id}`}
               value={modelValue}
               onChange={(e) => onModelChange(e.target.value)}
+              onBlur={(e) => onModelCommit(e.target.value)}
               placeholder={modelPlaceholder}
               className="text-sm h-9"
             />
@@ -495,13 +509,73 @@ export function AITab() {
     setKeyValues((prev) => ({ ...prev, [storageId]: value }));
   };
 
-  const handleSetActive = (providerId: string) => {
-    setActiveProviderId(providerId);
-    toast.success(t("ai.providerActivated").replace("{{name}}", providers.find((p) => p.id === providerId)?.name ?? providerId));
+  const buildServerProviders = (models: Record<string, string>) =>
+    providers
+      .filter((p) => p.category === "cloud" && keyValues[p.keyStorageId])
+      .map((p) => ({
+        id: p.id,
+        apiKey: keyValues[p.keyStorageId],
+        model: models[p.id] ?? "",
+        baseUrl: getBaseUrl(p, keyValues),
+        extraFields: Object.fromEntries(
+          (p.extraFields ?? [])
+            .map((f) => [f.id, keyValues[f.storageId] ?? ""])
+            .filter(([, v]) => v),
+        ),
+      }))
+      .filter((p) => p.apiKey && p.baseUrl);
+
+  // Persist provider config to the per-user DB. Called on every switch (set
+  // active / model change) so the change takes effect immediately — the chat
+  // route reads providers fresh from the DB per request, so there's nothing to
+  // "apply" beyond saving. Returns false (and toasts) on failure.
+  const persistProviders = async (
+    activeId: string,
+    models: Record<string, string>,
+  ): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/settings/providers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activeProviderId: activeId,
+          providers: buildServerProviders(models),
+          embedding: cloudMode ? { provider: embeddingProvider, model: embeddingModel } : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message ?? `Server error ${res.status}`);
+      }
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast.error(`${t("settings.saveFailed") ?? "Failed to save"}: ${msg}`);
+      return false;
+    }
   };
 
+  const handleSetActive = async (providerId: string) => {
+    const prev = activeProviderId;
+    setActiveProviderId(providerId);
+    const ok = await persistProviders(providerId, modelValues);
+    if (ok) {
+      toast.success(t("ai.providerActivated").replace("{{name}}", providers.find((p) => p.id === providerId)?.name ?? providerId));
+    } else {
+      setActiveProviderId(prev); // save failed — keep UI in sync with the DB
+    }
+  };
+
+  // Live edits (typing / dropdown) update local state only…
   const handleModelChange = (providerId: string, value: string) => {
     setModelValues((prev) => ({ ...prev, [providerId]: value }));
+  };
+
+  // …commit (dropdown pick or input blur) persists so the switch takes effect.
+  const handleModelCommit = (providerId: string, value: string) => {
+    const nextModels = { ...modelValues, [providerId]: value };
+    setModelValues(nextModels);
+    void persistProviders(activeProviderId, nextModels);
   };
 
   const handleTestEmbedding = async () => {
@@ -544,41 +618,8 @@ export function AITab() {
     localStorage.setItem("sayknowmind-embedding-model", embeddingModel);
 
     // Save provider configs to server DB (AES-256-GCM encrypted)
-    try {
-      const serverProviders = providers
-        .filter((p) => p.category === "cloud" && keyValues[p.keyStorageId])
-        .map((p) => ({
-          id: p.id,
-          apiKey: keyValues[p.keyStorageId],
-          model: modelValues[p.id] ?? "",
-          baseUrl: getBaseUrl(p, keyValues),
-          extraFields: Object.fromEntries(
-            (p.extraFields ?? [])
-              .map((f) => [f.id, keyValues[f.storageId] ?? ""])
-              .filter(([, v]) => v),
-          ),
-        }))
-        .filter((p) => p.apiKey && p.baseUrl);
-
-      const res = await fetch("/api/settings/providers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          activeProviderId,
-          providers: serverProviders,
-          embedding: cloudMode ? { provider: embeddingProvider, model: embeddingModel } : undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message ?? `Server error ${res.status}`);
-      }
-      toast.success(t("settings.saved"));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      toast.error(`${t("settings.saveFailed") ?? "Failed to save"}: ${msg}`);
-    }
+    const ok = await persistProviders(activeProviderId, modelValues);
+    if (ok) toast.success(t("settings.saved"));
   };
 
   const cloudProviders = providers.filter((p) => p.category === "cloud");
@@ -657,6 +698,7 @@ export function AITab() {
               onSetActive={() => handleSetActive(provider.id)}
               modelValue={modelValues[provider.id] ?? ""}
               onModelChange={(v) => handleModelChange(provider.id, v)}
+              onModelCommit={(v) => handleModelCommit(provider.id, v)}
               activeLabel={t("ai.setActive")}
               modelLabel={t("ai.model")}
               modelPlaceholder={t("ai.modelPlaceholder")}
