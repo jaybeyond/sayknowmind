@@ -1,3 +1,6 @@
+# [已停用 2026-07-07] 本项目 CI 已迁移到 Jenkins + Harbor（Jenkins 文件夹 sayknowmind，运维维护）。
+# 保留此文件仅作历史参考；GitLab Runner 不再触发本流水线。
+
 # =====================================================================
 # GitLab CI/CD — main branch push triggers build, optional manual deploy.
 #
