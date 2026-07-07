@@ -19,7 +19,11 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { baseUrl, apiKey } = body as { baseUrl?: string; apiKey?: string };
+  const { baseUrl, apiKey, providerId } = body as {
+    baseUrl?: string;
+    apiKey?: string;
+    providerId?: string;
+  };
 
   if (!baseUrl || !apiKey) {
     return NextResponse.json({ error: "baseUrl and apiKey are required" }, { status: 400 });
@@ -36,16 +40,54 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  try {
-    const url = `${baseUrl.replace(/\/$/, "")}/v1/models`;
+  const base = baseUrl.replace(/\/$/, "");
 
-    // safeFetch replaces the raw fetch() call.  It re-validates every redirect
-    // target, preventing a public URL that 302s to an internal address from
-    // bypassing the guard above (e.g. 169.254.169.254 cloud metadata endpoint).
+  // Per-provider model listing. Most providers are OpenAI-compatible
+  // (GET /v1/models, Bearer token, { data: [{ id }] }). Anthropic and Google
+  // use different auth, paths, and response shapes — without these branches
+  // only the OpenAI-compatible providers (OpenRouter, OpenAI, Grok, NVIDIA…)
+  // return a list and the rest come back empty.
+  type ModelListResponse = {
+    data?: Array<{ id?: string }>;
+    models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
+  };
+  let url: string;
+  let headers: Record<string, string>;
+  let parse: (data: ModelListResponse) => string[];
+
+  switch (providerId) {
+    case "google":
+      // API key as query param; GET /v1beta/models → { models: [{ name, supportedGenerationMethods }] }
+      url = `${base}/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+      headers = {};
+      parse = (d) =>
+        (d.models ?? [])
+          .filter((m) => (m.supportedGenerationMethods ?? []).includes("generateContent"))
+          .map((m) => String(m.name ?? "").replace(/^models\//, ""))
+          .filter(Boolean)
+          .sort();
+      break;
+    case "anthropic":
+      // x-api-key + anthropic-version headers (not Bearer); GET /v1/models → { data: [{ id }] }
+      url = `${base}/v1/models`;
+      headers = { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
+      parse = (d) =>
+        (d.data ?? []).map((m) => m.id).filter((id): id is string => Boolean(id)).sort();
+      break;
+    default:
+      // OpenAI-compatible providers
+      url = `${base}/v1/models`;
+      headers = { Authorization: `Bearer ${apiKey}` };
+      parse = (d) =>
+        (d.data ?? []).map((m) => m.id).filter((id): id is string => Boolean(id)).sort();
+  }
+
+  try {
+    // safeFetch re-validates every redirect target, preventing a public URL that
+    // 302s to an internal address from bypassing the guard above (e.g. the
+    // 169.254.169.254 cloud metadata endpoint).
     const res = await safeFetch(url, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       signal: AbortSignal.timeout(15_000),
     });
 
@@ -57,13 +99,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await res.json();
-
-    // OpenAI-compatible format: { data: [{ id: "model-name", ... }] }
-    const models: string[] = (data.data ?? [])
-      .map((m: { id?: string }) => m.id)
-      .filter(Boolean)
-      .sort();
+    const data = (await res.json()) as ModelListResponse;
+    const models = parse(data);
 
     return NextResponse.json({ models });
   } catch (err) {
