@@ -284,7 +284,7 @@ function ProviderCard({
       const res = await fetch("/api/models/provider", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseUrl, apiKey: key }),
+        body: JSON.stringify({ baseUrl, apiKey: key, providerId: provider.id }),
       });
       if (res.ok) {
         const data = await res.json();
