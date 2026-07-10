@@ -94,7 +94,15 @@ export function readableClause(
   userParam: number,
   resourceType: ShareableResource,
 ): string {
-  return `(${visibilityClause(alias, orgParam, userParam)} OR ${sharedWithClause(alias, userParam, resourceType)} OR ${teamSharedClause(alias, orgParam, resourceType)})`;
+  // A shared collection cascades read access to the memories inside it: if a
+  // document is filed under ANY category team-shared into the caller's active
+  // org, the document is readable too (including memories added to the
+  // collection later). Team-share only, read-only, reuses orgParam.
+  const categoryCascade =
+    resourceType === "document"
+      ? ` OR ${teamSharedViaCategoryClause(alias, orgParam)}`
+      : "";
+  return `(${visibilityClause(alias, orgParam, userParam)} OR ${sharedWithClause(alias, userParam, resourceType)} OR ${teamSharedClause(alias, orgParam, resourceType)}${categoryCascade})`;
 }
 
 /**
@@ -109,6 +117,17 @@ export function teamSharedClause(
   resourceType: ShareableResource,
 ): string {
   return `EXISTS (SELECT 1 FROM resource_team_shares rts WHERE rts.resource_type = '${resourceType}' AND rts.resource_id = ${alias}.id AND rts.organization_id = $${orgParam})`;
+}
+
+/**
+ * Read access a document inherits from a collection (category) shared into the
+ * caller's active team. This is the document-side cascade of a
+ * `resource_team_shares` category grant, so "share a collection with the team"
+ * exposes every memory filed under it — including ones added later. Read-only;
+ * reuses `orgParam`, so it adds no new placeholder.
+ */
+export function teamSharedViaCategoryClause(alias: string, orgParam: number): string {
+  return `EXISTS (SELECT 1 FROM document_categories dc JOIN resource_team_shares rts ON rts.resource_type = 'category' AND rts.resource_id = dc.category_id WHERE dc.document_id = ${alias}.id AND rts.organization_id = $${orgParam})`;
 }
 
 /**

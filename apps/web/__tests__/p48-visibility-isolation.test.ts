@@ -53,6 +53,10 @@ interface TeamShareRow {
   resource_id: string;
   organization_id: string;
 }
+interface CatLink {
+  document_id: string;
+  category_id: string;
+}
 
 let db: PGlite;
 
@@ -83,6 +87,10 @@ beforeAll(async () => {
       resource_id text NOT NULL,
       organization_id text NOT NULL
     );
+    CREATE TABLE document_categories (
+      document_id text NOT NULL,
+      category_id text NOT NULL
+    );
   `);
 });
 
@@ -91,13 +99,14 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await db.exec(`TRUNCATE documents, categories, resource_shares, resource_team_shares;`);
+  await db.exec(`TRUNCATE documents, categories, resource_shares, resource_team_shares, document_categories;`);
 });
 
 async function seed(
   docs: DocRow[],
   shares: ShareRow[] = [],
   teamShares: TeamShareRow[] = [],
+  catLinks: CatLink[] = [],
 ): Promise<void> {
   for (const d of docs) {
     await db.query(
@@ -115,6 +124,12 @@ async function seed(
     await db.query(
       `INSERT INTO resource_team_shares (resource_type, resource_id, organization_id) VALUES ($1,$2,$3)`,
       [t.resource_type, t.resource_id, t.organization_id],
+    );
+  }
+  for (const l of catLinks) {
+    await db.query(
+      `INSERT INTO document_categories (document_id, category_id) VALUES ($1,$2)`,
+      [l.document_id, l.category_id],
     );
   }
 }
@@ -142,8 +157,26 @@ const oracle = {
   teamShared(d: DocRow, type: ShareableResource, team: TeamShareRow[]): boolean {
     return team.some((t) => t.resource_type === type && t.resource_id === d.id && t.organization_id === ACTIVE_ORG);
   },
-  readable(d: DocRow, type: ShareableResource, shares: ShareRow[], team: TeamShareRow[]): boolean {
-    return this.visible(d) || this.shared(d, type, shares) || this.teamShared(d, type, team);
+  teamSharedViaCategory(d: DocRow, catLinks: CatLink[], team: TeamShareRow[]): boolean {
+    return catLinks.some(
+      (l) =>
+        l.document_id === d.id &&
+        team.some(
+          (t) => t.resource_type === "category" && t.resource_id === l.category_id && t.organization_id === ACTIVE_ORG,
+        ),
+    );
+  },
+  readable(
+    d: DocRow,
+    type: ShareableResource,
+    shares: ShareRow[],
+    team: TeamShareRow[],
+    catLinks: CatLink[] = [],
+  ): boolean {
+    const base = this.visible(d) || this.shared(d, type, shares) || this.teamShared(d, type, team);
+    // A document also inherits read access from any collection it is filed under
+    // that is team-shared into the caller's active org.
+    return type === "document" ? base || this.teamSharedViaCategory(d, catLinks, team) : base;
   },
   writable(d: DocRow, isAdmin: boolean): boolean {
     return isAdmin ? d.organization_id === ACTIVE_ORG : d.organization_id === ACTIVE_ORG && d.user_id === CALLER;
@@ -175,6 +208,8 @@ describe("Property 48: visibility clauses enforce tenant isolation (real SQL)", 
     { id: "acl-view", user_id: TEAMMATE, organization_id: ACTIVE_ORG, privacy_level: "private" },
     { id: "acl-edit", user_id: TEAMMATE, organization_id: ACTIVE_ORG, privacy_level: "private" },
     { id: "team-share-row", user_id: OUTSIDER, organization_id: OTHER_ORG, privacy_level: "private" },
+    { id: "in-shared-collection", user_id: OUTSIDER, organization_id: OTHER_ORG, privacy_level: "private" },
+    { id: "in-otherorg-collection", user_id: OUTSIDER, organization_id: OTHER_ORG, privacy_level: "private" },
   ];
   const shares: ShareRow[] = [
     { resource_type: "document", resource_id: "acl-view", grantee_user_id: CALLER, permission: "view" },
@@ -186,9 +221,18 @@ describe("Property 48: visibility clauses enforce tenant isolation (real SQL)", 
     { resource_type: "document", resource_id: "team-share-row", organization_id: ACTIVE_ORG },
     // a team share for a DIFFERENT org must never grant the caller access
     { resource_type: "document", resource_id: "own-other-org", organization_id: OTHER_ORG },
+    // a collection shared into the caller's active org cascades to its docs
+    { resource_type: "category", resource_id: "cat-shared", organization_id: ACTIVE_ORG },
+    // a collection shared into a DIFFERENT org must NOT cascade to the caller
+    { resource_type: "category", resource_id: "cat-other", organization_id: OTHER_ORG },
   ];
 
-  beforeEach(() => seed(docs, shares, teamShares));
+  const catLinks: CatLink[] = [
+    { document_id: "in-shared-collection", category_id: "cat-shared" },
+    { document_id: "in-otherorg-collection", category_id: "cat-other" },
+  ];
+
+  beforeEach(() => seed(docs, shares, teamShares, catLinks));
 
   it("visibilityClause: own rows always visible, foreign private hidden, org-shared visible", async () => {
     const got = await idsWhere(visibilityClause("d", 1, 2));
@@ -209,10 +253,13 @@ describe("Property 48: visibility clauses enforce tenant isolation (real SQL)", 
         "acl-view",
         "acl-edit",
         "team-share-row",
+        "in-shared-collection",
       ]),
     );
     // The teammate's private doc was shared with the OUTSIDER, not the caller.
     expect(got.has("team-private")).toBe(false);
+    // A collection shared into a DIFFERENT org must not cascade to the caller.
+    expect(got.has("in-otherorg-collection")).toBe(false);
   });
 
   it("writableClause(non-admin): only the caller's own rows in the active org", async () => {
@@ -290,22 +337,29 @@ describe("Property 48: clauses match an independent oracle over random universes
       const teamShares = fc.array(
         fc.record({
           resource_type: fc.constantFrom<ShareableResource>("document", "category"),
-          resource_id: fc.constantFrom(...ids),
+          resource_id: fc.constantFrom(...ids, "cat0", "cat1"),
           organization_id: fc.constantFrom(ACTIVE_ORG, OTHER_ORG),
         }),
         { maxLength: 4 },
       );
-      return fc.tuple(docs, shares, teamShares);
+      const catLinks = fc.array(
+        fc.record({
+          document_id: fc.constantFrom(...ids),
+          category_id: fc.constantFrom("cat0", "cat1"),
+        }),
+        { maxLength: 5 },
+      );
+      return fc.tuple(docs, shares, teamShares, catLinks);
     });
 
   it("readableClause('document') == oracle.readable for all random universes", async () => {
     await fc.assert(
-      fc.asyncProperty(arbUniverse, async ([docs, shares, teamShares]) => {
-        await db.exec(`TRUNCATE documents, resource_shares, resource_team_shares;`);
-        await seed(docs as DocRow[], shares as ShareRow[], teamShares as TeamShareRow[]);
+      fc.asyncProperty(arbUniverse, async ([docs, shares, teamShares, catLinks]) => {
+        await db.exec(`TRUNCATE documents, resource_shares, resource_team_shares, document_categories;`);
+        await seed(docs as DocRow[], shares as ShareRow[], teamShares as TeamShareRow[], catLinks as CatLink[]);
         const sql = await idsWhere(readableClause("d", 1, 2, "document"));
         const ref = expected(docs as DocRow[], (d) =>
-          oracle.readable(d, "document", shares as ShareRow[], teamShares as TeamShareRow[]),
+          oracle.readable(d, "document", shares as ShareRow[], teamShares as TeamShareRow[], catLinks as CatLink[]),
         );
         expect(sql).toEqual(ref);
       }),
@@ -316,7 +370,7 @@ describe("Property 48: clauses match an independent oracle over random universes
   it("writableClause(admin & non-admin) == oracle.writable for all random universes", async () => {
     await fc.assert(
       fc.asyncProperty(arbUniverse, fc.boolean(), async ([docs], isAdmin) => {
-        await db.exec(`TRUNCATE documents, resource_shares, resource_team_shares;`);
+        await db.exec(`TRUNCATE documents, resource_shares, resource_team_shares, document_categories;`);
         await seed(docs as DocRow[]);
         const sql = await idsWhere(writableClause("d", 1, 2, isAdmin));
         const ref = expected(docs as DocRow[], (d) => oracle.writable(d, isAdmin));
@@ -328,16 +382,17 @@ describe("Property 48: clauses match an independent oracle over random universes
 
   it("CRITICAL: a foreign, unshared private row is NEVER readable", async () => {
     await fc.assert(
-      fc.asyncProperty(arbUniverse, async ([docs, shares, teamShares]) => {
-        await db.exec(`TRUNCATE documents, resource_shares, resource_team_shares;`);
-        await seed(docs as DocRow[], shares as ShareRow[], teamShares as TeamShareRow[]);
+      fc.asyncProperty(arbUniverse, async ([docs, shares, teamShares, catLinks]) => {
+        await db.exec(`TRUNCATE documents, resource_shares, resource_team_shares, document_categories;`);
+        await seed(docs as DocRow[], shares as ShareRow[], teamShares as TeamShareRow[], catLinks as CatLink[]);
         const sql = await idsWhere(readableClause("d", 1, 2, "document"));
         for (const d of docs as DocRow[]) {
           const foreignPrivate =
             d.user_id !== CALLER &&
             d.privacy_level === "private" &&
             !oracle.shared(d, "document", shares as ShareRow[]) &&
-            !oracle.teamShared(d, "document", teamShares as TeamShareRow[]);
+            !oracle.teamShared(d, "document", teamShares as TeamShareRow[]) &&
+            !oracle.teamSharedViaCategory(d, catLinks as CatLink[], teamShares as TeamShareRow[]);
           if (foreignPrivate) {
             expect(sql.has(d.id)).toBe(false);
           }
@@ -372,8 +427,10 @@ describe("Property 48: clauses are parameterized and resource-type safe", () => 
     for (const type of ["document", "category"] as ShareableResource[]) {
       const c = readableClause("d", 1, 2, type);
       expect(c).toContain(`'${type}'`);
-      const other = type === "document" ? "category" : "document";
-      expect(c).not.toContain(`'${other}'`);
     }
+    // The category read path never references documents. The document read path
+    // legitimately references 'category' via the shared-collection cascade, so
+    // only assert the one-directional isolation that still holds.
+    expect(readableClause("d", 1, 2, "category")).not.toContain("'document'");
   });
 });
