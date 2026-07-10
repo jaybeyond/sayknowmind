@@ -6,7 +6,6 @@ import { useCategoriesStore } from "@/store/categories-store";
 import { MemoryCard } from "./memory-card";
 import { MemoryDetailPanel } from "./memory-detail-panel";
 import { InlineEditor } from "@/components/docs/inline-editor";
-import { AddMemoryDialog } from "./add-memory-dialog";
 import { StatsCards } from "./stats-cards";
 import { GalleryCard, type GalleryItem } from "@/components/gallery/gallery-card";
 import { Button } from "@/components/ui/button";
@@ -247,7 +246,6 @@ export function MemoryContent() {
   } = useMemoryStore();
   const { categories, getChildren, hasChildren, addCategory, deleteCategory } = useCategoriesStore();
   const [globalDragOver, setGlobalDragOver] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
 
   // Docs, spreadsheets and mind maps open in the in-place editor; everything else
@@ -381,7 +379,6 @@ export function MemoryContent() {
 
   return (
     <>
-      <AddMemoryDialog open={dialogOpen} onOpenChange={setDialogOpen} />
       <div
         className="flex-1 w-full overflow-auto relative"
         onDragOver={(e) => { e.preventDefault(); setGlobalDragOver(true); }}
@@ -596,16 +593,6 @@ export function MemoryContent() {
                   ))}
                 </div>
               )}
-              {selectedCollection !== "all" && (
-                <Button
-                  size="sm"
-                  onClick={() => setDialogOpen(true)}
-                  className="shrink-0"
-                >
-                  <Plus className="size-3.5 mr-1.5" />
-                  {t("content.addToCollection")}
-                </Button>
-              )}
             </div>
 
             {isLoading ? (
@@ -708,7 +695,7 @@ export function MemoryContent() {
                     {/* Same entries as the header "+" menu, so the empty state
                         offers every creatable type, not just memories. */}
                     <DropdownMenuContent align="center" className="w-44">
-                      <DropdownMenuItem onClick={() => setDialogOpen(true)}>
+                      <DropdownMenuItem onClick={() => window.dispatchEvent(new Event("sayknow-open-add-memory"))}>
                         <Plus className="size-4 mr-2" />
                         {t("header.addMemory")}
                       </DropdownMenuItem>

@@ -253,7 +253,6 @@
     "withoutTags": "Without tags",
     "loadMore": "Load more",
     "loadingMore": "Loading more...",
-    "addToCollection": "Add to this collection",
     "allLoaded": "All {{count}} memories loaded"
   },
   "emptyState": {
