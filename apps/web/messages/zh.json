@@ -896,7 +896,14 @@
       "create": "创建团队",
       "switchFailed": "切换团队失败",
       "createFailed": "创建团队失败",
-      "createSuccess": "团队\"{name}\"已创建"
+      "createSuccess": "团队\"{name}\"已创建",
+      "invitesHeading": "收到的邀请",
+      "accept": "接受",
+      "decline": "拒绝",
+      "acceptSuccess": "已加入团队\"{name}\"",
+      "acceptFailed": "接受邀请失败",
+      "declineFailed": "拒绝邀请失败",
+      "declined": "已拒绝邀请"
     },
     "settings": {
       "noActiveTeam": "当前没有活跃团队。请在侧边栏的团队切换器中创建或加入团队。",

@@ -896,7 +896,14 @@
       "create": "Create team",
       "switchFailed": "Failed to switch team",
       "createFailed": "Failed to create team",
-      "createSuccess": "Team \"{name}\" created"
+      "createSuccess": "Team \"{name}\" created",
+      "invitesHeading": "Invitations",
+      "accept": "Accept",
+      "decline": "Decline",
+      "acceptSuccess": "You joined \"{name}\"",
+      "acceptFailed": "Failed to accept invitation",
+      "declineFailed": "Failed to decline invitation",
+      "declined": "Invitation declined"
     },
     "settings": {
       "noActiveTeam": "No active team. Create or join a team from the team switcher in the sidebar.",

@@ -896,7 +896,14 @@
       "create": "チームを作成",
       "switchFailed": "チームの切り替えに失敗しました",
       "createFailed": "チームの作成に失敗しました",
-      "createSuccess": "チーム「{name}」を作成しました"
+      "createSuccess": "チーム「{name}」を作成しました",
+      "invitesHeading": "受け取った招待",
+      "accept": "承認",
+      "decline": "辞退",
+      "acceptSuccess": "チーム「{name}」に参加しました",
+      "acceptFailed": "招待の承認に失敗しました",
+      "declineFailed": "招待の辞退に失敗しました",
+      "declined": "招待を辞退しました"
     },
     "settings": {
       "noActiveTeam": "アクティブなチームがありません。サイドバーのチーム切替から作成または参加してください。",

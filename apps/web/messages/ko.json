@@ -896,7 +896,14 @@
       "create": "팀 만들기",
       "switchFailed": "팀 전환에 실패했습니다",
       "createFailed": "팀 생성에 실패했습니다",
-      "createSuccess": "\"{name}\" 팀이 생성되었습니다"
+      "createSuccess": "\"{name}\" 팀이 생성되었습니다",
+      "invitesHeading": "받은 초대",
+      "accept": "수락",
+      "decline": "거절",
+      "acceptSuccess": "\"{name}\" 팀에 합류했습니다",
+      "acceptFailed": "초대 수락에 실패했습니다",
+      "declineFailed": "초대 거절에 실패했습니다",
+      "declined": "초대를 거절했습니다"
     },
     "settings": {
       "noActiveTeam": "활성화된 팀이 없습니다. 사이드바의 팀 전환기에서 팀을 만들거나 참여하세요.",
