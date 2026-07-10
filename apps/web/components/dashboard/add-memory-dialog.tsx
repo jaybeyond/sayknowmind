@@ -43,7 +43,15 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
   const [bookmarkResult, setBookmarkResult] = React.useState<{ imported: number; skipped: number; total: number } | null>(null);
   const bookmarkInputRef = React.useRef<HTMLInputElement>(null);
 
-  const { fetchMemories, selectedCollection } = useMemoryStore();
+  const { fetchMemories, selectedCollection, selectedTab } = useMemoryStore();
+
+  // Save into the collection the user is currently viewing: the active sub-tab
+  // if one is open, otherwise the selected collection. "all"/"gallery" mean no
+  // specific collection (let the pipeline auto-file). Applies to every add
+  // entry point, including the header "+".
+  const targetCategoryId =
+    selectedTab ??
+    (selectedCollection !== "all" && selectedCollection !== "gallery" ? selectedCollection : undefined);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "url", label: t("ingest.tabUrl"), icon: <Link className="size-4" /> },
@@ -112,7 +120,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
           url: trimmed,
           locale,
           force,
-          categoryId: selectedCollection !== "all" ? selectedCollection : undefined,
+          categoryId: targetCategoryId,
         }),
       });
       if (res.status === 409) {
@@ -174,8 +182,8 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
       formData.append("file", file);
       formData.append("locale", locale);
       if (force) formData.append("force", "true");
-      if (selectedCollection !== "all") {
-        formData.append("categoryId", selectedCollection);
+      if (targetCategoryId) {
+        formData.append("categoryId", targetCategoryId);
       }
       const res = await fetch("/api/ingest/file", { method: "POST", body: formData });
       if (res.status === 409) {
@@ -212,7 +220,7 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
           content: trimmed,
           title: textTitle.trim() || undefined,
           locale,
-          categoryId: selectedCollection !== "all" ? selectedCollection : undefined,
+          categoryId: targetCategoryId,
         }),
       });
       if (!res.ok) {
@@ -267,8 +275,8 @@ export function AddMemoryDialog({ open, onOpenChange }: AddMemoryDialogProps) {
       formData.append("file", bookmarkFile);
       formData.append("locale", locale);
       formData.append("skipDuplicates", "true");
-      if (selectedCollection !== "all") {
-        formData.append("categoryId", selectedCollection);
+      if (targetCategoryId) {
+        formData.append("categoryId", targetCategoryId);
       }
       const res = await fetch("/api/ingest/bookmarks", { method: "POST", body: formData });
       if (!res.ok) {
