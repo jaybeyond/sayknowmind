@@ -358,6 +358,12 @@ async function processJob(job: JobRow): Promise<void> {
       return;
     }
     try {
+      // If the user filed this memory into a collection at ingest time, respect
+      // that choice exactly: skip AI auto-categorization so it stays in THAT
+      // collection only, instead of being scattered across AI-suggested ones.
+      const alreadyFiled =
+        (await pool.query(`SELECT 1 FROM document_categories WHERE document_id = $1 LIMIT 1`, [documentId]))
+          .rows.length > 0;
       // Fetch org's existing categories
       const catResult = await pool.query(
         `SELECT id, name FROM categories WHERE organization_id = $1`,
@@ -368,8 +374,8 @@ async function processJob(job: JobRow): Promise<void> {
         name: r.name,
       }));
 
-      let suggestions = await suggestCategories(doc.content, userId, existingCategories, language);
-      if (suggestions.length === 0) {
+      let suggestions = alreadyFiled ? [] : await suggestCategories(doc.content, userId, existingCategories, language);
+      if (!alreadyFiled && suggestions.length === 0) {
         const fallback = suggestFallbackCategory({
           title: doc.title,
           content: doc.content,
