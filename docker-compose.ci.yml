@@ -1,0 +1,25 @@
+# ============================================================================
+# SayKnowMind CI override —— 只给 7 个业务服务加 image: 引用（Harbor 镜像）
+# 与主 docker-compose.yml 叠加使用；不修改主 compose。
+#
+# 生产机 .env 内设置（让所有 docker compose 命令自动带上两份文件）：
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.ci.yml
+# 各 *_IMAGE 变量由 Jenkins 部署时 upsert；缺省回退当前本地构建镜像名（行为不变）。
+#
+# postgres / redis / ollama / searxng / ipfs 不在此文件 —— 永不被 CI 镜像化/自动重建。
+# ============================================================================
+services:
+  web:
+    image: ${WEB_IMAGE:-sayknowmind-web}
+  dashboard:
+    image: ${DASHBOARD_IMAGE:-sayknowmind-dashboard}
+  ai-server:
+    image: ${AI_SERVER_IMAGE:-sayknowmind-ai-server}
+  ocr-server:
+    image: ${OCR_IMAGE:-sayknowmind-ocr-server}
+  edgequake:
+    image: ${EDGEQUAKE_IMAGE:-sayknowmind-edgequake}
+  mcp-server:
+    image: ${MCP_IMAGE:-sayknowmind-mcp-server}
+  relay-server:
+    image: ${RELAY_IMAGE:-sayknowmind-relay-server}
