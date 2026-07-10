@@ -596,6 +596,16 @@ export function MemoryContent() {
                   ))}
                 </div>
               )}
+              {selectedCollection !== "all" && (
+                <Button
+                  size="sm"
+                  onClick={() => setDialogOpen(true)}
+                  className="shrink-0"
+                >
+                  <Plus className="size-3.5 mr-1.5" />
+                  {t("content.addToCollection")}
+                </Button>
+              )}
             </div>
 
             {isLoading ? (

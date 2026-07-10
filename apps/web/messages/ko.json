@@ -253,6 +253,7 @@
     "withoutTags": "태그 없음",
     "loadMore": "더 보기",
     "loadingMore": "불러오는 중...",
+    "addToCollection": "이 컬렉션에 추가",
     "allLoaded": "총 {{count}}개 메모리 로드 완료"
   },
   "emptyState": {

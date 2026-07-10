@@ -253,6 +253,7 @@
     "withoutTags": "无标签",
     "loadMore": "加载更多",
     "loadingMore": "加载中...",
+    "addToCollection": "添加到此收藏集",
     "allLoaded": "共 {{count}} 条已全部加载"
   },
   "emptyState": {
