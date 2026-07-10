@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { authClient, useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Loader2, Mail, Shield, User, X } from "lucide-react";
+import { Check, Loader2, Mail, Shield, User, X } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { isSaasAuth, synthesizeSaasEmail } from "@/lib/auth-mode";
 
@@ -37,6 +38,15 @@ interface Invitation {
   organizationId: string;
 }
 
+interface MyInvitation {
+  id: string;
+  role: Role;
+  status: string;
+  expiresAt: Date;
+  organizationId: string;
+  organizationName: string;
+}
+
 const ROLE_KEYS: Record<Role, RoleKey> = {
   owner: "roles.owner",
   admin: "roles.admin",
@@ -47,6 +57,7 @@ const INVITE_ROLES: Role[] = ["admin", "member"];
 
 export function TeamTab() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { data: session } = useSession();
   const { data: activeOrg } = authClient.useActiveOrganization();
 
@@ -61,6 +72,8 @@ export function TeamTab() {
   const [updatingRole, setUpdatingRole] = React.useState<string | null>(null);
   const [removing, setRemoving] = React.useState<string | null>(null);
   const [cancelling, setCancelling] = React.useState<string | null>(null);
+  const [myInvites, setMyInvites] = React.useState<MyInvitation[]>([]);
+  const [respondingInvite, setRespondingInvite] = React.useState<string | null>(null);
 
   const currentUserId = session?.user?.id;
 
@@ -83,6 +96,58 @@ export function TeamTab() {
   React.useEffect(() => {
     void loadOrgData();
   }, [loadOrgData]);
+
+  const loadMyInvites = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/invitations/mine");
+      if (!res.ok) return;
+      const data = await res.json();
+      setMyInvites((data.invitations ?? []) as MyInvitation[]);
+    } catch {
+      // Non-fatal: the tab still works without the received-invites list.
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadMyInvites();
+  }, [loadMyInvites]);
+
+  const handleAcceptMyInvite = async (inv: MyInvitation) => {
+    setRespondingInvite(inv.id);
+    try {
+      const result = await authClient.organization.acceptInvitation({ invitationId: inv.id });
+      if (result.error) {
+        toast.error(result.error.message ?? t("team.switcher.acceptFailed"));
+        return;
+      }
+      await authClient.organization.setActive({ organizationId: inv.organizationId });
+      toast.success(t("team.switcher.acceptSuccess").replace("{name}", inv.organizationName));
+      setMyInvites((prev) => prev.filter((i) => i.id !== inv.id));
+      void loadOrgData();
+      router.refresh();
+    } catch {
+      toast.error(t("team.switcher.acceptFailed"));
+    } finally {
+      setRespondingInvite(null);
+    }
+  };
+
+  const handleDeclineMyInvite = async (inv: MyInvitation) => {
+    setRespondingInvite(inv.id);
+    try {
+      const result = await authClient.organization.rejectInvitation({ invitationId: inv.id });
+      if (result.error) {
+        toast.error(result.error.message ?? t("team.switcher.declineFailed"));
+        return;
+      }
+      toast.success(t("team.switcher.declined"));
+      setMyInvites((prev) => prev.filter((i) => i.id !== inv.id));
+    } catch {
+      toast.error(t("team.switcher.declineFailed"));
+    } finally {
+      setRespondingInvite(null);
+    }
+  };
 
   const currentMember = members.find((m) => m.userId === currentUserId);
   const currentRole = currentMember?.role ?? "member";
@@ -201,6 +266,51 @@ export function TeamTab() {
 
   return (
     <div className="space-y-8">
+      {/* Invitations addressed to me — accept/decline (mirrors the sidebar team switcher) */}
+      {myInvites.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold">{t("team.switcher.invitesHeading")}</h3>
+          {myInvites.map((inv) => (
+            <div
+              key={inv.id}
+              className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5"
+            >
+              <div className="size-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Mail className="size-3.5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{inv.organizationName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("team.settings.invitedAs").replace("{role}", t(`team.${ROLE_KEYS[inv.role]}`))}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                disabled={respondingInvite === inv.id}
+                onClick={() => handleAcceptMyInvite(inv)}
+              >
+                {respondingInvite === inv.id ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Check className="size-3.5" />
+                )}
+                {t("team.switcher.accept")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                disabled={respondingInvite === inv.id}
+                onClick={() => handleDeclineMyInvite(inv)}
+              >
+                <X className="size-3.5" />
+                {t("team.switcher.decline")}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
       <div>
         <h2 className="text-base font-semibold">{activeOrg.name}</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
