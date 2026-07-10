@@ -3,6 +3,7 @@ import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { getUserOrgs } from "@/lib/tasks/store";
+import { isBiTasksEnabled, listBiTaskMembers } from "@/lib/integrations/bi-tasks";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,11 @@ export async function GET() {
     );
   }
   try {
+    if (isBiTasksEnabled()) {
+      const members = await listBiTaskMembers();
+      return NextResponse.json({ members });
+    }
+
     // Union of members across every org the caller belongs to, deduped — so the
     // assignee picker covers personal + team work in the cross-org task view.
     const orgs = await getUserOrgs(ctx.userId);

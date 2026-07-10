@@ -3,6 +3,7 @@ import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { isValidPriority, isValidStatus } from "@/lib/tasks/constants";
+import { createBiTask, isBiTasksEnabled, listBiTasks } from "@/lib/integrations/bi-tasks";
 import {
   listWorkItems,
   getWorkItem,
@@ -30,6 +31,10 @@ export async function GET(request: NextRequest) {
   const rawScope = request.nextUrl.searchParams.get("scope");
   const scope: TaskScope = rawScope && VALID_SCOPES.has(rawScope as TaskScope) ? (rawScope as TaskScope) : "all";
   try {
+    if (isBiTasksEnabled()) {
+      const tasks = await listBiTasks(ctx);
+      return NextResponse.json({ tasks });
+    }
     const tasks = await listWorkItems(ctx, scope);
     return NextResponse.json({ tasks });
   } catch (err) {
@@ -73,6 +78,19 @@ export async function POST(request: NextRequest) {
   const documentId = typeof body.documentId === "string" && body.documentId ? body.documentId : null;
 
   try {
+    if (isBiTasksEnabled()) {
+      const task = await createBiTask(ctx, {
+        title,
+        status,
+        priority,
+        description,
+        assigneeId,
+        dueDate,
+        projectId: typeof body.projectId === "string" && body.projectId ? body.projectId : null,
+      });
+      return NextResponse.json({ task }, { status: 201 });
+    }
+
     // If an assignee was named, they must share an org with the caller —
     // otherwise a caller could assign a task to any user id. Drop an invalid one.
     let safeAssignee: string | null = null;

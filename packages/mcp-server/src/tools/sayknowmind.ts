@@ -202,6 +202,150 @@ function invalidAuth() {
 
 export function registerSayknowmindTools(server: McpServer): void {
   // ---------------------------------------------------------------------------
+  // sayknowmind.tasks_list — List tasks visible to the caller
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_tasks_list",
+    "List tasks visible to the calling user in SayKnowMind. When BI task bridge is enabled, this returns BI tasks through the SayKnowMind task API.",
+    {
+      scope: z.enum(["all", "personal", "team"]).optional().describe("Task scope (default: all)"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const query = new URLSearchParams();
+        if (params.scope) query.set("scope", params.scope);
+        const qs = query.toString();
+        const response = await fetch(`${WEB_APP_URL}/api/tasks${qs ? `?${qs}` : ""}`, {
+          method: "GET",
+          headers: apiHeaders(),
+        });
+        if (!response.ok) {
+          const e = await response.text();
+          throw new Error(`/api/tasks returned ${response.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await response.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.task_create — Create a task through the web task API
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_task_create",
+    "Create a SayKnowMind task. When BI task bridge is enabled, this creates the task in BI and returns the mapped SayKnowMind task view.",
+    {
+      title: z.string().describe("Task title"),
+      description: z.string().optional().describe("Task description"),
+      status: z.enum(["backlog", "todo", "in-progress", "technical-review", "completed", "paused"]).optional(),
+      priority: z.enum(["no-priority", "urgent", "high", "medium", "low"]).optional(),
+      assignee_id: z.string().optional().describe("Assignee id. In BI mode this may be a BI member id, or a mapped SayKnowMind user id."),
+      due_date: z.string().optional().describe("ISO due date. If omitted in BI mode, BI_DEFAULT_DUE_DAYS supplies a default."),
+      project_id: z.string().optional().describe("Optional BI project id override. Otherwise organization/default project mapping is used."),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const response = await fetch(`${WEB_APP_URL}/api/tasks`, {
+          method: "POST",
+          headers: apiHeaders(),
+          body: JSON.stringify({
+            title: params.title,
+            description: params.description,
+            status: params.status,
+            priority: params.priority,
+            assigneeId: params.assignee_id,
+            dueDate: params.due_date,
+            projectId: params.project_id,
+          }),
+        });
+        if (!response.ok) {
+          const e = await response.text();
+          throw new Error(`/api/tasks returned ${response.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await response.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.task_update — Update a task through the web task API
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_task_update",
+    "Update a SayKnowMind task. When BI task bridge is enabled, this updates the corresponding BI task.",
+    {
+      task_id: z.string().describe("Task id"),
+      title: z.string().optional().describe("Task title"),
+      description: z.string().optional().describe("Task description"),
+      status: z.enum(["backlog", "todo", "in-progress", "technical-review", "completed", "paused"]).optional(),
+      priority: z.enum(["no-priority", "urgent", "high", "medium", "low"]).optional(),
+      assignee_id: z.string().nullable().optional().describe("Assignee id, or null to use default mapping in BI mode."),
+      due_date: z.string().nullable().optional().describe("ISO due date"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const body: Record<string, unknown> = {};
+        if (params.title !== undefined) body.title = params.title;
+        if (params.description !== undefined) body.description = params.description;
+        if (params.status !== undefined) body.status = params.status;
+        if (params.priority !== undefined) body.priority = params.priority;
+        if (params.assignee_id !== undefined) body.assigneeId = params.assignee_id;
+        if (params.due_date !== undefined) body.dueDate = params.due_date;
+        const response = await fetch(`${WEB_APP_URL}/api/tasks/${encodeURIComponent(params.task_id)}`, {
+          method: "PATCH",
+          headers: apiHeaders(),
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const e = await response.text();
+          throw new Error(`/api/tasks/${params.task_id} returned ${response.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await response.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.task_delete — Delete a task through the web task API
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_task_delete",
+    "Delete a SayKnowMind task. When BI task bridge is enabled, this deletes the task in BI.",
+    {
+      task_id: z.string().describe("Task id"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const response = await fetch(`${WEB_APP_URL}/api/tasks/${encodeURIComponent(params.task_id)}`, {
+          method: "DELETE",
+          headers: apiHeaders(),
+        });
+        if (!response.ok) {
+          const e = await response.text();
+          throw new Error(`/api/tasks/${params.task_id} returned ${response.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await response.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // sayknowmind.search — Search the knowledge base
   // ---------------------------------------------------------------------------
   server.tool(
