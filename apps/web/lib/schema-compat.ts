@@ -9,7 +9,7 @@ const SHARED_CONTENT_SCHEMA_SQL = `
   ALTER TABLE shared_content
     ADD COLUMN IF NOT EXISTS encryption_method VARCHAR(50),
     ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS share_token TEXT,
+    ADD COLUMN IF NOT EXISTS share_token VARCHAR(32),
     ADD COLUMN IF NOT EXISTS passphrase_hash TEXT,
     ADD COLUMN IF NOT EXISTS organization_id TEXT;
 

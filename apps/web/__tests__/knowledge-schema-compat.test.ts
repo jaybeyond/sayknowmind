@@ -92,6 +92,13 @@ describe("knowledge schema compatibility guard", () => {
       expect(shared.rows[0].share_token).toHaveLength(32);
       expect(shared.rows[0].organization_id).toBe("org-1");
 
+      const shareTokenColumn = await db.query<{ character_maximum_length: number }>(`
+        SELECT character_maximum_length
+          FROM information_schema.columns
+         WHERE table_name = 'shared_content' AND column_name = 'share_token'
+      `);
+      expect(Number(shareTokenColumn.rows[0].character_maximum_length)).toBe(32);
+
       const category = await db.query<{ kind: string; privacy_level: string; organization_id: string }>(
         "SELECT kind, privacy_level, organization_id FROM categories",
       );
