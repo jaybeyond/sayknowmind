@@ -4,6 +4,7 @@ import { insertDocument } from "@/lib/ingest/document-store";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { writableClause, editableViaShareClause } from "@/lib/visibility";
+import { ensureKnowledgeSchema } from "@/lib/schema-compat";
 
 /** POST /api/docs — create a new blank doc or mind map, optionally inside a collection. */
 export async function POST(request: NextRequest) {
@@ -16,6 +17,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    await ensureKnowledgeSchema();
     const body = (await request.json().catch(() => ({}))) as {
       title?: string;
       type?: "doc" | "mindmap" | "sheet";

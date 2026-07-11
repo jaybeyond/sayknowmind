@@ -3,6 +3,7 @@ import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { readableClause } from "@/lib/visibility";
+import { ensureKnowledgeSchema } from "@/lib/schema-compat";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,8 @@ export async function GET(request: NextRequest) {
   const isFavorite = searchParams.get("isFavorite");
 
   try {
+    await ensureKnowledgeSchema();
+
     // $1 = ctx.userId, orgId appended last as $N
     const params: unknown[] = [ctx.userId];
     let paramIdx = 2;
