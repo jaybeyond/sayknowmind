@@ -21,8 +21,8 @@ export async function GET() {
     );
   }
   try {
-    if (isBiTasksEnabled()) {
-      const members = await listBiTaskMembers();
+    if (isBiTasksEnabled(ctx)) {
+      const members = await listBiTaskMembers(ctx);
       return NextResponse.json({ members });
     }
 

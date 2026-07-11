@@ -15,6 +15,7 @@ interface BiConfig {
   defaultDueDays: number;
   orgProjectMap: JsonMap;
   userMap: JsonMap;
+  enabledOrganizationIds: string[];
 }
 
 interface BiMember {
@@ -92,18 +93,45 @@ interface CreateBiTaskInput {
 }
 
 type UpdateBiTaskInput = Record<string, unknown>;
+type BiTaskScope = "all" | "personal" | "team";
 
 let cachedToken: string | null = null;
-let cachedMembers: { at: number; members: BiMember[] } | null = null;
+const cachedProjectMembers = new Map<string, { at: number; members: BiMember[] }>();
+
+export class BiTaskBridgeError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "BiTaskBridgeError";
+  }
+}
+
+class BiRequestError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "BiRequestError";
+  }
+}
 
 function parseJsonMap(raw: string | undefined): JsonMap {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as JsonMap : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        ([key, value]) => key.trim().length > 0 && typeof value === "string" && value.trim().length > 0,
+      ),
+    ) as JsonMap;
   } catch {
     return {};
   }
+}
+
+function parseIdList(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function getConfig(): BiConfig {
@@ -120,11 +148,13 @@ function getConfig(): BiConfig {
     defaultDueDays: Number(process.env.BI_DEFAULT_DUE_DAYS ?? 7) || 7,
     orgProjectMap: parseJsonMap(process.env.BI_ORG_PROJECT_MAP),
     userMap: parseJsonMap(process.env.BI_USER_MAP),
+    enabledOrganizationIds: parseIdList(process.env.BI_TASKS_ORGANIZATION_IDS),
   };
 }
 
-export function isBiTasksEnabled(): boolean {
-  return getConfig().enabled;
+export function isBiTasksEnabled(ctx: OrgContext): boolean {
+  const config = getConfig();
+  return config.enabled && Boolean(resolveBiProjectId(ctx, config));
 }
 
 function assertConfigured(config: BiConfig) {
@@ -186,7 +216,7 @@ async function biRequest<T>(
   }
   if (!res.ok) {
     const message = await res.text().catch(() => "");
-    throw new Error(`BI request ${path} failed: ${res.status} ${message.slice(0, 200)}`);
+    throw new BiRequestError(`BI request ${path} failed: ${res.status} ${message.slice(0, 200)}`, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -220,19 +250,42 @@ async function getMindUser(userId: string): Promise<MindUser | null> {
   return res.rows[0] ? res.rows[0] as MindUser : null;
 }
 
-async function listBiMembers(): Promise<BiMember[]> {
+function resolveBiProjectId(ctx: OrgContext, config = getConfig()): string {
+  const mapped = config.orgProjectMap[ctx.organizationId]?.trim();
+  if (mapped) return mapped;
+  if (config.enabledOrganizationIds.includes(ctx.organizationId)) return config.defaultProjectId.trim();
+  return "";
+}
+
+function requireBiProjectId(ctx: OrgContext): string {
+  const projectId = resolveBiProjectId(ctx);
+  if (!projectId) {
+    throw new BiTaskBridgeError("BI tasks are not configured for this organization", 404);
+  }
+  return projectId;
+}
+
+async function listBiProjectMembers(ctx: OrgContext): Promise<BiMember[]> {
+  const projectId = requireBiProjectId(ctx);
   const now = Date.now();
-  if (cachedMembers && now - cachedMembers.at < 60_000) return cachedMembers.members;
-  const members = await biListAll<BiMember>("/members", new URLSearchParams());
-  cachedMembers = { at: now, members };
+  const cached = cachedProjectMembers.get(projectId);
+  if (cached && now - cached.at < 60_000) return cached.members;
+
+  const projectMembers = await biRequest<BiMember[]>(`/projects/${encodeURIComponent(projectId)}/members`);
+  const byId = new Map<string, BiMember>();
+  for (const member of projectMembers) {
+    if (member?.id) byId.set(member.id, member);
+  }
+  const members = [...byId.values()];
+  cachedProjectMembers.set(projectId, { at: now, members });
   return members;
 }
 
-async function resolveBiAssigneeId(mindUserId: string | null | undefined): Promise<string> {
+async function findBiAssigneeId(ctx: OrgContext, mindUserId: string | null | undefined): Promise<string | null> {
   const config = getConfig();
-  if (mindUserId && config.userMap[mindUserId]) return config.userMap[mindUserId];
-
-  const members = await listBiMembers();
+  const members = await listBiProjectMembers(ctx);
+  const mappedId = mindUserId ? config.userMap[mindUserId] : undefined;
+  if (mappedId && members.some((m) => m.id === mappedId)) return mappedId;
   if (mindUserId && members.some((m) => m.id === mindUserId)) return mindUserId;
 
   if (mindUserId) {
@@ -244,13 +297,19 @@ async function resolveBiAssigneeId(mindUserId: string | null | undefined): Promi
     }
   }
 
-  if (config.defaultAssigneeId) return config.defaultAssigneeId;
-  throw new Error("No BI assignee mapping found; configure BI_USER_MAP or BI_DEFAULT_ASSIGNEE_ID");
+  return null;
 }
 
-function resolveBiProjectId(ctx: OrgContext, requestedProjectId?: string | null): string {
+async function resolveBiAssigneeId(ctx: OrgContext, mindUserId: string | null | undefined): Promise<string> {
   const config = getConfig();
-  return requestedProjectId || config.orgProjectMap[ctx.organizationId] || config.defaultProjectId;
+  const mapped = await findBiAssigneeId(ctx, mindUserId);
+  if (mapped) return mapped;
+  const members = await listBiProjectMembers(ctx);
+
+  if (config.defaultAssigneeId && members.some((m) => m.id === config.defaultAssigneeId)) {
+    return config.defaultAssigneeId;
+  }
+  throw new Error("No BI assignee mapping found; configure BI_USER_MAP or BI_DEFAULT_ASSIGNEE_ID");
 }
 
 function defaultDueDate(): string {
@@ -328,8 +387,7 @@ function mapBiTask(task: BiTask): Task {
 
 function mapCreateBody(ctx: OrgContext, input: CreateBiTaskInput, assigneeId: string): Record<string, unknown> {
   const priority = mindPriorityToBi(input.priority);
-  const projectId = resolveBiProjectId(ctx, input.projectId);
-  if (!projectId) throw new Error("No BI project mapping found; configure BI_ORG_PROJECT_MAP or BI_DEFAULT_PROJECT_ID");
+  const projectId = requireBiProjectId(ctx);
   return {
     title: input.title,
     description: input.description ?? "",
@@ -343,7 +401,7 @@ function mapCreateBody(ctx: OrgContext, input: CreateBiTaskInput, assigneeId: st
   };
 }
 
-async function mapUpdateBody(input: UpdateBiTaskInput): Promise<Record<string, unknown>> {
+async function mapUpdateBody(ctx: OrgContext, input: UpdateBiTaskInput): Promise<Record<string, unknown>> {
   const body: Record<string, unknown> = {};
   if (typeof input.title === "string" && input.title.trim()) body.title = input.title.trim();
   if (typeof input.description === "string") body.description = input.description;
@@ -352,21 +410,40 @@ async function mapUpdateBody(input: UpdateBiTaskInput): Promise<Record<string, u
   if (typeof input.dueDate === "string" && input.dueDate) body.dueDate = input.dueDate;
   if ("assigneeId" in input) {
     const assigneeId = typeof input.assigneeId === "string" && input.assigneeId ? input.assigneeId : null;
-    body.assigneeId = await resolveBiAssigneeId(assigneeId);
+    body.assigneeId = await resolveBiAssigneeId(ctx, assigneeId);
   }
   return body;
 }
 
-export async function listBiTasks(ctx: OrgContext): Promise<Task[]> {
-  const projectId = resolveBiProjectId(ctx);
-  if (!projectId) throw new Error("No BI project mapping found; configure BI_ORG_PROJECT_MAP or BI_DEFAULT_PROJECT_ID");
+async function getBiTaskInProject(ctx: OrgContext, id: string): Promise<BiTask> {
+  const projectId = requireBiProjectId(ctx);
+  let task: BiTask;
+  try {
+    task = await biRequest<BiTask>(`/tasks/${encodeURIComponent(id)}`);
+  } catch (error) {
+    if (error instanceof BiRequestError && error.status === 404) {
+      throw new BiTaskBridgeError("BI task not found", 404);
+    }
+    throw error;
+  }
+  if (task.projectId !== projectId) throw new BiTaskBridgeError("BI task not found", 404);
+  return task;
+}
+
+export async function listBiTasks(ctx: OrgContext, scope: BiTaskScope = "all"): Promise<Task[]> {
+  const projectId = requireBiProjectId(ctx);
   const params = new URLSearchParams({ projectId });
+  if (scope === "personal") {
+    const assigneeId = await findBiAssigneeId(ctx, ctx.userId);
+    if (!assigneeId) return [];
+    params.set("assigneeId", assigneeId);
+  }
   const rows = await biListAll<BiTask>("/tasks", params);
   return rows.map(mapBiTask);
 }
 
-export async function listBiTaskMembers(): Promise<Array<{ id: string; name: string | null; email: string | null; image: string | null }>> {
-  return (await listBiMembers()).map((m) => ({
+export async function listBiTaskMembers(ctx: OrgContext): Promise<Array<{ id: string; name: string | null; email: string | null; image: string | null }>> {
+  return (await listBiProjectMembers(ctx)).map((m) => ({
     id: m.id,
     name: m.name ?? null,
     email: m.email ?? null,
@@ -375,7 +452,7 @@ export async function listBiTaskMembers(): Promise<Array<{ id: string; name: str
 }
 
 export async function createBiTask(ctx: OrgContext, input: CreateBiTaskInput): Promise<Task> {
-  const assigneeId = await resolveBiAssigneeId(input.assigneeId || ctx.userId);
+  const assigneeId = await resolveBiAssigneeId(ctx, input.assigneeId || ctx.userId);
   const body = mapCreateBody(ctx, input, assigneeId);
   const task = await biRequest<BiTask>("/tasks", {
     method: "POST",
@@ -384,16 +461,19 @@ export async function createBiTask(ctx: OrgContext, input: CreateBiTaskInput): P
   return mapBiTask(task);
 }
 
-export async function updateBiTask(id: string, input: UpdateBiTaskInput): Promise<Task> {
-  const body = await mapUpdateBody(input);
+export async function updateBiTask(ctx: OrgContext, id: string, input: UpdateBiTaskInput): Promise<Task> {
+  await getBiTaskInProject(ctx, id);
+  const body = await mapUpdateBody(ctx, input);
   if (Object.keys(body).length === 0) throw new Error("No valid BI task fields to update");
   const task = await biRequest<BiTask>(`/tasks/${encodeURIComponent(id)}`, {
     method: "PUT",
     body: JSON.stringify(body),
   });
+  if (task.projectId !== requireBiProjectId(ctx)) throw new BiTaskBridgeError("BI task not found", 404);
   return mapBiTask(task);
 }
 
-export async function deleteBiTask(id: string): Promise<void> {
+export async function deleteBiTask(ctx: OrgContext, id: string): Promise<void> {
+  await getBiTaskInProject(ctx, id);
   await biRequest<{ success: boolean }>(`/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
