@@ -17,7 +17,7 @@ import { formatError } from "../errors.js";
 const WEB_APP_URL = process.env.SAYKNOWMIND_URL ?? "http://localhost:5400";
 const AUTH_SECRET = process.env.AUTH_SECRET ?? "";
 
-function apiHeaders(): Record<string, string> {
+function apiHeaders(organizationId?: string): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   const context = getRequestContext();
   if (context?.rawToken) {
@@ -25,6 +25,7 @@ function apiHeaders(): Record<string, string> {
   } else if (AUTH_SECRET) {
     h["Authorization"] = `Bearer ${AUTH_SECRET}`;
   }
+  if (organizationId) h["X-Organization-Id"] = organizationId;
   return h;
 }
 
@@ -208,6 +209,7 @@ export function registerSayknowmindTools(server: McpServer): void {
     "sayknowmind_tasks_list",
     "List tasks visible to the calling user in SayKnowMind. When BI task bridge is enabled, this returns BI tasks through the SayKnowMind task API.",
     {
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID to use for task and BI project scoping"),
       scope: z.enum(["all", "personal", "team"]).optional().describe("Task scope (default: all)"),
       auth_token: z.string().optional().describe("Authentication token"),
     },
@@ -219,7 +221,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         const qs = query.toString();
         const response = await fetch(`${WEB_APP_URL}/api/tasks${qs ? `?${qs}` : ""}`, {
           method: "GET",
-          headers: apiHeaders(),
+          headers: apiHeaders(params.organization_id),
         });
         if (!response.ok) {
           const e = await response.text();
@@ -239,13 +241,13 @@ export function registerSayknowmindTools(server: McpServer): void {
     "sayknowmind_task_create",
     "Create a SayKnowMind task. When BI task bridge is enabled, this creates the task in BI and returns the mapped SayKnowMind task view.",
     {
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID mapped to the target BI project"),
       title: z.string().describe("Task title"),
       description: z.string().optional().describe("Task description"),
       status: z.enum(["backlog", "todo", "in-progress", "technical-review", "completed", "paused"]).optional(),
       priority: z.enum(["no-priority", "urgent", "high", "medium", "low"]).optional(),
       assignee_id: z.string().optional().describe("Assignee id. In BI mode this may be a BI member id, or a mapped SayKnowMind user id."),
       due_date: z.string().optional().describe("ISO due date. If omitted in BI mode, BI_DEFAULT_DUE_DAYS supplies a default."),
-      project_id: z.string().optional().describe("Optional BI project id override. Otherwise organization/default project mapping is used."),
       auth_token: z.string().optional().describe("Authentication token"),
     },
     async (params) => {
@@ -253,7 +255,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (!verifyAuthToken(params.auth_token)) return invalidAuth();
         const response = await fetch(`${WEB_APP_URL}/api/tasks`, {
           method: "POST",
-          headers: apiHeaders(),
+          headers: apiHeaders(params.organization_id),
           body: JSON.stringify({
             title: params.title,
             description: params.description,
@@ -261,7 +263,6 @@ export function registerSayknowmindTools(server: McpServer): void {
             priority: params.priority,
             assigneeId: params.assignee_id,
             dueDate: params.due_date,
-            projectId: params.project_id,
           }),
         });
         if (!response.ok) {
@@ -282,6 +283,7 @@ export function registerSayknowmindTools(server: McpServer): void {
     "sayknowmind_task_update",
     "Update a SayKnowMind task. When BI task bridge is enabled, this updates the corresponding BI task.",
     {
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID that owns the task's mapped BI project"),
       task_id: z.string().describe("Task id"),
       title: z.string().optional().describe("Task title"),
       description: z.string().optional().describe("Task description"),
@@ -303,7 +305,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (params.due_date !== undefined) body.dueDate = params.due_date;
         const response = await fetch(`${WEB_APP_URL}/api/tasks/${encodeURIComponent(params.task_id)}`, {
           method: "PATCH",
-          headers: apiHeaders(),
+          headers: apiHeaders(params.organization_id),
           body: JSON.stringify(body),
         });
         if (!response.ok) {
@@ -322,8 +324,9 @@ export function registerSayknowmindTools(server: McpServer): void {
   // ---------------------------------------------------------------------------
   server.tool(
     "sayknowmind_task_delete",
-    "Delete a SayKnowMind task. When BI task bridge is enabled, this deletes the task in BI.",
+    "Permanently delete a SayKnowMind task. When BI task bridge is enabled, this permanently deletes the task in BI after project-scope validation.",
     {
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID that owns the task's mapped BI project"),
       task_id: z.string().describe("Task id"),
       auth_token: z.string().optional().describe("Authentication token"),
     },
@@ -332,7 +335,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (!verifyAuthToken(params.auth_token)) return invalidAuth();
         const response = await fetch(`${WEB_APP_URL}/api/tasks/${encodeURIComponent(params.task_id)}`, {
           method: "DELETE",
-          headers: apiHeaders(),
+          headers: apiHeaders(params.organization_id),
         });
         if (!response.ok) {
           const e = await response.text();

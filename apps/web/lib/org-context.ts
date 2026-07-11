@@ -59,9 +59,29 @@ export async function getOrgContext(): Promise<OrgContext | null> {
   const userId = await getUserIdFromRequest();
   if (!userId) return null;
 
+  const requestHeaders = await headers();
+  const requestedOrgId = requestHeaders.get("x-organization-id")?.trim() || null;
+  if (requestedOrgId) {
+    const requested = await pool.query(
+      `SELECT m."organizationId", m.role
+         FROM member m
+        WHERE m."userId" = $1
+          AND m."organizationId" = $2
+        LIMIT 1`,
+      [userId, requestedOrgId],
+    );
+    const row = requested.rows[0];
+    if (!row) return null;
+    return {
+      userId,
+      organizationId: row.organizationId as string,
+      role: row.role as string,
+    };
+  }
+
   let activeOrgId: string | null = null;
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const session = await auth.api.getSession({ headers: requestHeaders });
     activeOrgId =
       (session?.session as { activeOrganizationId?: string | null } | undefined)
         ?.activeOrganizationId ?? null;

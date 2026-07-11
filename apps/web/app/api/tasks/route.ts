@@ -31,8 +31,8 @@ export async function GET(request: NextRequest) {
   const rawScope = request.nextUrl.searchParams.get("scope");
   const scope: TaskScope = rawScope && VALID_SCOPES.has(rawScope as TaskScope) ? (rawScope as TaskScope) : "all";
   try {
-    if (isBiTasksEnabled()) {
-      const tasks = await listBiTasks(ctx);
+    if (isBiTasksEnabled(ctx)) {
+      const tasks = await listBiTasks(ctx, scope);
       return NextResponse.json({ tasks });
     }
     const tasks = await listWorkItems(ctx, scope);
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
   const documentId = typeof body.documentId === "string" && body.documentId ? body.documentId : null;
 
   try {
-    if (isBiTasksEnabled()) {
+    if (isBiTasksEnabled(ctx)) {
       const task = await createBiTask(ctx, {
         title,
         status,
@@ -86,7 +86,6 @@ export async function POST(request: NextRequest) {
         description,
         assigneeId,
         dueDate,
-        projectId: typeof body.projectId === "string" && body.projectId ? body.projectId : null,
       });
       return NextResponse.json({ task }, { status: 201 });
     }
