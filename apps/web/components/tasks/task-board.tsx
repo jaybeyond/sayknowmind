@@ -2,19 +2,26 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
-import { TASK_STATUSES, type Task, type TaskStatusId } from "@/lib/tasks/constants";
+import { BI_TASK_STATUSES, TASK_STATUSES, type Task, type TaskStatusId } from "@/lib/tasks/constants";
 import { useTasksStore } from "@/store/tasks-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TaskCard } from "./task-card";
 import { DueDateField } from "./due-date-field";
+import { TaskProjectField } from "./task-project-field";
 
 function QuickAdd({ status, onDone }: { status: TaskStatusId; onDone: () => void }) {
   const { t } = useTranslation();
   const createTask = useTasksStore((s) => s.createTask);
+  const taskMode = useTasksStore((s) => s.taskMode);
+  const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState(
+    () => selectedProjectId ?? "",
+  );
+  const effectiveProjectId = selectedProjectId || projectId;
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -27,10 +34,13 @@ function QuickAdd({ status, onDone }: { status: TaskStatusId; onDone: () => void
       onDone();
       return;
     }
-    setTitle("");
-    setDueDate(null);
-    await createTask({ title: trimmed, status, dueDate });
-    onDone();
+    if (taskMode === "bi" && !effectiveProjectId) return;
+    const created = await createTask({ title: trimmed, status, dueDate, projectId: effectiveProjectId });
+    if (created) {
+      setTitle("");
+      setDueDate(null);
+      onDone();
+    }
   };
 
   return (
@@ -58,7 +68,10 @@ function QuickAdd({ status, onDone }: { status: TaskStatusId; onDone: () => void
         rows={2}
         className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
-      <DueDateField value={dueDate} status={status} size="xs" onChange={setDueDate} />
+      <div className="flex flex-wrap items-center gap-2">
+        <DueDateField value={dueDate} status={status} size="xs" onChange={setDueDate} />
+        <TaskProjectField value={effectiveProjectId} onChange={setProjectId} className="max-w-full" />
+      </div>
     </div>
   );
 }
@@ -79,6 +92,9 @@ function BoardColumn({
   const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const [over, setOver] = useState(false);
+  const taskMode = useTasksStore((state) => state.taskMode);
+  const projects = useTasksStore((state) => state.projects);
+  const canAdd = taskMode !== "bi" || projects.length > 0;
 
   return (
     <div className="flex w-72 shrink-0 flex-col">
@@ -88,8 +104,9 @@ function BoardColumn({
         <span className="text-xs text-muted-foreground tabular-nums">{tasks.length}</span>
         <button
           onClick={() => setAdding(true)}
-          className="ml-auto p-0.5 rounded hover:bg-muted text-muted-foreground"
-          title={t("tasks.addTask")}
+          disabled={!canAdd}
+          className="ml-auto p-0.5 rounded hover:bg-muted text-muted-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          title={canAdd ? t("tasks.addTask") : t("tasks.noProjects")}
         >
           <Plus className="size-4" />
         </button>
@@ -121,9 +138,10 @@ function BoardColumn({
         {tasks.length === 0 && !adding && (
           <button
             onClick={() => setAdding(true)}
-            className="w-full rounded-lg border border-dashed border-border py-6 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+            disabled={!canAdd}
+            className="w-full rounded-lg border border-dashed border-border py-6 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {t("tasks.addTask")}
+            {canAdd ? t("tasks.addTask") : t("tasks.noProjects")}
           </button>
         )}
       </div>
@@ -135,24 +153,26 @@ export function TaskBoard() {
   const { t } = useTranslation();
   const tasks = useTasksStore((s) => s.tasks);
   const isLoading = useTasksStore((s) => s.isLoading);
+  const taskMode = useTasksStore((s) => s.taskMode);
   const moveTask = useTasksStore((s) => s.moveTask);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const statuses = taskMode === "bi" ? BI_TASK_STATUSES : TASK_STATUSES;
 
   const byStatus = useMemo(() => {
     const map = new Map<TaskStatusId, Task[]>();
-    for (const s of TASK_STATUSES) map.set(s.id, []);
+    for (const s of statuses) map.set(s.id, []);
     for (const task of tasks) {
       const bucket = map.get(task.status as TaskStatusId);
       if (bucket) bucket.push(task);
       else map.get("backlog")!.push(task);
     }
     return map;
-  }, [tasks]);
+  }, [statuses, tasks]);
 
   if (isLoading) {
     return (
       <div className="flex gap-4 p-4 overflow-x-auto">
-        {TASK_STATUSES.map((s) => (
+        {statuses.map((s) => (
           <div key={s.id} className="w-72 shrink-0 space-y-2">
             <Skeleton className="h-6 w-32" />
             <Skeleton className="h-24 w-full rounded-lg" />
@@ -166,7 +186,7 @@ export function TaskBoard() {
   return (
     <div className="flex-1 overflow-x-auto overflow-y-hidden">
       <div className="flex h-full gap-4 p-4">
-        {TASK_STATUSES.map((status) => (
+        {statuses.map((status) => (
           <BoardColumn
             key={status.id}
             status={status}

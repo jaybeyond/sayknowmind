@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SquareKanban, List, CalendarDays, GanttChartSquare } from "lucide-react";
+import { SquareKanban, List, CalendarDays, GanttChartSquare, FolderKanban, X } from "lucide-react";
 import { useTasksStore, type TaskScope } from "@/store/tasks-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -36,10 +36,15 @@ const SCOPES: { id: TaskScope; labelKey: string }[] = [
  */
 export function TasksWorkspace() {
   const { t } = useTranslation();
-  const fetchTasks = useTasksStore((s) => s.fetchTasks);
-  const fetchMembers = useTasksStore((s) => s.fetchMembers);
+  const fetchProjects = useTasksStore((s) => s.fetchProjects);
   const scope = useTasksStore((s) => s.scope);
   const setScope = useTasksStore((s) => s.setScope);
+  const taskMode = useTasksStore((s) => s.taskMode);
+  const projects = useTasksStore((s) => s.projects);
+  const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
+  const setProjectFilter = useTasksStore((s) => s.setProjectFilter);
+  const error = useTasksStore((s) => s.error);
+  const clearError = useTasksStore((s) => s.clearError);
   const [view, setView] = useState<ViewId>("board");
 
   // Restore the last-used view. Done in an effect (not a lazy useState init)
@@ -53,9 +58,13 @@ export function TasksWorkspace() {
   }, []);
 
   useEffect(() => {
-    fetchTasks();
-    fetchMembers();
-  }, [fetchTasks, fetchMembers]);
+    void fetchProjects().then(() => {
+      const state = useTasksStore.getState();
+      void state.fetchTasks();
+      if (state.taskMode === "local") void state.fetchMembers();
+      else if (state.selectedProjectId) void state.fetchMembers(state.selectedProjectId);
+    });
+  }, [fetchProjects]);
 
   const selectView = (id: ViewId) => {
     setView(id);
@@ -83,9 +92,24 @@ export function TasksWorkspace() {
             <span className="hidden sm:inline">{t(v.labelKey)}</span>
           </button>
         ))}
-        {/* Scope filter: personal / team / all */}
-        <div className="ml-auto flex items-center gap-1 rounded-md border border-border p-0.5">
-          {SCOPES.map((s) => (
+        {taskMode === "bi" && (
+          <label className="ml-auto flex min-w-0 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
+            <FolderKanban className="size-3.5 shrink-0" />
+            <span className="sr-only">{t("tasks.project")}</span>
+            <select
+              value={selectedProjectId ?? ""}
+              onChange={(event) => setProjectFilter(event.target.value || null)}
+              className="min-w-24 max-w-48 bg-transparent text-foreground outline-none"
+            >
+              <option value="">{t("tasks.allProjects")}</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className={cn("flex items-center gap-1 rounded-md border border-border p-0.5", taskMode !== "bi" && "ml-auto")}>
+          {SCOPES.filter((item) => taskMode !== "bi" || item.id !== "team").map((s) => (
             <button
               key={s.id}
               onClick={() => setScope(s.id)}
@@ -100,6 +124,15 @@ export function TasksWorkspace() {
         </div>
         <PresenceBar />
       </div>
+
+      {error && (
+        <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
+          <span className="min-w-0 flex-1 truncate">{error}</span>
+          <button onClick={clearError} className="shrink-0 rounded p-0.5 hover:bg-destructive/10" title={t("tasks.dismissError")}>
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
 
       {view === "board" && <TaskBoard />}
       {view === "list" && <TaskList />}

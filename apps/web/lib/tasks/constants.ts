@@ -38,6 +38,8 @@ export const TASK_STATUSES: TaskStatusMeta[] = [
   { id: "paused", labelKey: "tasks.status.paused", color: "#0ea5e9" },
 ];
 
+export const BI_TASK_STATUSES = TASK_STATUSES.filter((status) => status.id !== "paused");
+
 export const TASK_PRIORITIES: TaskPriorityMeta[] = [
   { id: "urgent", labelKey: "tasks.priority.urgent", weight: 0 },
   { id: "high", labelKey: "tasks.priority.high", weight: 1 },
@@ -45,6 +47,10 @@ export const TASK_PRIORITIES: TaskPriorityMeta[] = [
   { id: "low", labelKey: "tasks.priority.low", weight: 3 },
   { id: "no-priority", labelKey: "tasks.priority.none", weight: 4 },
 ];
+
+export const BI_TASK_PRIORITIES = TASK_PRIORITIES.filter(
+  (priority) => priority.id !== "no-priority",
+);
 
 const STATUS_IDS = new Set(TASK_STATUSES.map((s) => s.id));
 const PRIORITY_IDS = new Set(TASK_PRIORITIES.map((p) => p.id));
@@ -67,6 +73,13 @@ export interface TaskLabel {
   color: string;
 }
 
+export interface TaskProject {
+  id: string;
+  name: string;
+  color: string | null;
+  status: string | null;
+}
+
 export interface Task {
   id: string;
   identifier: string | null;
@@ -76,6 +89,8 @@ export interface Task {
   priority: TaskPriorityId;
   assignee: { id: string; name: string | null; email: string | null; image: string | null } | null;
   labels: TaskLabel[];
+  projectId?: string | null;
+  project?: TaskProject | null;
   rank: string | null;
   startDate: string | null;
   dueDate: string | null;

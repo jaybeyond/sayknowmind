@@ -1037,6 +1037,11 @@
   },
   "tasks": {
     "title": "タスク",
+    "project": "プロジェクト",
+    "allProjects": "すべてのプロジェクト",
+    "selectProject": "プロジェクトを選択",
+    "noProjects": "アクセス可能なプロジェクトがありません",
+    "dismissError": "エラーを閉じる",
     "addTask": "タスクを追加",
     "newTaskPlaceholder": "何をしますか？",
     "delete": "削除",
