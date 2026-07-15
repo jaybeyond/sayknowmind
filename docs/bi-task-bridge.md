@@ -18,6 +18,10 @@ BI remains the single task data source. SayKnowMind does not copy BI tasks into
 - There is no user-facing integration switch. Operations controls rollout with
   environment configuration.
 
+The BI frontend does not gain a bridge-specific switch or selector. Project
+filtering, explicit project selection on create, project labels, and
+project-scoped assignees are added only to the Mind task workspace.
+
 This release shares task boards. It does not create, rename, archive, or delete
 BI projects from Mind.
 
