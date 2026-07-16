@@ -1037,6 +1037,11 @@
   },
   "tasks": {
     "title": "任务",
+    "project": "所属项目",
+    "allProjects": "全部项目",
+    "selectProject": "选择项目",
+    "noProjects": "暂无可访问项目",
+    "dismissError": "关闭错误提示",
     "addTask": "添加任务",
     "newTaskPlaceholder": "需要做什么？",
     "delete": "删除",

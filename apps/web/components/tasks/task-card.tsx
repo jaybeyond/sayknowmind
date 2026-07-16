@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -11,9 +12,15 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Trash2 } from "lucide-react";
-import { TASK_PRIORITIES, TASK_STATUSES, type Task } from "@/lib/tasks/constants";
-import { useTasksStore } from "@/store/tasks-store";
+import { FolderKanban, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+  BI_TASK_PRIORITIES,
+  BI_TASK_STATUSES,
+  TASK_PRIORITIES,
+  TASK_STATUSES,
+  type Task,
+} from "@/lib/tasks/constants";
+import { EMPTY_TASK_MEMBERS, useTasksStore } from "@/store/tasks-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { PRIORITY_DOT, initials } from "./shared";
@@ -23,8 +30,18 @@ export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: 
   const { t } = useTranslation();
   const updateTask = useTasksStore((s) => s.updateTask);
   const deleteTask = useTasksStore((s) => s.deleteTask);
-  const members = useTasksStore((s) => s.members);
+  const members = useTasksStore((s) => task.projectId
+    ? s.membersByProject[task.projectId] ?? EMPTY_TASK_MEMBERS
+    : s.members);
+  const fetchMembers = useTasksStore((s) => s.fetchMembers);
+  const taskMode = useTasksStore((s) => s.taskMode);
   const openTask = useTasksStore((s) => s.openTask);
+  const statuses = taskMode === "bi" ? BI_TASK_STATUSES : TASK_STATUSES;
+  const priorities = taskMode === "bi" ? BI_TASK_PRIORITIES : TASK_PRIORITIES;
+
+  useEffect(() => {
+    if (task.projectId && members.length === 0) void fetchMembers(task.projectId);
+  }, [fetchMembers, members.length, task.projectId]);
 
   const priority = TASK_PRIORITIES.find((p) => p.id === task.priority);
 
@@ -55,7 +72,7 @@ export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: 
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>{t("tasks.setPriority")}</DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                {TASK_PRIORITIES.map((p) => (
+                {priorities.map((p) => (
                   <DropdownMenuItem key={p.id} onClick={() => updateTask(task.id, { priority: p.id })}>
                     <span className={cn("size-2 rounded-full mr-2", PRIORITY_DOT[p.id])} />
                     {t(p.labelKey)}
@@ -66,7 +83,7 @@ export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: 
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>{t("tasks.setStatus")}</DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                {TASK_STATUSES.map((s) => (
+                {statuses.map((s) => (
                   <DropdownMenuItem key={s.id} onClick={() => updateTask(task.id, { status: s.id })}>
                     <span className="size-2 rounded-full mr-2" style={{ backgroundColor: s.color }} />
                     {t(s.labelKey)}
@@ -77,9 +94,11 @@ export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: 
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>{t("tasks.assign")}</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
-                <DropdownMenuItem onClick={() => updateTask(task.id, { assigneeId: null, assignee: null })}>
-                  {t("tasks.unassigned")}
-                </DropdownMenuItem>
+                {taskMode !== "bi" && (
+                  <DropdownMenuItem onClick={() => updateTask(task.id, { assigneeId: null, assignee: null })}>
+                    {t("tasks.unassigned")}
+                  </DropdownMenuItem>
+                )}
                 {members.map((m) => (
                   <DropdownMenuItem
                     key={m.id}
@@ -107,6 +126,13 @@ export function TaskCard({ task, onDragStart }: { task: Task; onDragStart: (id: 
       >
         {task.title}
       </button>
+
+      {task.project && (
+        <div className="mt-2 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
+          <FolderKanban className="size-3 shrink-0" />
+          <span className="truncate">{task.project.name}</span>
+        </div>
+      )}
 
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">

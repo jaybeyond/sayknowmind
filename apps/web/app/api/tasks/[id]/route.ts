@@ -4,7 +4,8 @@ import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { isValidPriority, isValidStatus, isDoneStatus } from "@/lib/tasks/constants";
 import { getWorkItem, getUserOrgs, isAssignableUser } from "@/lib/tasks/store";
-import { BiTaskBridgeError, deleteBiTask, isBiTasksEnabled, updateBiTask } from "@/lib/integrations/bi-tasks";
+import { deleteBiTask, isBiTasksEnabled, updateBiTask } from "@/lib/integrations/bi-tasks";
+import { biTaskErrorResponse } from "@/lib/tasks/bridge-error";
 
 export const dynamic = "force-dynamic";
 
@@ -12,19 +13,6 @@ function unauthorized() {
   return NextResponse.json(
     { code: ErrorCode.AUTH_TOKEN_EXPIRED, message: "Unauthorized", timestamp: new Date().toISOString() },
     { status: 401 },
-  );
-}
-
-function biTaskError(err: unknown) {
-  const status = err instanceof BiTaskBridgeError ? err.status : 500;
-  const notFound = status === 404;
-  return NextResponse.json(
-    {
-      code: notFound ? ErrorCode.SYSTEM_VALIDATION_ERROR : ErrorCode.SYSTEM_INTERNAL_ERROR,
-      message: notFound ? "Not found" : "Internal server error",
-      timestamp: new Date().toISOString(),
-    },
-    { status },
   );
 }
 
@@ -50,7 +38,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ task });
     } catch (err) {
       console.error("[tasks] BI PATCH error:", err);
-      return biTaskError(err);
+      return biTaskErrorResponse(err);
     }
   }
 
@@ -145,7 +133,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[tasks] DELETE error:", err);
-    if (isBiTasksEnabled(ctx)) return biTaskError(err);
+    if (isBiTasksEnabled(ctx)) return biTaskErrorResponse(err);
     return NextResponse.json(
       { code: ErrorCode.SYSTEM_INTERNAL_ERROR, message: "Internal server error", timestamp: new Date().toISOString() },
       { status: 500 },

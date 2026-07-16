@@ -203,13 +203,42 @@ function invalidAuth() {
 
 export function registerSayknowmindTools(server: McpServer): void {
   // ---------------------------------------------------------------------------
+  // sayknowmind.task_projects_list — List projects available to the caller
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_task_projects_list",
+    "List BI projects the calling user owns or that have been shared with them. Use a returned project id when creating or filtering bridged tasks.",
+    {
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID whose BI bridge policy applies"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const response = await fetch(`${WEB_APP_URL}/api/tasks/projects`, {
+          method: "GET",
+          headers: apiHeaders(params.organization_id),
+        });
+        if (!response.ok) {
+          const e = await response.text();
+          throw new Error(`/api/tasks/projects returned ${response.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await response.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // sayknowmind.tasks_list — List tasks visible to the caller
   // ---------------------------------------------------------------------------
   server.tool(
     "sayknowmind_tasks_list",
     "List tasks visible to the calling user in SayKnowMind. When BI task bridge is enabled, this returns BI tasks through the SayKnowMind task API.",
     {
-      organization_id: z.string().min(1).describe("SayKnowMind organization UUID to use for task and BI project scoping"),
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID whose BI bridge policy applies"),
+      project_id: z.string().optional().describe("Optional BI project id; omit to list tasks across all accessible projects"),
       scope: z.enum(["all", "personal", "team"]).optional().describe("Task scope (default: all)"),
       auth_token: z.string().optional().describe("Authentication token"),
     },
@@ -218,6 +247,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (!verifyAuthToken(params.auth_token)) return invalidAuth();
         const query = new URLSearchParams();
         if (params.scope) query.set("scope", params.scope);
+        if (params.project_id) query.set("projectId", params.project_id);
         const qs = query.toString();
         const response = await fetch(`${WEB_APP_URL}/api/tasks${qs ? `?${qs}` : ""}`, {
           method: "GET",
@@ -241,7 +271,8 @@ export function registerSayknowmindTools(server: McpServer): void {
     "sayknowmind_task_create",
     "Create a SayKnowMind task. When BI task bridge is enabled, this creates the task in BI and returns the mapped SayKnowMind task view.",
     {
-      organization_id: z.string().min(1).describe("SayKnowMind organization UUID mapped to the target BI project"),
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID whose BI bridge policy applies"),
+      project_id: z.string().optional().describe("BI project id. Required when the BI task bridge is enabled."),
       title: z.string().describe("Task title"),
       description: z.string().optional().describe("Task description"),
       status: z.enum(["backlog", "todo", "in-progress", "technical-review", "completed", "paused"]).optional(),
@@ -263,6 +294,7 @@ export function registerSayknowmindTools(server: McpServer): void {
             priority: params.priority,
             assigneeId: params.assignee_id,
             dueDate: params.due_date,
+            projectId: params.project_id,
           }),
         });
         if (!response.ok) {
@@ -283,7 +315,7 @@ export function registerSayknowmindTools(server: McpServer): void {
     "sayknowmind_task_update",
     "Update a SayKnowMind task. When BI task bridge is enabled, this updates the corresponding BI task.",
     {
-      organization_id: z.string().min(1).describe("SayKnowMind organization UUID that owns the task's mapped BI project"),
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID whose BI bridge policy applies"),
       task_id: z.string().describe("Task id"),
       title: z.string().optional().describe("Task title"),
       description: z.string().optional().describe("Task description"),
@@ -326,7 +358,7 @@ export function registerSayknowmindTools(server: McpServer): void {
     "sayknowmind_task_delete",
     "Permanently delete a SayKnowMind task. When BI task bridge is enabled, this permanently deletes the task in BI after project-scope validation.",
     {
-      organization_id: z.string().min(1).describe("SayKnowMind organization UUID that owns the task's mapped BI project"),
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID whose BI bridge policy applies"),
       task_id: z.string().describe("Task id"),
       auth_token: z.string().optional().describe("Authentication token"),
     },

@@ -10,7 +10,7 @@ import { StreamWriter, type StreamSource } from "./stream-writer";
 import { createEditorDocument, shareEditorDocument, type MindInput, type CellValue } from "./doc-actions";
 import { queryEdgeQuake } from "@/lib/edgequake/client";
 import { pool } from "@/lib/db";
-import { loadPrompts } from "@/app/api/settings/prompts/route";
+import { loadPrompts } from "@/lib/prompts-route";
 import { readableClause } from "@/lib/visibility";
 
 interface PipelineInput {

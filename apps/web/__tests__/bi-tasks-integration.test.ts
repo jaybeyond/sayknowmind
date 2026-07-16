@@ -14,6 +14,7 @@ vi.mock("@/lib/org-context", () => ({
 
 const ctx = { userId: "mind-user-1", organizationId: "mind-org-1", role: "member" };
 const otherCtx = { userId: "mind-user-2", organizationId: "mind-org-2", role: "member" };
+const SECRET = "mind-bi-integration-test-secret-at-least-32-bytes";
 
 const BI_ENV_KEYS = [
   "BI_TASKS_ENABLED",
@@ -21,6 +22,7 @@ const BI_ENV_KEYS = [
   "BI_SERVICE_TOKEN",
   "BI_SERVICE_LOGIN_ID",
   "BI_SERVICE_PASSWORD",
+  "BI_INTEGRATION_SECRET",
   "BI_ORG_PROJECT_MAP",
   "BI_TASKS_ORGANIZATION_IDS",
   "BI_DEFAULT_PROJECT_ID",
@@ -28,15 +30,18 @@ const BI_ENV_KEYS = [
   "BI_DEFAULT_ASSIGNEE_ID",
 ] as const;
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+function jsonResponse(body: unknown, status = 200, delegated = true): Response {
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (delegated) headers.set("X-SayKnowMind-Integration", "delegated");
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 function biMember(id: string, email: string) {
   return { id, name: id, email, avatar: null };
+}
+
+function biProject(id: string) {
+  return { id, name: `Project ${id}`, color: "#2563eb", status: "executing" };
 }
 
 function biTask(id: string, projectId = "bi-project-1") {
@@ -48,6 +53,7 @@ function biTask(id: string, projectId = "bi-project-1") {
     priority: "medium",
     priorityLevel: "P3",
     projectId,
+    project: biProject(projectId),
     assigneeId: "bi-member-1",
     assignee: biMember("bi-member-1", "member1@example.com"),
     dueDate: "2026-07-20T10:00:00.000Z",
@@ -58,11 +64,10 @@ function biTask(id: string, projectId = "bi-project-1") {
   };
 }
 
-function mappedProject() {
+function projectMembers(projectId: string) {
   return [
-    biMember("bi-owner", "owner@example.com"),
+    biMember(`${projectId}-owner`, "owner@example.com"),
     biMember("bi-member-1", "member1@example.com"),
-    biMember("bi-member-2", "member2@example.com"),
   ];
 }
 
@@ -77,9 +82,9 @@ beforeEach(() => {
   process.env.BI_TASKS_ENABLED = "true";
   process.env.BI_API_BASE_URL = "https://bi.test/api";
   process.env.BI_SERVICE_TOKEN = "service-token";
-  process.env.BI_ORG_PROJECT_MAP = JSON.stringify({ "mind-org-1": "bi-project-1" });
-  process.env.BI_TASKS_ORGANIZATION_IDS = "";
-  process.env.BI_DEFAULT_PROJECT_ID = "";
+  process.env.BI_INTEGRATION_SECRET = SECRET;
+  process.env.BI_TASKS_ORGANIZATION_IDS = "mind-org-1";
+  process.env.BI_ORG_PROJECT_MAP = "{}";
   process.env.BI_USER_MAP = JSON.stringify({ "mind-user-1": "bi-member-1" });
   process.env.BI_DEFAULT_ASSIGNEE_ID = "";
 });
@@ -89,34 +94,18 @@ afterEach(() => {
   for (const key of BI_ENV_KEYS) delete process.env[key];
 });
 
-describe("BI task bridge hardening", () => {
-  it("enables the bridge only for an explicitly mapped organization", async () => {
+describe("BI multi-project task bridge", () => {
+  it("enables only allowlisted Mind organizations and keeps the legacy map as an allowlist", async () => {
     const mod = await import("@/lib/integrations/bi-tasks");
-    const isEnabled = mod.isBiTasksEnabled as unknown as (org: typeof ctx) => boolean;
+    expect(mod.isBiTasksEnabled(ctx)).toBe(true);
+    expect(mod.isBiTasksEnabled(otherCtx)).toBe(false);
 
-    expect(isEnabled(ctx)).toBe(true);
-    expect(isEnabled(otherCtx)).toBe(false);
+    process.env.BI_TASKS_ORGANIZATION_IDS = "";
+    process.env.BI_ORG_PROJECT_MAP = JSON.stringify({ "mind-org-2": "legacy-project" });
+    expect(mod.isBiTasksEnabled(otherCtx)).toBe(true);
   });
 
-  it("requires an allowlisted organization before using the default project", async () => {
-    process.env.BI_ORG_PROJECT_MAP = "{}";
-    process.env.BI_DEFAULT_PROJECT_ID = "bi-default";
-    process.env.BI_TASKS_ORGANIZATION_IDS = "mind-org-1";
-    const mod = await import("@/lib/integrations/bi-tasks");
-    const isEnabled = mod.isBiTasksEnabled as unknown as (org: typeof ctx) => boolean;
-
-    expect(isEnabled(ctx)).toBe(true);
-    expect(isEnabled(otherCtx)).toBe(false);
-  });
-
-  it("fails closed when an organization map contains a non-string project id", async () => {
-    process.env.BI_ORG_PROJECT_MAP = JSON.stringify({ "mind-org-1": 123 });
-    const mod = await import("@/lib/integrations/bi-tasks");
-
-    expect(mod.isBiTasksEnabled(ctx)).toBe(false);
-  });
-
-  it("keeps unmapped organizations on their existing local Mind tasks", async () => {
+  it("keeps organizations outside the allowlist on local Mind tasks", async () => {
     mocks.getOrgContext.mockResolvedValue(otherCtx);
     mocks.query.mockImplementation(async (sql: string) => {
       const normalized = sql.replace(/\s+/g, " ");
@@ -158,204 +147,204 @@ describe("BI task bridge hardening", () => {
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
-  it("always creates in the mapped project even if a caller submits another project id", async () => {
+  it("lists every accessible project page and signs the delegated actor id", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url.endsWith("/projects/bi-project-1/members")) return jsonResponse(mappedProject());
-      if (url.endsWith("/tasks") && init?.method === "POST") return jsonResponse(biTask("created"), 201);
-      throw new Error(`Unexpected BI request: ${init?.method ?? "GET"} ${url}`);
+    fetchMock.mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/projects" && url.searchParams.get("page") === "1") {
+        return jsonResponse({ data: [biProject("bi-project-1")], page: 1, pageSize: 200, totalPages: 2 });
+      }
+      if (url.pathname === "/api/projects" && url.searchParams.get("page") === "2") {
+        return jsonResponse({ data: [biProject("bi-project-2")], page: 2, pageSize: 200, totalPages: 2 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
     });
 
     const mod = await import("@/lib/integrations/bi-tasks");
-    await mod.createBiTask(ctx, {
-      title: "Safe project",
-      assigneeId: "mind-user-1",
-      projectId: "bi-project-other",
-    });
+    const projects = await mod.listBiTaskProjects(ctx);
+    expect(projects.map((project) => project.id)).toEqual(["bi-project-1", "bi-project-2"]);
 
-    const createCall = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
-    expect(createCall).toBeDefined();
-    expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({ projectId: "bi-project-1" });
+    const [input, init] = fetchMock.mock.calls[0];
+    const url = new URL(String(input));
+    const headers = new Headers(init?.headers);
+    const timestamp = headers.get("x-integration-timestamp") ?? "";
+    expect(headers.get("x-integration-actor-id")).toBe("bi-member-1");
+    expect(headers.get("x-integration-actor-email")).toBeNull();
+    expect(headers.get("x-integration-signature")).toBe(mod.buildBiIntegrationSignature({
+      secret: SECRET,
+      timestamp,
+      method: "GET",
+      path: `${url.pathname}${url.search}`,
+      actorMemberId: "bi-member-1",
+      body: "",
+    }));
   });
 
-  it("maps a SayKnowMind user to a BI project member by shared email", async () => {
+  it("links same-email Mind and BI accounts without a manual user map", async () => {
     process.env.BI_USER_MAP = "{}";
     mocks.query.mockResolvedValue({
       rows: [{ id: "mind-user-1", name: "Mind user", email: "MEMBER1@example.com", image: null }],
     });
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = new URL(String(input));
+      expect(new Headers(init?.headers).get("x-integration-actor-email")).toBe("member1@example.com");
+      return jsonResponse({ data: [biProject("bi-project-1")], page: 1, pageSize: 200, totalPages: 1 });
+    });
+
+    const mod = await import("@/lib/integrations/bi-tasks");
+    await expect(mod.listBiTaskProjects(ctx)).resolves.toHaveLength(1);
+  });
+
+  it("creates in the explicitly selected project instead of a fixed organization project", async () => {
+    process.env.BI_ORG_PROJECT_MAP = JSON.stringify({ "mind-org-1": "legacy-fixed-project" });
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url.endsWith("/projects/bi-project-1/members")) return jsonResponse(mappedProject());
-      if (url.endsWith("/tasks") && init?.method === "POST") return jsonResponse(biTask("created"), 201);
+      const url = new URL(String(input));
+      if (url.pathname === "/api/projects/bi-project-2/members") {
+        return jsonResponse(projectMembers("bi-project-2"));
+      }
+      if (url.pathname === "/api/tasks" && init?.method === "POST") {
+        return jsonResponse(biTask("created", "bi-project-2"), 201);
+      }
       throw new Error(`Unexpected BI request: ${init?.method ?? "GET"} ${url}`);
     });
 
     const mod = await import("@/lib/integrations/bi-tasks");
-    await mod.createBiTask(ctx, { title: "Email mapping" });
+    const created = await mod.createBiTask(ctx, {
+      title: "Selected project",
+      projectId: "bi-project-2",
+    });
 
+    expect(created.projectId).toBe("bi-project-2");
     const createCall = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
-    expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({ assigneeId: "bi-member-1" });
+    expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({ projectId: "bi-project-2" });
   });
 
-  it("rejects updating a task outside the mapped project", async () => {
-    vi.mocked(fetch).mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url.endsWith("/tasks/task-other") && !init?.method) {
-        return jsonResponse(biTask("task-other", "bi-project-other"));
-      }
-      throw new Error(`Unexpected BI request: ${init?.method ?? "GET"} ${url}`);
-    });
-
+  it("requires a project for BI task creation", async () => {
     const mod = await import("@/lib/integrations/bi-tasks");
-    const update = mod.updateBiTask as unknown as (
-      org: typeof ctx,
-      id: string,
-      body: Record<string, unknown>,
-    ) => Promise<unknown>;
-
-    await expect(update(ctx, "task-other", { title: "blocked" })).rejects.toMatchObject({ status: 404 });
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    await expect(mod.createBiTask(ctx, { title: "Missing project" })).rejects.toMatchObject({ status: 400 });
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
-  it("rejects deleting a task outside the mapped project", async () => {
-    vi.mocked(fetch).mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url.endsWith("/tasks/task-other") && !init?.method) {
-        return jsonResponse(biTask("task-other", "bi-project-other"));
-      }
-      throw new Error(`Unexpected BI request: ${init?.method ?? "GET"} ${url}`);
-    });
-
+  it("rejects Mind-only paused status instead of silently changing it", async () => {
     const mod = await import("@/lib/integrations/bi-tasks");
-    const remove = mod.deleteBiTask as unknown as (org: typeof ctx, id: string) => Promise<void>;
-
-    await expect(remove(ctx, "task-other")).rejects.toMatchObject({ status: 404 });
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    await expect(mod.createBiTask(ctx, {
+      title: "Paused task",
+      projectId: "bi-project-1",
+      status: "paused",
+    })).rejects.toMatchObject({ status: 400 });
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
-  it("updates a task after confirming it belongs to the mapped project", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url.endsWith("/tasks/task-1") && !init?.method) return jsonResponse(biTask("task-1"));
-      if (url.endsWith("/tasks/task-1") && init?.method === "PUT") {
-        return jsonResponse({ ...biTask("task-1"), title: "Updated" });
-      }
-      throw new Error(`Unexpected BI request: ${init?.method ?? "GET"} ${url}`);
-    });
-
+  it("rejects Mind-only no-priority instead of silently changing it", async () => {
     const mod = await import("@/lib/integrations/bi-tasks");
-    const updated = await mod.updateBiTask(ctx, "task-1", { title: "Updated" });
-
-    expect(updated.title).toBe("Updated");
-    expect(fetchMock.mock.calls.map(([, init]) => init?.method ?? "GET")).toEqual(["GET", "PUT"]);
+    await expect(mod.createBiTask(ctx, {
+      title: "No priority task",
+      projectId: "bi-project-1",
+      priority: "no-priority",
+    })).rejects.toMatchObject({ status: 400 });
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
-  it("deletes a task only after confirming it belongs to the mapped project", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url.endsWith("/tasks/task-1") && !init?.method) return jsonResponse(biTask("task-1"));
-      if (url.endsWith("/tasks/task-1") && init?.method === "DELETE") {
-        return jsonResponse({ success: true });
-      }
-      throw new Error(`Unexpected BI request: ${init?.method ?? "GET"} ${url}`);
-    });
-
-    const mod = await import("@/lib/integrations/bi-tasks");
-    await expect(mod.deleteBiTask(ctx, "task-1")).resolves.toBeUndefined();
-    expect(fetchMock.mock.calls.map(([, init]) => init?.method ?? "GET")).toEqual(["GET", "DELETE"]);
-  });
-
-  it("returns 404 from the task route for a cross-project task id", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.mocked(fetch).mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url.endsWith("/tasks/task-other") && !init?.method) {
-        return jsonResponse(biTask("task-other", "bi-project-other"));
-      }
-      throw new Error(`Unexpected BI request: ${init?.method ?? "GET"} ${url}`);
-    });
-
-    const { PATCH } = await import("@/app/api/tasks/[id]/route");
-    const response = await PATCH(
-      new NextRequest("http://localhost/api/tasks/task-other", {
-        method: "PATCH",
-        body: JSON.stringify({ title: "blocked" }),
-      }),
-      { params: Promise.resolve({ id: "task-other" }) },
-    );
-
-    expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toMatchObject({ message: "Not found" });
-    errorSpy.mockRestore();
-  });
-
-  it("returns only the owner and members of the mapped BI project", async () => {
-    vi.mocked(fetch).mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.endsWith("/projects/bi-project-1/members")) return jsonResponse(mappedProject());
-      throw new Error(`Unexpected BI request: GET ${url}`);
-    });
-
-    const mod = await import("@/lib/integrations/bi-tasks");
-    const listMembers = mod.listBiTaskMembers as unknown as (org: typeof ctx) => Promise<Array<{ id: string }>>;
-    const members = await listMembers(ctx);
-
-    expect(members.map((member) => member.id)).toEqual(["bi-owner", "bi-member-1", "bi-member-2"]);
-  });
-
-  it("loads every BI task page for the mapped project", async () => {
+  it("lists all projects, one selected project, and personal tasks with assignee=me", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockImplementation(async (input) => {
       const url = new URL(String(input));
-      expect(url.searchParams.get("projectId")).toBe("bi-project-1");
-      if (url.searchParams.get("page") === "1") {
-        return jsonResponse({ data: [biTask("task-1")], page: 1, pageSize: 200, totalPages: 2 });
+      return jsonResponse({ data: [biTask("task-1", url.searchParams.get("projectId") ?? "bi-project-1")], totalPages: 1 });
+    });
+
+    const mod = await import("@/lib/integrations/bi-tasks");
+    await mod.listBiTasks(ctx, "all");
+    await mod.listBiTasks(ctx, "all", "bi-project-2");
+    await mod.listBiTasks(ctx, "personal");
+
+    const urls = fetchMock.mock.calls.map(([input]) => new URL(String(input)));
+    expect(urls[0].searchParams.get("projectId")).toBeNull();
+    expect(urls[1].searchParams.get("projectId")).toBe("bi-project-2");
+    expect(urls[2].searchParams.get("assigneeId")).toBe("me");
+  });
+
+  it("loads every BI task page when a project has more than 200 tasks", async () => {
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      const page = Number(url.searchParams.get("page"));
+      if (page === 1) {
+        return jsonResponse({
+          data: Array.from({ length: 200 }, (_, index) => biTask(`task-${index + 1}`)),
+          page: 1,
+          pageSize: 200,
+          total: 201,
+          totalPages: 2,
+        });
       }
-      return jsonResponse({ data: [biTask("task-2")], page: 2, pageSize: 200, totalPages: 2 });
+      if (page === 2) {
+        return jsonResponse({
+          data: [biTask("task-201")],
+          page: 2,
+          pageSize: 200,
+          total: 201,
+          totalPages: 2,
+        });
+      }
+      throw new Error(`Unexpected page: ${page}`);
     });
 
     const mod = await import("@/lib/integrations/bi-tasks");
-    const tasks = await mod.listBiTasks(ctx);
-
-    expect(tasks.map((task) => task.id)).toEqual(["task-1", "task-2"]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expect(mod.listBiTasks(ctx, "all", "bi-project-1")).resolves.toHaveLength(201);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
   });
 
-  it("filters personal task scope to the mapped BI assignee", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.endsWith("/projects/bi-project-1/members")) return jsonResponse(mappedProject());
-      if (url.includes("/tasks?")) return jsonResponse({ data: [], page: 1, pageSize: 200, totalPages: 1 });
-      throw new Error(`Unexpected BI request: GET ${url}`);
+  it("loads assignees only from the selected project", async () => {
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      expect(url.pathname).toBe("/api/projects/bi-project-2/members");
+      return jsonResponse(projectMembers("bi-project-2"));
     });
 
     const mod = await import("@/lib/integrations/bi-tasks");
-    const list = mod.listBiTasks as unknown as (org: typeof ctx, scope: string) => Promise<unknown[]>;
-    await list(ctx, "personal");
-
-    const taskCall = fetchMock.mock.calls.find(([input]) => String(input).includes("/tasks?"));
-    const taskUrl = new URL(String(taskCall?.[0]));
-    expect(taskUrl.searchParams.get("assigneeId")).toBe("bi-member-1");
+    const members = await mod.listBiTaskMembers(ctx, "bi-project-2");
+    expect(members.map((member) => member.id)).toEqual(["bi-project-2-owner", "bi-member-1"]);
   });
 
-  it("does not show the default assignee's personal tasks to an unmapped user", async () => {
-    process.env.BI_USER_MAP = "{}";
-    process.env.BI_DEFAULT_ASSIGNEE_ID = "bi-member-2";
-    mocks.query.mockResolvedValue({ rows: [{ id: "mind-user-1", email: "unknown@example.com" }] });
+  it("updates and deletes only after BI authorizes the task for the delegated user", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.endsWith("/projects/bi-project-1/members")) return jsonResponse(mappedProject());
-      throw new Error(`Unexpected BI request: GET ${url}`);
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/tasks/task-1" && !init?.method) return jsonResponse(biTask("task-1", "bi-project-2"));
+      if (url.pathname === "/api/tasks/task-1" && init?.method === "PUT") {
+        return jsonResponse({ ...biTask("task-1", "bi-project-2"), title: "Updated" });
+      }
+      if (url.pathname === "/api/tasks/task-1" && init?.method === "DELETE") return jsonResponse({ success: true });
+      throw new Error(`Unexpected BI request: ${init?.method ?? "GET"} ${url}`);
     });
 
     const mod = await import("@/lib/integrations/bi-tasks");
-    await expect(mod.listBiTasks(ctx, "personal")).resolves.toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(mod.updateBiTask(ctx, "task-1", { title: "Updated" })).resolves.toMatchObject({ title: "Updated" });
+    await expect(mod.deleteBiTask(ctx, "task-1")).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls.map(([, init]) => init?.method ?? "GET")).toEqual(["GET", "PUT", "GET", "DELETE"]);
+  });
+
+  it("propagates BI project denial without falling back to local or exposing data", async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ error: "Not found" }, 404));
+    const mod = await import("@/lib/integrations/bi-tasks");
+
+    await expect(mod.updateBiTask(ctx, "hidden-task", { title: "blocked" })).rejects.toMatchObject({ status: 404 });
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when BI has not activated delegated access", async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ data: [] }, 200, false));
+    const mod = await import("@/lib/integrations/bi-tasks");
+
+    await expect(mod.listBiTaskProjects(ctx)).rejects.toMatchObject({ status: 503 });
+  });
+
+  it("returns a clear 503 from the project endpoint when delegation is not active", async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ data: [] }, 200, false));
+    const { GET } = await import("@/app/api/tasks/projects/route");
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ message: "BI delegated access is not active" });
   });
 });
