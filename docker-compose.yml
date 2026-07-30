@@ -275,12 +275,35 @@ services:
       # it bypass user lookup. Leave empty in production once UI-
       # issued per-user keys are the only path.
       MCP_API_KEY: ${MCP_API_KEY:-}
+      # Session registry bounds. A session is only closed by an explicit
+      # DELETE /mcp, which crashed or disconnected clients never send, so
+      # idle eviction is what stops abandoned sessions from accumulating.
+      # Tunable here so ops can adjust without rebuilding the image.
+      MCP_SESSION_IDLE_MS: ${MCP_SESSION_IDLE_MS:-1800000}
+      MCP_MAX_SESSIONS: ${MCP_MAX_SESSIONS:-256}
+      # V8 sizes its heap from host RAM, not the container limit, so without
+      # this it grows past mem_limit and gets OOM-killed instead of
+      # collecting harder.
+      NODE_OPTIONS: --max-old-space-size=1024
     depends_on:
       postgres:
         condition: service_healthy
       edgequake:
         condition: service_started
     restart: unless-stopped
+    # Defence in depth behind the session bounds above: caps the blast radius
+    # on the shared host (7.6GB, no swap) if this process ever leaks again.
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - sayknowmind
 
