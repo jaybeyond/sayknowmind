@@ -7,7 +7,6 @@
  * - stdio — for local CLI usage (pass --stdio flag)
  */
 import { randomUUID, createHash } from "node:crypto";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -17,6 +16,7 @@ import pg from "pg";
 import { requestContext } from "./auth-context.js";
 import { closeAuditPool } from "./audit.js";
 import { createServer } from "./server.js";
+import { SessionRegistry } from "./session-registry.js";
 
 const PORT = parseInt(process.env.PORT ?? "8082", 10);
 const ADMIN_API_KEY = process.env.MCP_API_KEY;
@@ -31,26 +31,8 @@ function envInt(name: string, fallback: number): number {
 }
 
 // ── Session registry ────────────────────────────────────────
-// Each live session pins a whole McpServer (every tool's input schema is
-// rebuilt per session), so an entry that is never removed costs hundreds of
-// KB for the lifetime of the process.
-//
-// The SDK only reaches transport.close() — and therefore our onclose cleanup —
-// when the client sends an explicit DELETE /mcp. Clients that crash, lose the
-// network, or simply stop talking never send it, so the registry MUST expire
-// entries on its own. Without the sweeper below this map grows monotonically
-// until the container is OOM-killed.
+// Eviction rules and rationale live in session-registry.ts.
 type AnyTransport = StreamableHTTPServerTransport | SSEServerTransport;
-
-interface Session {
-  transport: AnyTransport;
-  server: McpServer;
-  lastSeen: number;
-  /** SSE only: a still-open response counts as activity even when idle. */
-  isStreamOpen?: () => boolean;
-}
-
-const sessions = new Map<string, Session>();
 
 /** Evict a session after this long with no request touching it. */
 const SESSION_IDLE_MS = envInt("MCP_SESSION_IDLE_MS", 30 * 60_000);
@@ -58,79 +40,47 @@ const SESSION_IDLE_MS = envInt("MCP_SESSION_IDLE_MS", 30 * 60_000);
 const SESSION_SWEEP_MS = envInt("MCP_SESSION_SWEEP_MS", 60_000);
 /** Hard ceiling so a misbehaving or hostile client cannot exhaust memory. */
 const MAX_SESSIONS = envInt("MCP_MAX_SESSIONS", 256);
+/** How long shutdown waits for sessions to close before exiting anyway. */
+const SHUTDOWN_TIMEOUT_MS = envInt("MCP_SHUTDOWN_TIMEOUT_MS", 5_000);
 
-function registerSession(
-  sid: string,
-  transport: AnyTransport,
-  server: McpServer,
-  isStreamOpen?: () => boolean,
+const sessions = new SessionRegistry<AnyTransport>({
+  idleMs: SESSION_IDLE_MS,
+  maxSessions: MAX_SESSIONS,
+  onEvict: (sid, reason) => {
+    if (reason === "idle") console.log(`[MCP] evicting idle session ${sid}`);
+    else
+      console.warn(
+        `[MCP] session cap ${MAX_SESSIONS} reached — evicting least-recently-used session ${sid}`,
+      );
+  },
+});
+
+// The SDK's standalone GET /mcp stream closes without ever firing
+// transport.onclose, and the default web client transport is streamable-http,
+// so a listener that stays connected but quiet would look idle to the sweeper.
+// Track every open response ourselves: any still-open stream (standalone GET
+// SSE or in-flight POST) marks the session active.
+const openStreams = new WeakMap<
+  StreamableHTTPServerTransport,
+  Set<express.Response>
+>();
+
+function trackStream(
+  transport: StreamableHTTPServerTransport,
+  res: express.Response,
 ): void {
-  sessions.set(sid, { transport, server, lastSeen: Date.now(), isStreamOpen });
-  evictOverCap();
-}
-
-function touchSession(sid: string): void {
-  const session = sessions.get(sid);
-  if (session) session.lastSeen = Date.now();
-}
-
-/**
- * Drop a session and release its transport + server. The map entry is removed
- * first so the transport's own onclose handler is a harmless no-op re-delete.
- */
-function dropSession(sid: string): void {
-  const session = sessions.get(sid);
-  if (!session) return;
-  sessions.delete(sid);
-  // McpServer.close() cascades to transport.close().
-  void Promise.resolve()
-    .then(() => session.server.close())
-    .catch(() => {
-      /* transport already torn down — nothing left to release */
-    });
-}
-
-function sweepIdleSessions(): void {
-  const now = Date.now();
-  for (const [sid, session] of sessions) {
-    // A live SSE stream is an active client even with no recent messages.
-    if (session.isStreamOpen?.()) {
-      session.lastSeen = now;
-      continue;
-    }
-    if (now - session.lastSeen > SESSION_IDLE_MS) {
-      console.log(`[MCP] evicting idle session ${sid}`);
-      dropSession(sid);
-    }
+  let set = openStreams.get(transport);
+  if (!set) {
+    set = new Set();
+    openStreams.set(transport, set);
   }
-}
-
-/** Prefer evicting sessions with no live stream; fall back to plain LRU. */
-function evictOverCap(): void {
-  while (sessions.size > MAX_SESSIONS) {
-    let victim: string | undefined;
-    let oldest = Infinity;
-    for (const [sid, session] of sessions) {
-      if (session.isStreamOpen?.()) continue;
-      if (session.lastSeen < oldest) {
-        oldest = session.lastSeen;
-        victim = sid;
-      }
-    }
-    if (!victim) {
-      for (const [sid, session] of sessions) {
-        if (session.lastSeen < oldest) {
-          oldest = session.lastSeen;
-          victim = sid;
-        }
-      }
-    }
-    if (!victim) return;
-    console.warn(
-      `[MCP] session cap ${MAX_SESSIONS} reached — evicting least-recently-used session ${victim}`,
-    );
-    dropSession(victim);
-  }
+  set.add(res);
+  res.on("close", () => {
+    set.delete(res);
+    // The idle clock starts when the last stream closes, not when it opened.
+    const sid = transport.sessionId;
+    if (sid) sessions.touch(sid);
+  });
 }
 
 // ── Per-user key lookup (lazy pg pool) ───────────────────────
@@ -238,7 +188,7 @@ function startHttpServer(): void {
   const app = express();
   app.use(express.json());
 
-  const sweeper = setInterval(sweepIdleSessions, SESSION_SWEEP_MS);
+  const sweeper = setInterval(() => sessions.sweepIdle(), SESSION_SWEEP_MS);
   sweeper.unref();
 
   // Health check (no auth). Session and memory counters are exposed so the
@@ -271,7 +221,7 @@ function startHttpServer(): void {
         const existing = sessions.get(sessionId)!.transport;
         if (existing instanceof StreamableHTTPServerTransport) {
           transport = existing;
-          touchSession(sessionId);
+          sessions.touch(sessionId);
         } else {
           res.status(400).json({
             jsonrpc: "2.0",
@@ -285,12 +235,15 @@ function startHttpServer(): void {
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (sid) => {
-            registerSession(sid, transport!, server);
+            sessions.register(sid, transport!, server, () => {
+              const set = openStreams.get(transport!);
+              return set !== undefined && set.size > 0;
+            });
           },
         });
         transport.onclose = () => {
           const sid = transport!.sessionId;
-          if (sid) sessions.delete(sid);
+          if (sid) sessions.remove(sid);
         };
         await server.connect(transport);
       } else {
@@ -302,6 +255,7 @@ function startHttpServer(): void {
         return;
       }
 
+      trackStream(transport, res);
       await transport.handleRequest(req, res, req.body);
     } catch (error) {
       if (!res.headersSent) {
@@ -318,14 +272,14 @@ function startHttpServer(): void {
   app.get("/sse", authMiddleware, async (_req, res) => {
     const server = createServer();
     const transport = new SSEServerTransport("/messages", res);
-    registerSession(
+    sessions.register(
       transport.sessionId,
       transport,
       server,
       () => !res.writableEnded && !res.destroyed,
     );
     res.on("close", () => {
-      dropSession(transport.sessionId);
+      void sessions.drop(transport.sessionId);
     });
     await server.connect(transport);
   });
@@ -334,7 +288,7 @@ function startHttpServer(): void {
     const sessionId = req.query.sessionId as string;
     const transport = sessions.get(sessionId)?.transport;
     if (transport instanceof SSEServerTransport) {
-      touchSession(sessionId);
+      sessions.touch(sessionId);
       await transport.handlePostMessage(req, res, req.body);
     } else {
       res.status(400).json({ error: "No SSE session found" });
@@ -373,8 +327,18 @@ function startHttpServer(): void {
     shuttingDown = true;
     console.log(`[MCP] ${signal} received — draining ${sessions.size} session(s)`);
     clearInterval(sweeper);
-    httpServer.close();
-    for (const sid of [...sessions.keys()]) dropSession(sid);
+    const serverClosed = new Promise<void>((resolve) => {
+      httpServer.close(() => resolve());
+    });
+    const drained = Promise.allSettled([
+      ...sessions.keys().map((sid) => sessions.drop(sid)),
+      serverClosed,
+    ]);
+    // Bounded wait: a wedged transport must not stall the container stop.
+    await Promise.race([
+      drained,
+      new Promise((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS).unref()),
+    ]);
     await Promise.allSettled([pgPool?.end(), closeAuditPool()]);
     process.exit(0);
   };
