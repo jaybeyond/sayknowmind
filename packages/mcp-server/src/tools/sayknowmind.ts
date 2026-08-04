@@ -17,6 +17,18 @@ import { formatError } from "../errors.js";
 const WEB_APP_URL = process.env.SAYKNOWMIND_URL ?? "http://localhost:5400";
 const AUTH_SECRET = process.env.AUTH_SECRET ?? "";
 
+// Calls to the web app must not hang forever: a wedged upstream would pin the
+// in-flight tool call — and with it the whole session's McpServer — for the
+// life of the socket.
+const WEB_FETCH_TIMEOUT_MS = (() => {
+  const parsed = parseInt(process.env.MCP_WEB_FETCH_TIMEOUT_MS ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30_000;
+})();
+
+function webFetch(url: string | URL, init?: RequestInit): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS) });
+}
+
 function apiHeaders(organizationId?: string): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   const context = getRequestContext();
@@ -215,7 +227,7 @@ export function registerSayknowmindTools(server: McpServer): void {
     async (params) => {
       try {
         if (!verifyAuthToken(params.auth_token)) return invalidAuth();
-        const response = await fetch(`${WEB_APP_URL}/api/tasks/projects`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/tasks/projects`, {
           method: "GET",
           headers: apiHeaders(params.organization_id),
         });
@@ -249,7 +261,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (params.scope) query.set("scope", params.scope);
         if (params.project_id) query.set("projectId", params.project_id);
         const qs = query.toString();
-        const response = await fetch(`${WEB_APP_URL}/api/tasks${qs ? `?${qs}` : ""}`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/tasks${qs ? `?${qs}` : ""}`, {
           method: "GET",
           headers: apiHeaders(params.organization_id),
         });
@@ -284,7 +296,7 @@ export function registerSayknowmindTools(server: McpServer): void {
     async (params) => {
       try {
         if (!verifyAuthToken(params.auth_token)) return invalidAuth();
-        const response = await fetch(`${WEB_APP_URL}/api/tasks`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/tasks`, {
           method: "POST",
           headers: apiHeaders(params.organization_id),
           body: JSON.stringify({
@@ -335,7 +347,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (params.priority !== undefined) body.priority = params.priority;
         if (params.assignee_id !== undefined) body.assigneeId = params.assignee_id;
         if (params.due_date !== undefined) body.dueDate = params.due_date;
-        const response = await fetch(`${WEB_APP_URL}/api/tasks/${encodeURIComponent(params.task_id)}`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/tasks/${encodeURIComponent(params.task_id)}`, {
           method: "PATCH",
           headers: apiHeaders(params.organization_id),
           body: JSON.stringify(body),
@@ -365,7 +377,7 @@ export function registerSayknowmindTools(server: McpServer): void {
     async (params) => {
       try {
         if (!verifyAuthToken(params.auth_token)) return invalidAuth();
-        const response = await fetch(`${WEB_APP_URL}/api/tasks/${encodeURIComponent(params.task_id)}`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/tasks/${encodeURIComponent(params.task_id)}`, {
           method: "DELETE",
           headers: apiHeaders(params.organization_id),
         });
@@ -404,7 +416,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(`${WEB_APP_URL}/api/search`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/search`, {
           method: "POST",
           headers: apiHeaders(),
           body: JSON.stringify({
@@ -452,13 +464,13 @@ export function registerSayknowmindTools(server: McpServer): void {
         let response: Response;
 
         if (params.url) {
-          response = await fetch(`${WEB_APP_URL}/api/ingest/url`, {
+          response = await webFetch(`${WEB_APP_URL}/api/ingest/url`, {
             method: "POST",
             headers: apiHeaders(),
             body: JSON.stringify({ url: params.url }),
           });
         } else if (params.content) {
-          response = await fetch(`${WEB_APP_URL}/api/ingest/text`, {
+          response = await webFetch(`${WEB_APP_URL}/api/ingest/text`, {
             method: "POST",
             headers: apiHeaders(),
             body: JSON.stringify({
@@ -526,7 +538,7 @@ export function registerSayknowmindTools(server: McpServer): void {
 
         const qs = query.toString();
         const url = `${WEB_APP_URL}/api/documents${qs ? `?${qs}` : ""}`;
-        const response = await fetch(url, { method: "GET", headers: apiHeaders() });
+        const response = await webFetch(url, { method: "GET", headers: apiHeaders() });
 
         if (!response.ok) {
           throw new Error(`Documents API returned ${response.status}: ${response.statusText}`);
@@ -565,7 +577,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`,
           { method: "GET", headers: apiHeaders() },
         );
@@ -614,7 +626,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(`${WEB_APP_URL}/api/categories`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/categories`, {
           method: "GET",
           headers: apiHeaders(),
         });
@@ -680,7 +692,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (params.metadata !== undefined) body.metadata = params.metadata;
         if (params.category_id !== undefined) body.categoryId = params.category_id;
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`,
           { method: "PATCH", headers: apiHeaders(), body: JSON.stringify(body) },
         );
@@ -729,7 +741,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`,
           { method: "DELETE", headers: apiHeaders() },
         );
@@ -777,7 +789,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(`${WEB_APP_URL}/api/tags`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/tags`, {
           method: "GET",
           headers: apiHeaders(),
         });
@@ -819,7 +831,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}/tags`,
           {
             method: "POST",
@@ -874,7 +886,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}/tags`,
           {
             method: "DELETE",
@@ -932,7 +944,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`,
           {
             method: "PATCH",
@@ -985,7 +997,7 @@ export function registerSayknowmindTools(server: McpServer): void {
             isError: true,
           };
         }
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}/related`,
           { method: "GET", headers: apiHeaders() },
         );
@@ -1028,7 +1040,7 @@ export function registerSayknowmindTools(server: McpServer): void {
             isError: true,
           };
         }
-        const response = await fetch(`${WEB_APP_URL}/api/conversations`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/conversations`, {
           method: "GET",
           headers: apiHeaders(),
         });
@@ -1066,7 +1078,7 @@ export function registerSayknowmindTools(server: McpServer): void {
             isError: true,
           };
         }
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/conversations/${encodeURIComponent(params.conversation_id)}/messages`,
           { method: "GET", headers: apiHeaders() },
         );
@@ -1116,7 +1128,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(`${WEB_APP_URL}/api/categories`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/categories`, {
           method: "POST",
           headers: apiHeaders(),
           body: JSON.stringify({
@@ -1174,7 +1186,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (params.description !== undefined) body.description = params.description;
         if (params.color !== undefined) body.color = params.color;
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/categories/${encodeURIComponent(params.category_id)}`,
           { method: "PUT", headers: apiHeaders(), body: JSON.stringify(body) },
         );
@@ -1222,7 +1234,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/categories/${encodeURIComponent(params.category_id)}`,
           { method: "DELETE", headers: apiHeaders() },
         );
@@ -1278,7 +1290,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (!verifyAuthToken(params.auth_token)) return invalidAuth();
         const title = params.title?.trim() || "Untitled";
 
-        const createRes = await fetch(`${WEB_APP_URL}/api/docs`, {
+        const createRes = await webFetch(`${WEB_APP_URL}/api/docs`, {
           method: "POST",
           headers: apiHeaders(),
           body: JSON.stringify({ type: params.type, title, categoryId: params.category_id ?? null }),
@@ -1291,7 +1303,7 @@ export function registerSayknowmindTools(server: McpServer): void {
 
         const patch = buildContentPatch(params.type, title, params);
         if (patch) {
-          const pr = await fetch(`${WEB_APP_URL}/api/documents/${encodeURIComponent(id)}`, {
+          const pr = await webFetch(`${WEB_APP_URL}/api/documents/${encodeURIComponent(id)}`, {
             method: "PATCH",
             headers: apiHeaders(),
             body: JSON.stringify(patch),
@@ -1341,7 +1353,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         }
         if (params.title?.trim()) patch.title = params.title.trim();
 
-        const res = await fetch(`${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`, {
+        const res = await webFetch(`${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`, {
           method: "PATCH",
           headers: apiHeaders(),
           body: JSON.stringify(patch),
@@ -1382,7 +1394,7 @@ export function registerSayknowmindTools(server: McpServer): void {
     async (params) => {
       try {
         if (!verifyAuthToken(params.auth_token)) return invalidAuth();
-        const res = await fetch(`${WEB_APP_URL}/api/share`, {
+        const res = await webFetch(`${WEB_APP_URL}/api/share`, {
           method: "POST",
           headers: apiHeaders(),
           body: JSON.stringify({
