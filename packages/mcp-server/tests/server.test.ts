@@ -74,6 +74,11 @@ describe("MCP server unit tests", () => {
       "sayknowmind_search",
       "sayknowmind_share_create",
       "sayknowmind_tags_list",
+      "sayknowmind_task_create",
+      "sayknowmind_task_delete",
+      "sayknowmind_task_projects_list",
+      "sayknowmind_task_update",
+      "sayknowmind_tasks_list",
       "workspace_create",
       "workspace_delete",
       "workspace_get",
@@ -252,6 +257,17 @@ describe("MCP server unit tests", () => {
     expect(props).toHaveProperty("document_id");
     const required = tool!.inputSchema.required as string[] | undefined;
     expect(required).toContain("document_id");
+  });
+
+  it("should expose project-aware SayKnowMind task tools", async () => {
+    const tools = await client.listTools();
+    const toolMap = new Map(tools.tools.map((tool) => [tool.name, tool]));
+
+    expect(toolMap.get("sayknowmind_task_projects_list")).toBeDefined();
+    const listProps = toolMap.get("sayknowmind_tasks_list")!.inputSchema.properties as Record<string, unknown>;
+    const createProps = toolMap.get("sayknowmind_task_create")!.inputSchema.properties as Record<string, unknown>;
+    expect(listProps).toHaveProperty("project_id");
+    expect(createProps).toHaveProperty("project_id");
   });
 });
 

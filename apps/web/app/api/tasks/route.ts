@@ -3,6 +3,8 @@ import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { isValidPriority, isValidStatus } from "@/lib/tasks/constants";
+import { createBiTask, isBiTasksEnabled, listBiTasks } from "@/lib/integrations/bi-tasks";
+import { biTaskErrorResponse } from "@/lib/tasks/bridge-error";
 import {
   listWorkItems,
   getWorkItem,
@@ -29,11 +31,17 @@ export async function GET(request: NextRequest) {
   if (!ctx) return unauthorized();
   const rawScope = request.nextUrl.searchParams.get("scope");
   const scope: TaskScope = rawScope && VALID_SCOPES.has(rawScope as TaskScope) ? (rawScope as TaskScope) : "all";
+  const projectId = request.nextUrl.searchParams.get("projectId");
   try {
+    if (isBiTasksEnabled(ctx)) {
+      const tasks = await listBiTasks(ctx, scope, projectId);
+      return NextResponse.json({ tasks });
+    }
     const tasks = await listWorkItems(ctx, scope);
     return NextResponse.json({ tasks });
   } catch (err) {
     console.error("[tasks] GET error:", err);
+    if (isBiTasksEnabled(ctx)) return biTaskErrorResponse(err);
     return NextResponse.json(
       { code: ErrorCode.SYSTEM_INTERNAL_ERROR, message: "Internal server error", timestamp: new Date().toISOString() },
       { status: 500 },
@@ -64,15 +72,34 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const biTasksEnabled = isBiTasksEnabled(ctx);
   const status = isValidStatus(body.status) ? body.status : "backlog";
-  const priority = isValidPriority(body.priority) ? body.priority : "no-priority";
+  const priority = isValidPriority(body.priority)
+    ? body.priority
+    : biTasksEnabled
+      ? "medium"
+      : "no-priority";
   const description = typeof body.description === "string" ? body.description : null;
   const assigneeId = typeof body.assigneeId === "string" && body.assigneeId ? body.assigneeId : null;
   const startDate = typeof body.startDate === "string" && body.startDate ? body.startDate : null;
   const dueDate = typeof body.dueDate === "string" && body.dueDate ? body.dueDate : null;
   const documentId = typeof body.documentId === "string" && body.documentId ? body.documentId : null;
+  const projectId = typeof body.projectId === "string" && body.projectId ? body.projectId : null;
 
   try {
+    if (biTasksEnabled) {
+      const task = await createBiTask(ctx, {
+        title,
+        status,
+        priority,
+        description,
+        assigneeId,
+        dueDate,
+        projectId,
+      });
+      return NextResponse.json({ task }, { status: 201 });
+    }
+
     // If an assignee was named, they must share an org with the caller —
     // otherwise a caller could assign a task to any user id. Drop an invalid one.
     let safeAssignee: string | null = null;
@@ -103,6 +130,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ task }, { status: 201 });
   } catch (err) {
     console.error("[tasks] POST error:", err);
+    if (biTasksEnabled) return biTaskErrorResponse(err);
     return NextResponse.json(
       { code: ErrorCode.SYSTEM_INTERNAL_ERROR, message: "Internal server error", timestamp: new Date().toISOString() },
       { status: 500 },

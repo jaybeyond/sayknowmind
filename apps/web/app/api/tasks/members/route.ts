@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getOrgContext } from "@/lib/org-context";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { getUserOrgs } from "@/lib/tasks/store";
+import { isBiTasksEnabled, listBiTaskMembers } from "@/lib/integrations/bi-tasks";
+import { biTaskErrorResponse } from "@/lib/tasks/bridge-error";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +13,7 @@ export const dynamic = "force-dynamic";
  * assignee picker; separate from the general team endpoints so the board only
  * pulls the id/name/email/image it renders.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const ctx = await getOrgContext();
   if (!ctx) {
     return NextResponse.json(
@@ -20,6 +22,11 @@ export async function GET() {
     );
   }
   try {
+    if (isBiTasksEnabled(ctx)) {
+      const members = await listBiTaskMembers(ctx, request.nextUrl.searchParams.get("projectId"));
+      return NextResponse.json({ members });
+    }
+
     // Union of members across every org the caller belongs to, deduped — so the
     // assignee picker covers personal + team work in the cross-org task view.
     const orgs = await getUserOrgs(ctx.userId);
@@ -35,6 +42,7 @@ export async function GET() {
     return NextResponse.json({ members: res.rows });
   } catch (err) {
     console.error("[tasks/members] GET error:", err);
+    if (isBiTasksEnabled(ctx)) return biTaskErrorResponse(err);
     return NextResponse.json(
       { code: ErrorCode.SYSTEM_INTERNAL_ERROR, message: "Internal server error", timestamp: new Date().toISOString() },
       { status: 500 },

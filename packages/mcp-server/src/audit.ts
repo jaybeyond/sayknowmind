@@ -16,10 +16,24 @@ let pool: pg.Pool | undefined;
 function getPool(): pg.Pool | null {
   if (!process.env.DATABASE_URL) return null;
   if (!pool) {
-    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+    pool = new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 2,
+      // Audit writes are fire-and-forget, so a slow DB applies no backpressure
+      // to callers. Without a timeout every waiting write piles onto pg's
+      // unbounded internal queue and that queue becomes the leak.
+      connectionTimeoutMillis: 5_000,
+    });
     pool.on("error", (err) => console.error("[MCP audit] pg pool error:", err));
   }
   return pool;
+}
+
+/** Release the audit pool on shutdown. Safe to call when it was never opened. */
+export async function closeAuditPool(): Promise<void> {
+  const p = pool;
+  pool = undefined;
+  if (p) await p.end().catch(() => undefined);
 }
 
 export type AuditStatus = "ok" | "error" | "blocked";

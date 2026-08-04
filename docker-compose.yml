@@ -170,6 +170,19 @@ services:
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
       GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
+      # BI task bridge is opt-in per mapped/allowlisted Mind organization.
+      BI_TASKS_ENABLED: "${BI_TASKS_ENABLED:-false}"
+      BI_API_BASE_URL: "${BI_API_BASE_URL:-}"
+      BI_SERVICE_TOKEN: "${BI_SERVICE_TOKEN:-}"
+      BI_SERVICE_LOGIN_ID: "${BI_SERVICE_LOGIN_ID:-}"
+      BI_SERVICE_PASSWORD: "${BI_SERVICE_PASSWORD:-}"
+      BI_INTEGRATION_SECRET: "${BI_INTEGRATION_SECRET:-}"
+      BI_ORG_PROJECT_MAP: "${BI_ORG_PROJECT_MAP:-}"
+      BI_TASKS_ORGANIZATION_IDS: "${BI_TASKS_ORGANIZATION_IDS:-}"
+      BI_DEFAULT_PROJECT_ID: "${BI_DEFAULT_PROJECT_ID:-}"
+      BI_USER_MAP: "${BI_USER_MAP:-}"
+      BI_DEFAULT_ASSIGNEE_ID: "${BI_DEFAULT_ASSIGNEE_ID:-}"
+      BI_DEFAULT_DUE_DAYS: "${BI_DEFAULT_DUE_DAYS:-7}"
       IPFS_KUBO_API: http://ipfs:5001
       IPFS_GATEWAY: http://ipfs:8080/ipfs
       MCP_SERVER_URL: http://mcp-server:8082
@@ -262,12 +275,35 @@ services:
       # it bypass user lookup. Leave empty in production once UI-
       # issued per-user keys are the only path.
       MCP_API_KEY: ${MCP_API_KEY:-}
+      # Session registry bounds. A session is only closed by an explicit
+      # DELETE /mcp, which crashed or disconnected clients never send, so
+      # idle eviction is what stops abandoned sessions from accumulating.
+      # Tunable here so ops can adjust without rebuilding the image.
+      MCP_SESSION_IDLE_MS: ${MCP_SESSION_IDLE_MS:-1800000}
+      MCP_MAX_SESSIONS: ${MCP_MAX_SESSIONS:-256}
+      # V8 sizes its heap from host RAM, not the container limit, so without
+      # this it grows past mem_limit and gets OOM-killed instead of
+      # collecting harder.
+      NODE_OPTIONS: --max-old-space-size=1024
     depends_on:
       postgres:
         condition: service_healthy
       edgequake:
         condition: service_started
     restart: unless-stopped
+    # Defence in depth behind the session bounds above: caps the blast radius
+    # on the shared host (7.6GB, no swap) if this process ever leaks again.
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - sayknowmind
 

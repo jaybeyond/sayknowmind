@@ -67,6 +67,10 @@ function TimelineBar({ task, offset, length }: { task: Task; offset: number; len
 
   const onPointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
+    if (task.projectId) {
+      openTask(task.id);
+      return;
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     const localX = e.clientX - rect.left;
     setDragMode(localX < EDGE ? "resize-start" : localX > rect.width - EDGE ? "resize-end" : "move");
@@ -115,14 +119,22 @@ function TimelineBar({ task, offset, length }: { task: Task; offset: number; len
         tabIndex={0}
         className={cn(
           "group/bar absolute top-1/2 -translate-y-1/2 h-5 rounded-md flex items-center px-2 text-[10px] text-white/95 truncate shadow-sm select-none touch-none",
-          dragging ? "cursor-grabbing ring-2 ring-white/40" : "cursor-grab hover:brightness-110",
+          task.projectId
+            ? "cursor-pointer hover:brightness-110"
+            : dragging
+              ? "cursor-grabbing ring-2 ring-white/40"
+              : "cursor-grab hover:brightness-110",
         )}
         style={{ left, width: Math.max(COL - 4, width), backgroundColor: STATUS_COLOR[task.status] }}
         title={task.title}
       >
         {/* Edge resize affordances (visual only; hit-testing is by localX). */}
-        <span className="absolute left-0 top-0 h-full w-2 rounded-l-md cursor-ew-resize opacity-0 group-hover/bar:opacity-100 bg-white/25" />
-        <span className="absolute right-0 top-0 h-full w-2 rounded-r-md cursor-ew-resize opacity-0 group-hover/bar:opacity-100 bg-white/25" />
+        {!task.projectId && (
+          <>
+            <span className="absolute left-0 top-0 h-full w-2 rounded-l-md cursor-ew-resize opacity-0 group-hover/bar:opacity-100 bg-white/25" />
+            <span className="absolute right-0 top-0 h-full w-2 rounded-r-md cursor-ew-resize opacity-0 group-hover/bar:opacity-100 bg-white/25" />
+          </>
+        )}
         <span className="truncate">{task.title}</span>
       </div>
       {previewLabel && (

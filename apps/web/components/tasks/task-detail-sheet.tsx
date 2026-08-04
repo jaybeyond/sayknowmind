@@ -8,9 +8,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Trash2 } from "lucide-react";
-import { TASK_STATUSES, TASK_PRIORITIES } from "@/lib/tasks/constants";
-import { useTasksStore } from "@/store/tasks-store";
+import { FolderKanban, Trash2 } from "lucide-react";
+import {
+  BI_TASK_PRIORITIES,
+  BI_TASK_STATUSES,
+  TASK_PRIORITIES,
+  TASK_STATUSES,
+} from "@/lib/tasks/constants";
+import { EMPTY_TASK_MEMBERS, useTasksStore } from "@/store/tasks-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { PRIORITY_DOT, initials } from "./shared";
@@ -26,10 +31,16 @@ export function TaskDetailSheet() {
   const { t } = useTranslation();
   const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
   const task = useTasksStore((s) => s.tasks.find((x) => x.id === s.selectedTaskId) ?? null);
-  const members = useTasksStore((s) => s.members);
+  const members = useTasksStore((s) => task?.projectId
+    ? s.membersByProject[task.projectId] ?? EMPTY_TASK_MEMBERS
+    : s.members);
+  const fetchMembers = useTasksStore((s) => s.fetchMembers);
+  const taskMode = useTasksStore((s) => s.taskMode);
   const updateTask = useTasksStore((s) => s.updateTask);
   const deleteTask = useTasksStore((s) => s.deleteTask);
   const closeTask = useTasksStore((s) => s.closeTask);
+  const statuses = taskMode === "bi" ? BI_TASK_STATUSES : TASK_STATUSES;
+  const priorities = taskMode === "bi" ? BI_TASK_PRIORITIES : TASK_PRIORITIES;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -45,6 +56,10 @@ export function TaskDetailSheet() {
     }
   }, [task?.id]);
   /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+
+  useEffect(() => {
+    if (task?.projectId && members.length === 0) void fetchMembers(task.projectId);
+  }, [fetchMembers, members.length, task?.projectId]);
 
   const status = useMemo(() => TASK_STATUSES.find((s) => s.id === task?.status), [task?.status]);
 
@@ -84,9 +99,18 @@ export function TaskDetailSheet() {
 
               {/* Field grid */}
               <div className="space-y-3 text-sm">
+                {task.project && (
+                  <Field label={t("tasks.project")}>
+                    <div className="flex min-w-0 items-center gap-1.5 text-sm">
+                      <FolderKanban className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{task.project.name}</span>
+                    </div>
+                  </Field>
+                )}
+
                 <Field label={t("tasks.setStatus")}>
                   <div className="flex flex-wrap gap-1.5">
-                    {TASK_STATUSES.map((s) => (
+                    {statuses.map((s) => (
                       <button
                         key={s.id}
                         onClick={() => updateTask(task.id, { status: s.id })}
@@ -104,7 +128,7 @@ export function TaskDetailSheet() {
 
                 <Field label={t("tasks.setPriority")}>
                   <div className="flex flex-wrap gap-1.5">
-                    {TASK_PRIORITIES.map((p) => (
+                    {priorities.map((p) => (
                       <button
                         key={p.id}
                         onClick={() => updateTask(task.id, { priority: p.id })}
@@ -130,7 +154,7 @@ export function TaskDetailSheet() {
                     }}
                     className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary"
                   >
-                    <option value="">{t("tasks.unassigned")}</option>
+                    {taskMode !== "bi" && <option value="">{t("tasks.unassigned")}</option>}
                     {members.map((m) => (
                       <option key={m.id} value={m.id}>{m.name || m.email}</option>
                     ))}
@@ -147,9 +171,11 @@ export function TaskDetailSheet() {
                 </Field>
 
                 <div className="flex gap-6">
-                  <Field label={t("tasks.startDate")}>
-                    <DueDateField value={task.startDate} onChange={(iso) => updateTask(task.id, { startDate: iso })} />
-                  </Field>
+                  {!task.projectId && (
+                    <Field label={t("tasks.startDate")}>
+                      <DueDateField value={task.startDate} onChange={(iso) => updateTask(task.id, { startDate: iso })} />
+                    </Field>
+                  )}
                   <Field label={t("tasks.setDue")}>
                     <DueDateField value={task.dueDate} status={task.status} onChange={(iso) => updateTask(task.id, { dueDate: iso })} />
                   </Field>

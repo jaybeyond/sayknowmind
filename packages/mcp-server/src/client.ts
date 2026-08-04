@@ -14,12 +14,22 @@ let _initialized = false;
 const BOOTSTRAP_TIMEOUT_MS = 3000;
 
 export async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
-    ),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} timed out after ${ms}ms`)),
+          ms,
+        );
+      }),
+    ]);
+  } finally {
+    // Without this the timer stays pending for its full duration after the
+    // operation settles — up to 60s of dead timers per upload.
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**

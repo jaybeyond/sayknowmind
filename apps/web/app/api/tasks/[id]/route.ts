@@ -4,6 +4,8 @@ import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { isValidPriority, isValidStatus, isDoneStatus } from "@/lib/tasks/constants";
 import { getWorkItem, getUserOrgs, isAssignableUser } from "@/lib/tasks/store";
+import { deleteBiTask, isBiTasksEnabled, updateBiTask } from "@/lib/integrations/bi-tasks";
+import { biTaskErrorResponse } from "@/lib/tasks/bridge-error";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       { code: ErrorCode.SYSTEM_VALIDATION_ERROR, message: "Invalid JSON", timestamp: new Date().toISOString() },
       { status: 400 },
     );
+  }
+
+  if (isBiTasksEnabled(ctx)) {
+    try {
+      const task = await updateBiTask(ctx, id, body);
+      return NextResponse.json({ task });
+    } catch (err) {
+      console.error("[tasks] BI PATCH error:", err);
+      return biTaskErrorResponse(err);
+    }
   }
 
   const orgs = await getUserOrgs(ctx.userId);
@@ -102,6 +114,11 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { id } = await params;
 
   try {
+    if (isBiTasksEnabled(ctx)) {
+      await deleteBiTask(ctx, id);
+      return NextResponse.json({ ok: true });
+    }
+
     const orgs = await getUserOrgs(ctx.userId);
     const res = await pool.query(
       `DELETE FROM work_items w WHERE w.id = $1 AND w.organization_id = ANY($2) RETURNING w.id`,
@@ -116,6 +133,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[tasks] DELETE error:", err);
+    if (isBiTasksEnabled(ctx)) return biTaskErrorResponse(err);
     return NextResponse.json(
       { code: ErrorCode.SYSTEM_INTERNAL_ERROR, message: "Internal server error", timestamp: new Date().toISOString() },
       { status: 500 },

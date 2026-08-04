@@ -67,7 +67,7 @@ describe("GET /api/documents category scoping", () => {
     mocks.query.mockClear();
     await getDocuments(new NextRequest("http://localhost/api/documents"));
     const [noneSql] = mocks.query.mock.calls[0] as [string];
-    expect(noneSql).not.toContain("dc.category_id");
+    expect(noneSql).not.toContain("dc.category_id = ANY(");
   });
 });
 

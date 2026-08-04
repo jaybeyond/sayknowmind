@@ -14,7 +14,9 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 import pg from "pg";
 import { requestContext } from "./auth-context.js";
+import { closeAuditPool } from "./audit.js";
 import { createServer } from "./server.js";
+import { SessionRegistry } from "./session-registry.js";
 
 const PORT = parseInt(process.env.PORT ?? "8082", 10);
 const ADMIN_API_KEY = process.env.MCP_API_KEY;
@@ -23,16 +25,76 @@ const DATABASE_URL = process.env.DATABASE_URL;
 // silent default just because no key/DB happens to be configured.
 const ALLOW_ANONYMOUS = process.env.MCP_ALLOW_ANONYMOUS === "true";
 
-// ── Transport registry ──────────────────────────────────────
+function envInt(name: string, fallback: number): number {
+  const parsed = parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+// ── Session registry ────────────────────────────────────────
+// Eviction rules and rationale live in session-registry.ts.
 type AnyTransport = StreamableHTTPServerTransport | SSEServerTransport;
-const transports: Record<string, AnyTransport> = {};
+
+/** Evict a session after this long with no request touching it. */
+const SESSION_IDLE_MS = envInt("MCP_SESSION_IDLE_MS", 30 * 60_000);
+/** How often to look for idle sessions. */
+const SESSION_SWEEP_MS = envInt("MCP_SESSION_SWEEP_MS", 60_000);
+/** Hard ceiling so a misbehaving or hostile client cannot exhaust memory. */
+const MAX_SESSIONS = envInt("MCP_MAX_SESSIONS", 256);
+/** How long shutdown waits for sessions to close before exiting anyway. */
+const SHUTDOWN_TIMEOUT_MS = envInt("MCP_SHUTDOWN_TIMEOUT_MS", 5_000);
+
+const sessions = new SessionRegistry<AnyTransport>({
+  idleMs: SESSION_IDLE_MS,
+  maxSessions: MAX_SESSIONS,
+  onEvict: (sid, reason) => {
+    if (reason === "idle") console.log(`[MCP] evicting idle session ${sid}`);
+    else
+      console.warn(
+        `[MCP] session cap ${MAX_SESSIONS} reached — evicting least-recently-used session ${sid}`,
+      );
+  },
+});
+
+// The SDK's standalone GET /mcp stream closes without ever firing
+// transport.onclose, and the default web client transport is streamable-http,
+// so a listener that stays connected but quiet would look idle to the sweeper.
+// Track every open response ourselves: any still-open stream (standalone GET
+// SSE or in-flight POST) marks the session active.
+const openStreams = new WeakMap<
+  StreamableHTTPServerTransport,
+  Set<express.Response>
+>();
+
+function trackStream(
+  transport: StreamableHTTPServerTransport,
+  res: express.Response,
+): void {
+  let set = openStreams.get(transport);
+  if (!set) {
+    set = new Set();
+    openStreams.set(transport, set);
+  }
+  set.add(res);
+  res.on("close", () => {
+    set.delete(res);
+    // The idle clock starts when the last stream closes, not when it opened.
+    const sid = transport.sessionId;
+    if (sid) sessions.touch(sid);
+  });
+}
 
 // ── Per-user key lookup (lazy pg pool) ───────────────────────
 let pgPool: pg.Pool | undefined;
 function getPgPool(): pg.Pool | null {
   if (!DATABASE_URL) return null;
   if (!pgPool) {
-    pgPool = new pg.Pool({ connectionString: DATABASE_URL, max: 4 });
+    pgPool = new pg.Pool({
+      connectionString: DATABASE_URL,
+      max: 4,
+      // Without a timeout, callers queue on an unbounded internal array
+      // whenever the DB is slow, and the queue itself becomes a leak.
+      connectionTimeoutMillis: envInt("MCP_PG_CONNECT_TIMEOUT_MS", 5_000),
+    });
     pgPool.on("error", (err) => console.error("[MCP] pg pool error:", err));
   }
   return pgPool;
@@ -126,13 +188,26 @@ function startHttpServer(): void {
   const app = express();
   app.use(express.json());
 
-  // Health check (no auth)
+  const sweeper = setInterval(() => sessions.sweepIdle(), SESSION_SWEEP_MS);
+  sweeper.unref();
+
+  // Health check (no auth). Session and memory counters are exposed so the
+  // leak this endpoint used to hide can be watched from outside the container.
   app.get("/health", (_req, res) => {
+    const mem = process.memoryUsage();
+    const mb = (n: number) => Math.round((n / 1024 / 1024) * 10) / 10;
     res.json({
       status: "ok",
       service: "mcp-server",
       version: "0.2.0",
       transports: ["streamable-http", "sse"],
+      sessions: {
+        active: sessions.size,
+        max: MAX_SESSIONS,
+        idleTimeoutMs: SESSION_IDLE_MS,
+      },
+      memory: { rssMb: mb(mem.rss), heapUsedMb: mb(mem.heapUsed) },
+      uptimeSec: Math.round(process.uptime()),
     });
   });
 
@@ -142,10 +217,11 @@ function startHttpServer(): void {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
       let transport: StreamableHTTPServerTransport | undefined;
 
-      if (sessionId && transports[sessionId]) {
-        const existing = transports[sessionId];
+      if (sessionId && sessions.has(sessionId)) {
+        const existing = sessions.get(sessionId)!.transport;
         if (existing instanceof StreamableHTTPServerTransport) {
           transport = existing;
+          sessions.touch(sessionId);
         } else {
           res.status(400).json({
             jsonrpc: "2.0",
@@ -155,17 +231,20 @@ function startHttpServer(): void {
           return;
         }
       } else if (!sessionId && req.method === "POST" && isInitializeRequest(req.body)) {
+        const server = createServer();
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (sid) => {
-            transports[sid] = transport!;
+            sessions.register(sid, transport!, server, () => {
+              const set = openStreams.get(transport!);
+              return set !== undefined && set.size > 0;
+            });
           },
         });
         transport.onclose = () => {
           const sid = transport!.sessionId;
-          if (sid) delete transports[sid];
+          if (sid) sessions.remove(sid);
         };
-        const server = createServer();
         await server.connect(transport);
       } else {
         res.status(400).json({
@@ -176,6 +255,7 @@ function startHttpServer(): void {
         return;
       }
 
+      trackStream(transport, res);
       await transport.handleRequest(req, res, req.body);
     } catch (error) {
       if (!res.headersSent) {
@@ -190,30 +270,41 @@ function startHttpServer(): void {
 
   // ── SSE transport (GET /sse + POST /messages) ──────────────
   app.get("/sse", authMiddleware, async (_req, res) => {
-    const transport = new SSEServerTransport("/messages", res);
-    transports[transport.sessionId] = transport;
-    res.on("close", () => {
-      delete transports[transport.sessionId];
-    });
     const server = createServer();
+    const transport = new SSEServerTransport("/messages", res);
+    sessions.register(
+      transport.sessionId,
+      transport,
+      server,
+      () => !res.writableEnded && !res.destroyed,
+    );
+    res.on("close", () => {
+      void sessions.drop(transport.sessionId);
+    });
     await server.connect(transport);
   });
 
   app.post("/messages", authMiddleware, async (req, res) => {
     const sessionId = req.query.sessionId as string;
-    const transport = transports[sessionId];
+    const transport = sessions.get(sessionId)?.transport;
     if (transport instanceof SSEServerTransport) {
+      sessions.touch(sessionId);
       await transport.handlePostMessage(req, res, req.body);
     } else {
       res.status(400).json({ error: "No SSE session found" });
     }
   });
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = app.listen(PORT, "0.0.0.0", () => {
     console.log(`[MCP] Server listening on http://0.0.0.0:${PORT}`);
     console.log(`[MCP] StreamableHTTP: POST/GET/DELETE /mcp`);
     console.log(`[MCP] SSE: GET /sse + POST /messages`);
     console.log(`[MCP] Health: GET /health`);
+    console.log(
+      `[MCP] Sessions: max ${MAX_SESSIONS}, idle eviction after ${Math.round(
+        SESSION_IDLE_MS / 1000,
+      )}s, swept every ${Math.round(SESSION_SWEEP_MS / 1000)}s`,
+    );
     const authModes: string[] = [];
     if (DATABASE_URL) authModes.push("per-user keys (user_mcp_keys table)");
     if (ADMIN_API_KEY) authModes.push("admin/shared MCP_API_KEY");
@@ -228,13 +319,31 @@ function startHttpServer(): void {
     );
   });
 
-  process.on("SIGINT", async () => {
-    for (const sid of Object.keys(transports)) {
-      try { await transports[sid].close(); } catch { /* ignore */ }
-      delete transports[sid];
-    }
+  // Docker/Railway stop containers with SIGTERM; only handling SIGINT meant
+  // every deploy and every OOM restart tore down in-flight requests abruptly.
+  let shuttingDown = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[MCP] ${signal} received — draining ${sessions.size} session(s)`);
+    clearInterval(sweeper);
+    const serverClosed = new Promise<void>((resolve) => {
+      httpServer.close(() => resolve());
+    });
+    const drained = Promise.allSettled([
+      ...sessions.keys().map((sid) => sessions.drop(sid)),
+      serverClosed,
+    ]);
+    // Bounded wait: a wedged transport must not stall the container stop.
+    await Promise.race([
+      drained,
+      new Promise((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS).unref()),
+    ]);
+    await Promise.allSettled([pgPool?.end(), closeAuditPool()]);
     process.exit(0);
-  });
+  };
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
 // ── Main ────────────────────────────────────────────────────

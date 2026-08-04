@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
+import { ensureSharedContentSchema } from "@/lib/schema-compat";
 
 export const dynamic = "force-dynamic";
 
 /** GET /api/share/gallery — public endpoint, lists all public non-revoked shares */
 export async function GET(request: NextRequest) {
   try {
+    await ensureSharedContentSchema();
     const { searchParams } = request.nextUrl;
     const limit = Math.min(Number(searchParams.get("limit")) || 24, 100);
     const offset = Math.max(Number(searchParams.get("offset")) || 0, 0);

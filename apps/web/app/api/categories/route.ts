@@ -5,6 +5,7 @@ import { listCategories, createCategory } from "@/lib/categories/store";
 import { pool } from "@/lib/db";
 import { ErrorCode } from "@/lib/types";
 import { readableClause } from "@/lib/visibility";
+import { ensureKnowledgeSchema } from "@/lib/schema-compat";
 
 /** GET /api/categories - List all categories for user */
 export async function GET(request: NextRequest) {
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    await ensureKnowledgeSchema();
     const categories = await listCategories(ctx);
 
     // Get document counts per category
@@ -69,6 +71,7 @@ export async function POST(request: NextRequest) {
   if (blocked) return blocked;
 
   try {
+    await ensureKnowledgeSchema();
     const body = await request.json();
     const { name, parentId, description, color, kind } = body as {
       name?: string;

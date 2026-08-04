@@ -17,7 +17,19 @@ import { formatError } from "../errors.js";
 const WEB_APP_URL = process.env.SAYKNOWMIND_URL ?? "http://localhost:5400";
 const AUTH_SECRET = process.env.AUTH_SECRET ?? "";
 
-function apiHeaders(): Record<string, string> {
+// Calls to the web app must not hang forever: a wedged upstream would pin the
+// in-flight tool call — and with it the whole session's McpServer — for the
+// life of the socket.
+const WEB_FETCH_TIMEOUT_MS = (() => {
+  const parsed = parseInt(process.env.MCP_WEB_FETCH_TIMEOUT_MS ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30_000;
+})();
+
+function webFetch(url: string | URL, init?: RequestInit): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS) });
+}
+
+function apiHeaders(organizationId?: string): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   const context = getRequestContext();
   if (context?.rawToken) {
@@ -25,6 +37,7 @@ function apiHeaders(): Record<string, string> {
   } else if (AUTH_SECRET) {
     h["Authorization"] = `Bearer ${AUTH_SECRET}`;
   }
+  if (organizationId) h["X-Organization-Id"] = organizationId;
   return h;
 }
 
@@ -202,6 +215,184 @@ function invalidAuth() {
 
 export function registerSayknowmindTools(server: McpServer): void {
   // ---------------------------------------------------------------------------
+  // sayknowmind.task_projects_list — List projects available to the caller
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_task_projects_list",
+    "List BI projects the calling user owns or that have been shared with them. Use a returned project id when creating or filtering bridged tasks.",
+    {
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID whose BI bridge policy applies"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const response = await webFetch(`${WEB_APP_URL}/api/tasks/projects`, {
+          method: "GET",
+          headers: apiHeaders(params.organization_id),
+        });
+        if (!response.ok) {
+          const e = await response.text();
+          throw new Error(`/api/tasks/projects returned ${response.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await response.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.tasks_list — List tasks visible to the caller
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_tasks_list",
+    "List tasks visible to the calling user in SayKnowMind. When BI task bridge is enabled, this returns BI tasks through the SayKnowMind task API.",
+    {
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID whose BI bridge policy applies"),
+      project_id: z.string().optional().describe("Optional BI project id; omit to list tasks across all accessible projects"),
+      scope: z.enum(["all", "personal", "team"]).optional().describe("Task scope (default: all)"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const query = new URLSearchParams();
+        if (params.scope) query.set("scope", params.scope);
+        if (params.project_id) query.set("projectId", params.project_id);
+        const qs = query.toString();
+        const response = await webFetch(`${WEB_APP_URL}/api/tasks${qs ? `?${qs}` : ""}`, {
+          method: "GET",
+          headers: apiHeaders(params.organization_id),
+        });
+        if (!response.ok) {
+          const e = await response.text();
+          throw new Error(`/api/tasks returned ${response.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await response.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.task_create — Create a task through the web task API
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_task_create",
+    "Create a SayKnowMind task. When BI task bridge is enabled, this creates the task in BI and returns the mapped SayKnowMind task view.",
+    {
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID whose BI bridge policy applies"),
+      project_id: z.string().optional().describe("BI project id. Required when the BI task bridge is enabled."),
+      title: z.string().describe("Task title"),
+      description: z.string().optional().describe("Task description"),
+      status: z.enum(["backlog", "todo", "in-progress", "technical-review", "completed", "paused"]).optional(),
+      priority: z.enum(["no-priority", "urgent", "high", "medium", "low"]).optional(),
+      assignee_id: z.string().optional().describe("Assignee id. In BI mode this may be a BI member id, or a mapped SayKnowMind user id."),
+      due_date: z.string().optional().describe("ISO due date. If omitted in BI mode, BI_DEFAULT_DUE_DAYS supplies a default."),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const response = await webFetch(`${WEB_APP_URL}/api/tasks`, {
+          method: "POST",
+          headers: apiHeaders(params.organization_id),
+          body: JSON.stringify({
+            title: params.title,
+            description: params.description,
+            status: params.status,
+            priority: params.priority,
+            assigneeId: params.assignee_id,
+            dueDate: params.due_date,
+            projectId: params.project_id,
+          }),
+        });
+        if (!response.ok) {
+          const e = await response.text();
+          throw new Error(`/api/tasks returned ${response.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await response.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.task_update — Update a task through the web task API
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_task_update",
+    "Update a SayKnowMind task. When BI task bridge is enabled, this updates the corresponding BI task.",
+    {
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID whose BI bridge policy applies"),
+      task_id: z.string().describe("Task id"),
+      title: z.string().optional().describe("Task title"),
+      description: z.string().optional().describe("Task description"),
+      status: z.enum(["backlog", "todo", "in-progress", "technical-review", "completed", "paused"]).optional(),
+      priority: z.enum(["no-priority", "urgent", "high", "medium", "low"]).optional(),
+      assignee_id: z.string().nullable().optional().describe("Assignee id, or null to use default mapping in BI mode."),
+      due_date: z.string().nullable().optional().describe("ISO due date"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const body: Record<string, unknown> = {};
+        if (params.title !== undefined) body.title = params.title;
+        if (params.description !== undefined) body.description = params.description;
+        if (params.status !== undefined) body.status = params.status;
+        if (params.priority !== undefined) body.priority = params.priority;
+        if (params.assignee_id !== undefined) body.assigneeId = params.assignee_id;
+        if (params.due_date !== undefined) body.dueDate = params.due_date;
+        const response = await webFetch(`${WEB_APP_URL}/api/tasks/${encodeURIComponent(params.task_id)}`, {
+          method: "PATCH",
+          headers: apiHeaders(params.organization_id),
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const e = await response.text();
+          throw new Error(`/api/tasks/${params.task_id} returned ${response.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await response.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // sayknowmind.task_delete — Delete a task through the web task API
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "sayknowmind_task_delete",
+    "Permanently delete a SayKnowMind task. When BI task bridge is enabled, this permanently deletes the task in BI after project-scope validation.",
+    {
+      organization_id: z.string().min(1).describe("SayKnowMind organization UUID whose BI bridge policy applies"),
+      task_id: z.string().describe("Task id"),
+      auth_token: z.string().optional().describe("Authentication token"),
+    },
+    async (params) => {
+      try {
+        if (!verifyAuthToken(params.auth_token)) return invalidAuth();
+        const response = await webFetch(`${WEB_APP_URL}/api/tasks/${encodeURIComponent(params.task_id)}`, {
+          method: "DELETE",
+          headers: apiHeaders(params.organization_id),
+        });
+        if (!response.ok) {
+          const e = await response.text();
+          throw new Error(`/api/tasks/${params.task_id} returned ${response.status}: ${e.slice(0, 200)}`);
+        }
+        return ok(await response.json());
+      } catch (error) {
+        return formatError(error);
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // sayknowmind.search — Search the knowledge base
   // ---------------------------------------------------------------------------
   server.tool(
@@ -225,7 +416,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(`${WEB_APP_URL}/api/search`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/search`, {
           method: "POST",
           headers: apiHeaders(),
           body: JSON.stringify({
@@ -273,13 +464,13 @@ export function registerSayknowmindTools(server: McpServer): void {
         let response: Response;
 
         if (params.url) {
-          response = await fetch(`${WEB_APP_URL}/api/ingest/url`, {
+          response = await webFetch(`${WEB_APP_URL}/api/ingest/url`, {
             method: "POST",
             headers: apiHeaders(),
             body: JSON.stringify({ url: params.url }),
           });
         } else if (params.content) {
-          response = await fetch(`${WEB_APP_URL}/api/ingest/text`, {
+          response = await webFetch(`${WEB_APP_URL}/api/ingest/text`, {
             method: "POST",
             headers: apiHeaders(),
             body: JSON.stringify({
@@ -347,7 +538,7 @@ export function registerSayknowmindTools(server: McpServer): void {
 
         const qs = query.toString();
         const url = `${WEB_APP_URL}/api/documents${qs ? `?${qs}` : ""}`;
-        const response = await fetch(url, { method: "GET", headers: apiHeaders() });
+        const response = await webFetch(url, { method: "GET", headers: apiHeaders() });
 
         if (!response.ok) {
           throw new Error(`Documents API returned ${response.status}: ${response.statusText}`);
@@ -386,7 +577,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`,
           { method: "GET", headers: apiHeaders() },
         );
@@ -435,7 +626,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(`${WEB_APP_URL}/api/categories`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/categories`, {
           method: "GET",
           headers: apiHeaders(),
         });
@@ -501,7 +692,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (params.metadata !== undefined) body.metadata = params.metadata;
         if (params.category_id !== undefined) body.categoryId = params.category_id;
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`,
           { method: "PATCH", headers: apiHeaders(), body: JSON.stringify(body) },
         );
@@ -550,7 +741,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`,
           { method: "DELETE", headers: apiHeaders() },
         );
@@ -598,7 +789,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(`${WEB_APP_URL}/api/tags`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/tags`, {
           method: "GET",
           headers: apiHeaders(),
         });
@@ -640,7 +831,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}/tags`,
           {
             method: "POST",
@@ -695,7 +886,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}/tags`,
           {
             method: "DELETE",
@@ -753,7 +944,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`,
           {
             method: "PATCH",
@@ -806,7 +997,7 @@ export function registerSayknowmindTools(server: McpServer): void {
             isError: true,
           };
         }
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}/related`,
           { method: "GET", headers: apiHeaders() },
         );
@@ -849,7 +1040,7 @@ export function registerSayknowmindTools(server: McpServer): void {
             isError: true,
           };
         }
-        const response = await fetch(`${WEB_APP_URL}/api/conversations`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/conversations`, {
           method: "GET",
           headers: apiHeaders(),
         });
@@ -887,7 +1078,7 @@ export function registerSayknowmindTools(server: McpServer): void {
             isError: true,
           };
         }
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/conversations/${encodeURIComponent(params.conversation_id)}/messages`,
           { method: "GET", headers: apiHeaders() },
         );
@@ -937,7 +1128,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(`${WEB_APP_URL}/api/categories`, {
+        const response = await webFetch(`${WEB_APP_URL}/api/categories`, {
           method: "POST",
           headers: apiHeaders(),
           body: JSON.stringify({
@@ -995,7 +1186,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (params.description !== undefined) body.description = params.description;
         if (params.color !== undefined) body.color = params.color;
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/categories/${encodeURIComponent(params.category_id)}`,
           { method: "PUT", headers: apiHeaders(), body: JSON.stringify(body) },
         );
@@ -1043,7 +1234,7 @@ export function registerSayknowmindTools(server: McpServer): void {
           };
         }
 
-        const response = await fetch(
+        const response = await webFetch(
           `${WEB_APP_URL}/api/categories/${encodeURIComponent(params.category_id)}`,
           { method: "DELETE", headers: apiHeaders() },
         );
@@ -1099,7 +1290,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         if (!verifyAuthToken(params.auth_token)) return invalidAuth();
         const title = params.title?.trim() || "Untitled";
 
-        const createRes = await fetch(`${WEB_APP_URL}/api/docs`, {
+        const createRes = await webFetch(`${WEB_APP_URL}/api/docs`, {
           method: "POST",
           headers: apiHeaders(),
           body: JSON.stringify({ type: params.type, title, categoryId: params.category_id ?? null }),
@@ -1112,7 +1303,7 @@ export function registerSayknowmindTools(server: McpServer): void {
 
         const patch = buildContentPatch(params.type, title, params);
         if (patch) {
-          const pr = await fetch(`${WEB_APP_URL}/api/documents/${encodeURIComponent(id)}`, {
+          const pr = await webFetch(`${WEB_APP_URL}/api/documents/${encodeURIComponent(id)}`, {
             method: "PATCH",
             headers: apiHeaders(),
             body: JSON.stringify(patch),
@@ -1162,7 +1353,7 @@ export function registerSayknowmindTools(server: McpServer): void {
         }
         if (params.title?.trim()) patch.title = params.title.trim();
 
-        const res = await fetch(`${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`, {
+        const res = await webFetch(`${WEB_APP_URL}/api/documents/${encodeURIComponent(params.document_id)}`, {
           method: "PATCH",
           headers: apiHeaders(),
           body: JSON.stringify(patch),
@@ -1203,7 +1394,7 @@ export function registerSayknowmindTools(server: McpServer): void {
     async (params) => {
       try {
         if (!verifyAuthToken(params.auth_token)) return invalidAuth();
-        const res = await fetch(`${WEB_APP_URL}/api/share`, {
+        const res = await webFetch(`${WEB_APP_URL}/api/share`, {
           method: "POST",
           headers: apiHeaders(),
           body: JSON.stringify({

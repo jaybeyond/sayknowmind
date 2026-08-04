@@ -1037,6 +1037,11 @@
   },
   "tasks": {
     "title": "Tasks",
+    "project": "Project",
+    "allProjects": "All projects",
+    "selectProject": "Select project",
+    "noProjects": "No accessible projects",
+    "dismissError": "Dismiss error",
     "addTask": "Add task",
     "newTaskPlaceholder": "What needs to be done?",
     "delete": "Delete",
